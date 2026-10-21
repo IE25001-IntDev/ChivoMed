@@ -1,5 +1,10 @@
-test/
-.vscode/*
-
+#carpetas de tests, archivos de configuracion de vscode y ejemplos 
 .vscode
 test
+tests
+src/examples
+example.html
+#archivos de configuracion de variables de entorno
+.env
+#archivos de configuracion de node
+node_modules/
