@@ -4,6 +4,10 @@ test
 tests
 src/examples
 example.html
+.agents
+.codex
+.aws
+
 #archivos de configuracion de variables de entorno
 .env
 #archivos de configuracion de node
