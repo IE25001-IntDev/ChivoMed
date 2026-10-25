@@ -1,4 +1,5 @@
 export { API_CONFIG } from "./api_config.js";
+export { default as PatientPortalService } from "./patient_portal_service.js";
 export { default as DefaultService } from "./default_service.js";
 export { default as AtencionService } from "./atencion_service.js";
 export { default as ClinicaService } from "./clinica_service.js";

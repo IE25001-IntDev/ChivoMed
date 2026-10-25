@@ -496,3 +496,47 @@ svg {
     animation: none !important;
   }
 }
+
+/* Translucent patient cards. Variables inherit through both Shadow DOM layers. */
+:host(tarjeta-simple), :host(tarjeta-consulta) { height: 100%; }
+.patient-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  height: 100%;
+  padding: 28px;
+  border: 1px solid var(--liquid-edge, var(--border));
+  border-radius: 26px;
+  background: var(--liquid-fill, var(--glass));
+  -webkit-backdrop-filter: blur(28px) saturate(155%);
+  backdrop-filter: blur(28px) saturate(155%);
+  box-shadow: inset 0 1px 0 var(--liquid-shine, var(--border)), inset 0 -1px 0 var(--divider), 0 12px 32px rgba(19, 65, 55, .07);
+  transform: perspective(900px) translateY(0) rotateX(0) rotateY(0);
+  transition: transform .65s cubic-bezier(.22,1,.36,1), box-shadow .65s ease, border-color .45s ease;
+}
+.patient-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(400px circle at var(--pointer-x, 25%) var(--pointer-y, 0%), var(--liquid-shine, rgba(255,255,255,.45)), transparent 65%), linear-gradient(135deg, rgba(255,255,255,.14), transparent 45%, var(--glow-blue));
+  opacity: .6;
+  transition: opacity .6s ease;
+}
+:host(:focus-within) .patient-card { border-color: var(--accent); box-shadow: 0 18px 44px var(--glow-mint), inset 0 1px 0 var(--liquid-shine); }
+@media (hover: hover) and (pointer: fine) {
+  :host(:hover) .patient-card {
+    transform: perspective(900px) translateY(-6px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+    border-color: var(--liquid-shine, var(--border));
+    box-shadow: inset 0 1px 0 var(--liquid-shine), 0 24px 46px rgba(19,65,55,.12), 0 8px 24px var(--glow-mint);
+  }
+  :host(:hover) .patient-card::before { opacity: 1; }
+}
+.patient-card footer { border-top:1px solid var(--divider); padding-top:16px; margin-top:20px; }
+.patient-card ::slotted([slot="contenido"]) { min-height:0; font-size:14px; line-height:1.7; }
+.patient-card ::slotted([slot="pie"]) { font-size:12px; color:var(--accent-text); }
+@media (prefers-reduced-motion: reduce) {
+  .patient-card, :host(:hover) .patient-card { transform: none; transition: none; }
+}

@@ -8,12 +8,64 @@ No requieren dependencias ni compilación. Cargar desde un `<script type="module
 
 ## Configuración y contrato
 
-`control/api_config.js` define `http://localhost:9080/galenosv/api` como base.
+En el navegador, `control/api_config.js` usa `/galenosv/api` como base.
+`npm start` inicia ChivoMed en `http://localhost:5173`, lee `API_URL` de `.env`
+y reenvía `/galenosv` al despliegue configurado. El valor predeterminado del
+servidor es `http://localhost:9080/galenosv/api`. `PORT` cambia el puerto local.
+El navegador nunca descarga `.env`; el servidor solo publica archivos de `src`.
+El proxy conserva las cookies, los cuerpos JSON y los errores de Galeno.
+
 Se puede cambiar `API_CONFIG.baseUrl` antes de instanciar servicios, o pasar
 `{ baseUrl: "/galenosv/api" }` a cada constructor. Los servicios conservan cookies
 con `credentials: "include"`, necesario para compartir el rol y la atención activos.
 Si ChivoMed se sirve desde otro origen, el servidor debe permitir ese origen y
 credenciales mediante CORS, o se debe configurar un proxy del mismo origen.
+Un despliegue estático puede definir `globalThis.CHIVOMED_CONFIG = { baseUrl: "URL" }`
+antes de cargar los módulos. En Node también se respeta `process.env.API_URL`.
+
+## Portal del paciente
+
+Abrir `http://localhost:5173/` después de iniciar Galeno y ejecutar `npm start`.
+Seleccionar un rol Paciente en Galeno y volver al portal con **Actualizar**.
+Usar el mismo nombre de host (por ejemplo, `localhost`) para compartir la cookie
+de sesión. También se puede abrir la selección de rol mediante el enlace del
+portal, que pasa por el mismo proxy.
+
+`control/patient_portal_service.js` sigue este recorrido:
+
+1. `GET /atencion` obtiene la asignación activa. Sin asignación no consulta expedientes.
+2. Resuelve `PersonaRol`, valida el rol Paciente activo y carga su persona y clínica.
+3. Lee documentos desde `/personas/{idPersona}/documentos`; el formulario usa los
+   tipos reales de `/tipos-documento` y solo permite tipos activos al registrar.
+4. Lee consultas desde `/personas-roles/{idPersonaRol}/consultas`, en la asignación
+   de la clínica activa. Usa `fechaInicio`, `fechaFin`, `referenciaExterna` y `observaciones`.
+5. Recorre consulta → procedimientos → pasos → órdenes de examen → resultados.
+   El catálogo global de exámenes no se usa como historial del paciente.
+
+Registrar un documento envía únicamente `{ idTipoDocumento, valor, rutaFisica }`
+al POST anidado de la persona. Se vuelve a comprobar la sesión antes de escribir,
+y se conserva la validación de formatos de Galeno. Las órdenes sin resultados
+se muestran como pendientes; los últimos 30 días se calculan con las fechas de
+los resultados, incluso si la orden es anterior. No se almacenan datos clínicos
+en IndexedDB o localStorage ni se migran los registros de la demostración anterior.
+El tema y la transición del navbar conservan únicamente preferencias visuales.
+
+El contrato actual no tiene agenda de citas futuras ni subida de archivos. No se
+utiliza el CRUD genérico de consultas para simular citas: el POST del flujo exige
+un médico y genera las fechas en el servidor. El portal permite leer las consultas
+reales y registrar documentos con valor y ruta de un adjunto existente. Programar
+citas y cargar archivos requiere ampliar primero el backend y su contrato REST.
+Las escrituras médicas (inicio, cierre, procedimientos, órdenes y resultados)
+permanecen en el flujo de Galeno, sin ejecutarlas desde el rol Paciente.
+
+La selección de rol existente no autentica al usuario. La autenticación y la
+autorización del expediente deben ser aplicadas por el servidor; el portal no
+inventa un login ni selecciona pacientes desde un listado global.
+
+Si Galeno está apagado, el portal muestra un error de conexión y permite reintentar;
+no sustituye el expediente por datos locales ni confirma registros fallidos.
+
+## Respuestas y errores
 
 Cada operación devuelve una promesa de `DefaultResponse`:
 `{ status, message, data, headers }`, con el indicador `ok`. `data` contiene una
