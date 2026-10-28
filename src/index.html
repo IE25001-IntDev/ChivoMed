@@ -1,11 +1,65 @@
-<!DOCTYPE html>
-<html>
-    <head>
-
-    </head>
-    <body>
-        <h1>
-            HOLA MUNDO!
-        </h1>
-    </body>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#edf5f2" />
+  <meta name="description" content="Ingresa a ChivoMed, tu espacio de salud y bienestar." />
+  <title>Iniciar sesión | ChivoMed</title>
+  <link rel="icon" type="image/svg+xml" href="./resources/favicon.svg" />
+  <script src="./js/boundary/theme_init.js"></script>
+  <link rel="stylesheet" href="./resources/login.css" />
+  <script type="module" src="./js/boundary/login.js"></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" /></symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" /></symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" /></symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></symbol>
+    <symbol id="icon-eye-off" viewBox="0 0 24 24"><path d="m3 3 18 18M10.6 5.1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6 6a20 20 0 0 0-4 6s3.5 7 10 7a13 13 0 0 0 5-1M10 10a3 3 0 0 0 4 4" /></symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z" /></symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></symbol>
+    <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 4.5 1.5c-1.5 1-2 1.5-2 3M12 17h.01" /></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></symbol>
+  </svg>
+  <a class="skip-link" href="#login">Saltar al inicio de sesión</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="ChivoMed, inicio"><span class="brand-mark" aria-hidden="true">+</span><span>Chivo<span class="brand-accent">Med</span></span></a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Activar modo oscuro" aria-pressed="false" hidden><svg class="icon" aria-hidden="true"><use href="#icon-moon" /></svg><span id="theme-label">Modo oscuro</span></button>
+    </header>
+    <main class="login-shell" id="login">
+      <section class="form-panel" aria-labelledby="login-title">
+        <div class="form-content">
+          <h1 id="login-title">Inicia sesión en ChivoMed</h1>
+          <p class="login-caption">Tu salud, en un solo lugar.</p>
+          <form id="login-form">
+            <div class="field-group">
+              <label for="username">Usuario o correo electrónico</label>
+              <div class="input-wrap"><svg class="icon field-icon" aria-hidden="true"><use href="#icon-user" /></svg><input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Escribe tu usuario o correo" aria-describedby="username-error" required /></div>
+              <p class="field-error" id="username-error" hidden></p>
+            </div>
+            <div class="field-group">
+              <div class="label-row"><label for="password">Contraseña</label><button class="text-button recovery-button" type="button" data-help="recovery" hidden>¿La olvidaste?</button></div>
+              <div class="input-wrap"><svg class="icon field-icon" aria-hidden="true"><use href="#icon-lock" /></svg><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Escribe tu contraseña" aria-describedby="password-error" required /><button class="password-toggle" id="password-toggle" type="button" aria-label="Mostrar contraseña" aria-pressed="false" aria-controls="password" hidden><svg class="icon" aria-hidden="true"><use href="#icon-eye" /></svg></button></div>
+              <p class="field-error" id="password-error" hidden></p>
+            </div>
+            <p class="form-feedback" id="form-feedback" role="status" tabindex="-1" hidden></p>
+            <button class="submit-button" id="login-submit" type="submit" disabled>Iniciar sesión <svg class="icon" aria-hidden="true"><use href="#icon-arrow" /></svg></button>
+            <p class="form-feedback" id="script-notice">Activa JavaScript para utilizar esta vista de acceso.</p>
+          </form>
+          <div class="access-help"><span>¿Aún no tienes acceso?</span><button class="text-button" type="button" data-help="access" hidden>Solicítalo a tu clínica <span aria-hidden="true">↗</span></button></div>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer"><p>ChivoMed todos los derechos reservados</p></footer>
+  </div>
+  <dialog id="help-dialog" aria-labelledby="help-title" aria-describedby="help-description">
+    <button class="dialog-close" id="dialog-close" type="button" aria-label="Cerrar ayuda"><svg class="icon" aria-hidden="true"><use href="#icon-close" /></svg></button>
+    <span class="access-icon" aria-hidden="true"><svg class="icon"><use href="#icon-help" /></svg></span>
+    <h2 id="help-title">Estamos para ayudarte</h2><p id="help-description"></p>
+    <button class="submit-button" id="dialog-done" type="button">Entendido <svg class="icon" aria-hidden="true"><use href="#icon-arrow" /></svg></button>
+  </dialog>
+</body>
 </html>

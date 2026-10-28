@@ -1,0 +1,14 @@
+{
+  "name": "chivomed-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Entorno de desarrollo del frontend de ChivoMed",
+  "author": "Julio Ernesto Calderon Umana",
+  "scripts": {
+    "start": "npm run dev",
+    "dev": "browser-sync start --config bs-config.cjs"
+  },
+  "devDependencies": {
+    "browser-sync": "3.0.4"
+  }
+}
