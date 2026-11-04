@@ -85,6 +85,13 @@ input[aria-invalid="true"] { border-color: var(--error-border); }
 .recovery-button { font-size: 12px; min-height: 44px; margin-block: -10px; }
 .field-error { font-size: 12px; color: var(--error-text); margin: 7px 0 0; }
 .form-feedback { padding: 12px 14px; background: var(--mint-soft); border: 1px solid var(--border-strong); border-radius: 4px; font-size: 13px; color: var(--text); margin: 0 0 16px; }
+.form-feedback[data-state="error"] { color: var(--error-text); border-color: var(--error-border); background: var(--login-card); }
+.session-status { margin-top: 24px; }
+.session-return { margin-top: 8px; }
+.account-info { margin: 0 0 32px; }
+.account-info div { padding: 14px 0; border-top: 1px solid var(--divider); }
+.account-info dt { color: var(--muted); font-size: 13px; }
+.account-info dd { margin: 4px 0 0; font-size: 16px; overflow-wrap: anywhere; }
 .submit-button { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 48px; padding: 12px 18px; color: var(--on-accent); background: var(--accent); border: 1px solid transparent; border-radius: 4px; font-size: 14px; font-weight: 600; }
 .submit-button:not(:disabled):hover { filter: brightness(.94); }
 .submit-button:active { transform: translateY(1px); }

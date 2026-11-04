@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#edf5f2" />
+  <meta name="referrer" content="same-origin" />
+  <title>Tu cuenta | ChivoMed</title>
+  <link rel="icon" type="image/svg+xml" href="./resources/favicon.svg" />
+  <script src="./js/boundary/theme_init.js"></script>
+  <link rel="stylesheet" href="./resources/login.css" />
+  <script type="module" src="./js/boundary/inicio.js"></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z" /></symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></symbol>
+  </svg>
+  <a class="skip-link" href="#cuenta">Saltar a tu cuenta</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="ChivoMed, inicio"><span class="brand-mark" aria-hidden="true">+</span><span>Chivo<span class="brand-accent">Med</span></span></a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Activar modo oscuro" aria-pressed="false" hidden><svg class="icon" aria-hidden="true"><use href="#icon-moon" /></svg><span id="theme-label">Modo oscuro</span></button>
+    </header>
+    <main class="login-shell" id="cuenta">
+      <section class="form-panel" aria-labelledby="account-title">
+        <h1 id="account-title">Tu cuenta</h1>
+        <p class="form-feedback session-status" id="session-status" role="status" tabindex="-1">Activa JavaScript para verificar tu sesión.</p>
+        <div id="session-details" hidden>
+          <p class="login-caption" id="account-name"></p>
+          <dl class="account-info">
+            <div><dt>Rol</dt><dd id="account-role"></dd></div>
+            <div><dt>Clínica</dt><dd id="account-clinic"></dd></div>
+          </dl>
+          <button class="submit-button" id="logout" type="button" disabled>Cerrar sesión</button>
+        </div>
+        <a class="text-button session-return" id="session-return" href="./">Volver al inicio de sesión</a>
+      </section>
+    </main>
+    <footer class="site-footer"><p>ChivoMed todos los derechos reservados</p></footer>
+  </div>
+</body>
+</html>

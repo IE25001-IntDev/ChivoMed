@@ -1,39 +1,25 @@
+import "./theme.js";
+import { iniciarSesion } from "../control/auth_service.js";
+
 const form = document.querySelector("#login-form");
 const username = document.querySelector("#username");
 const password = document.querySelector("#password");
 const feedback = document.querySelector("#form-feedback");
 const passwordToggle = document.querySelector("#password-toggle");
-const themeToggle = document.querySelector("#theme-toggle");
-const themeLabel = document.querySelector("#theme-label");
-const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+const submit = document.querySelector("#login-submit");
+const submitLabel = document.querySelector("#login-submit-label");
+let enviando = false;
 
-function updateTheme(theme) {
-  const dark = theme === "dark";
-  document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]').content = dark ? "#101f25" : "#edf5f2";
-  themeToggle.setAttribute("aria-pressed", String(dark));
-  themeToggle.setAttribute("aria-label", dark ? "Activar modo claro" : "Activar modo oscuro");
-  themeToggle.querySelector("use").setAttribute("href", dark ? "#icon-sun" : "#icon-moon");
-  themeLabel.textContent = dark ? "Modo claro" : "Modo oscuro";
+function mostrarError(message) {
+  feedback.textContent = message;
+  feedback.dataset.state = "error";
+  feedback.hidden = false;
+  feedback.focus();
 }
 
-function preferredTheme() {
-  let saved;
-  try { saved = localStorage.getItem("chivomed-theme"); } catch { /* El almacenamiento es opcional. */ }
-  return saved === "light" || saved === "dark" ? saved : systemTheme.matches ? "dark" : "light";
+if (new URLSearchParams(location.search).get("sesion") === "finalizada") {
+  mostrarError("Tu sesión ha finalizado. Vuelve a iniciar sesión.");
 }
-
-themeToggle.addEventListener("click", () => {
-  const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  updateTheme(theme);
-  try { localStorage.setItem("chivomed-theme", theme); } catch { /* Conserva el tema de esta vista. */ }
-});
-systemTheme.addEventListener("change", () => updateTheme(preferredTheme()));
-window.addEventListener("storage", event => {
-  if (event.key === "chivomed-theme" || event.key === null) updateTheme(preferredTheme());
-});
-updateTheme(preferredTheme());
-themeToggle.hidden = false;
 
 passwordToggle.addEventListener("click", () => {
   const visible = password.type === "password";
@@ -53,8 +39,9 @@ function validate(field) {
   return valid;
 }
 
-form.addEventListener("submit", event => {
+form.addEventListener("submit", async event => {
   event.preventDefault();
+  if (enviando) return;
   feedback.hidden = true;
   const usernameValid = validate(username);
   const passwordValid = validate(password);
@@ -62,10 +49,26 @@ form.addEventListener("submit", event => {
     (usernameValid ? password : username).focus();
     return;
   }
-  // GalenoSV aún no define autenticación; no enviar ni almacenar credenciales.
-  feedback.textContent = "Esta es una vista previa del acceso. Aún no se ha iniciado una sesión.";
-  feedback.hidden = false;
-  feedback.focus();
+  enviando = true;
+  form.setAttribute("aria-busy", "true");
+  for (const control of [username, password, passwordToggle, submit]) control.disabled = true;
+  submitLabel.textContent = "Iniciando sesión…";
+  try {
+    await iniciarSesion(username.value.trim(), password.value);
+    location.replace("./inicio.html");
+  } catch (error) {
+    mostrarError(error.message);
+  } finally {
+    password.value = "";
+    password.type = "password";
+    passwordToggle.setAttribute("aria-pressed", "false");
+    passwordToggle.setAttribute("aria-label", "Mostrar contraseña");
+    passwordToggle.querySelector("use").setAttribute("href", "#icon-eye");
+    for (const control of [username, password, passwordToggle, submit]) control.disabled = false;
+    submitLabel.textContent = "Iniciar sesión";
+    form.setAttribute("aria-busy", "false");
+    enviando = false;
+  }
 });
 for (const field of [username, password]) {
   field.addEventListener("input", () => {
@@ -74,7 +77,7 @@ for (const field of [username, password]) {
   });
 }
 form.noValidate = true;
-document.querySelector("#login-submit").disabled = false;
+submit.disabled = false;
 
 const dialog = document.querySelector("#help-dialog");
 const helpContent = {
