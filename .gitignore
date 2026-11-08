@@ -1,7 +1,7 @@
-#carpetas de tests, archivos de configuracion de vscode y ejemplos 
-.vscode
-test
-tests
+#archivos de configuracion de vscode (compartir launch y tasks, ignorar personales)
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
 src/examples
 example.html
 #archivos de configuracion de variables de entorno

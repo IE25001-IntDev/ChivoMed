@@ -1,11 +1,812 @@
 <!DOCTYPE html>
-<html>
-    <head>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChivoMed · Salud digital conectada</title>
+    <link rel="stylesheet" href="resources/chivomed_theme.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-    </head>
-    <body>
-        <h1>
-            HOLA MUNDO!
-        </h1>
-    </body>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.5;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Resplandores radiales de fondo */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 81% 14%, var(--glow-mint), transparent 45%),
+                radial-gradient(ellipse at 9% 36%, var(--glow-blue), transparent 45%),
+                radial-gradient(ellipse at 83% 77%, var(--glow-lavender), transparent 45%);
+        }
+
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 32px 60px;
+        }
+
+        /* Barra de navegación Glass flotante */
+        .site-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            border-radius: 9999px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            box-shadow: var(--glass-shadow);
+            -webkit-backdrop-filter: blur(24px);
+            backdrop-filter: blur(24px);
+            margin-bottom: 40px;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .brand-logo {
+            display: grid;
+            place-items: center;
+            width: 38px;
+            height: 38px;
+            background: var(--accent);
+            color: var(--on-accent);
+            font-size: 24px;
+            font-weight: 700;
+            border-radius: 10px;
+        }
+
+        .brand-text strong {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-text small {
+            display: block;
+            font-size: 8px;
+            letter-spacing: 1.5px;
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 4px;
+            border-radius: 9999px;
+            border: 1px solid var(--border);
+        }
+
+        .nav-link {
+            padding: 8px 18px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            background: var(--mint-soft);
+            color: var(--accent-text);
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn-theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 9999px;
+            background: var(--glass);
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-theme-toggle:hover {
+            background: var(--surface-solid);
+            border-color: var(--accent);
+        }
+
+        /* Hero Section */
+        .hero {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 40px;
+            align-items: center;
+            margin-bottom: 48px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            color: var(--accent-text);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+            box-shadow: 0 0 10px #ef4444;
+        }
+
+        .hero-title {
+            font-size: 44px;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -1.2px;
+            margin-bottom: 18px;
+        }
+
+        .hero-title span {
+            color: var(--accent);
+        }
+
+        .hero-description {
+            font-size: 15px;
+            color: var(--muted);
+            line-height: 1.6;
+            margin-bottom: 24px;
+            max-width: 520px;
+        }
+
+        /* Buscador */
+        .search-wrapper {
+            position: relative;
+            z-index: 100;
+            margin-bottom: 28px;
+            max-width: 600px;
+        }
+
+        .hero-actions {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 22px;
+            border-radius: 9999px;
+            font-size: 14px;
+            font-weight: 650;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-action-medico {
+            background: #0284c7;
+            color: #ffffff;
+            box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35);
+        }
+
+        .btn-action-medico:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.5);
+        }
+
+        .btn-action-personal {
+            background: var(--accent);
+            color: var(--on-accent);
+            box-shadow: 0 4px 16px rgba(120, 212, 176, 0.35);
+        }
+
+        .btn-action-personal:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(120, 212, 176, 0.5);
+        }
+
+        /* Escena Orbital Care Preview */
+        .care-scene {
+            position: relative;
+            height: 420px;
+            display: grid;
+            place-items: center;
+        }
+
+        .scene-orbit {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .orbit-outer {
+            width: 390px;
+            height: 390px;
+            border: 1px solid var(--border);
+        }
+
+        .orbit-inner {
+            width: 290px;
+            height: 290px;
+            border: 1px dashed var(--border-strong);
+        }
+
+        .scene-spark {
+            position: absolute;
+            color: var(--accent);
+            font-size: 18px;
+            font-weight: 700;
+            user-select: none;
+        }
+
+        .spark-1 { top: 38px; right: 70px; opacity: 0.8; }
+        .spark-2 { bottom: 42px; left: 65px; opacity: 0.6; }
+
+        .care-window {
+            position: relative;
+            z-index: 2;
+            width: 210px;
+            padding: 24px 20px;
+            border-radius: 20px;
+            background: var(--surface-solid);
+            border: 1px solid var(--border-strong);
+            box-shadow: var(--glass-shadow);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .care-window-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--mint-soft);
+            color: var(--accent);
+            display: grid;
+            place-items: center;
+        }
+
+        .care-window h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .care-window p {
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .care-soundwave {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 18px;
+            margin-top: 4px;
+        }
+
+        .care-soundwave span {
+            width: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+            animation: pulseWave 1.4s ease-in-out infinite;
+        }
+
+        .care-soundwave span:nth-child(1) { height: 6px; animation-delay: 0.1s; }
+        .care-soundwave span:nth-child(2) { height: 12px; animation-delay: 0.2s; }
+        .care-soundwave span:nth-child(3) { height: 16px; animation-delay: 0.3s; }
+        .care-soundwave span:nth-child(4) { height: 8px; animation-delay: 0.4s; }
+        .care-soundwave span:nth-child(5) { height: 14px; animation-delay: 0.2s; }
+        .care-soundwave span:nth-child(6) { height: 10px; animation-delay: 0.5s; }
+        .care-soundwave span:nth-child(7) { height: 4px; animation-delay: 0.3s; }
+
+        @keyframes pulseWave {
+            0%, 100% { transform: scaleY(0.7); }
+            50% { transform: scaleY(1.3); }
+        }
+
+        .floating-card-sample {
+            position: absolute;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-radius: 9999px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            box-shadow: var(--glass-shadow);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            font-size: 12px;
+            color: var(--text);
+            text-decoration: none;
+            transition: transform 0.2s ease, border-color 0.2s;
+        }
+
+        .floating-card-sample:hover {
+            transform: scale(1.05);
+            border-color: var(--accent);
+        }
+
+        .floating-card-sample strong { display: block; font-size: 12px; font-weight: 650; }
+        .floating-card-sample small { display: block; font-size: 9px; color: var(--muted); }
+
+        .card-pacientes { top: 28px; left: 24px; }
+        .card-consultas { top: 70px; right: 12px; }
+        .card-examenes { bottom: 36px; right: 30px; }
+
+        .badge-icon {
+            display: grid;
+            place-items: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-size: 14px;
+        }
+
+        .badge-icon.mint { background: var(--mint-soft); }
+        .badge-icon.blue { background: var(--blue-soft); }
+        .badge-icon.lavender { background: var(--lavender-soft); }
+
+        /* Monitor de Conexión en Vivo GalenoSV */
+        .backend-monitor {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px 24px;
+            box-shadow: var(--glass-shadow);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            margin-bottom: 40px;
+        }
+
+        .monitor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .monitor-title {
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .monitor-pill {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .monitor-pill.loading { background: #fef3c7; color: #b45309; }
+        .monitor-pill.success { background: #dcfce7; color: #15803d; }
+        .monitor-pill.error { background: #fee2e2; color: #b91c1c; }
+
+        .btn-retry {
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: transparent;
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-retry:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            font-size: 13px;
+        }
+
+        .monitor-stat-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+        }
+
+        .monitor-stat-card h4 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .monitor-stat-card ul {
+            list-style: none;
+            line-height: 1.6;
+        }
+
+        .monitor-stat-card li {
+            color: var(--text);
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        /* Barra de principios inferior */
+        .principles-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 28px;
+            border-radius: 9999px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--muted);
+            box-shadow: var(--glass-shadow);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .principles-bar strong { color: var(--text); }
+        .principles-item { display: flex; align-items: center; gap: 6px; }
+        .principles-item span { color: var(--accent); }
+
+        @media (max-width: 900px) {
+            .hero { grid-template-columns: 1fr; }
+            .care-scene { margin-top: 30px; }
+            .principles-bar { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <!-- Navegación Glass Flotante -->
+        <header class="site-header">
+            <a href="index.html" class="brand">
+                <span class="brand-logo">+</span>
+                <span class="brand-text">
+                    <strong>ChivoMed</strong>
+                    <small>El cuidado nos conecta</small>
+                </span>
+            </a>
+
+            <nav class="nav-links">
+                <a href="index.html" class="nav-link active">Inicio</a>
+                <a href="paginas/medico/atencion.html" class="nav-link">🩺 Estación Médica</a>
+                <a href="paginas/personal/administracion.html" class="nav-link">🏢 Personal de Clínica</a>
+                <a href="paginas/demo_busqueda_glass.html" class="nav-link">🧪 Demo Visual</a>
+            </nav>
+
+            <div class="header-actions">
+                <button type="button" class="btn-theme-toggle" id="btnThemeToggle">
+                    ☀️ <span>Modo Claro</span>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Hero Principal -->
+            <section class="hero">
+                <div class="hero-left">
+                    <p class="eyebrow">
+                        <span id="globalStatusDot" class="status-dot"></span>
+                        SISTEMA HOSPITALARIO GALENOSV · JAKARTA EE
+                    </p>
+                    <h1 class="hero-title">
+                        Salud digital conectada.<br>
+                        <span>Centrada en las personas.</span>
+                    </h1>
+                    <p class="hero-description">
+                        Atención clínica médica, workflows de consultas, diagnósticos y parametrización de catálogos en un ecosistema reactivo y ágil.
+                    </p>
+
+                    <!-- Buscador Reactivo Glassmorphic con Web Component -->
+                    <div class="search-wrapper">
+                        <busqueda-chivomed id="buscadorGlobal" placeholder="Buscar pacientes, clínicas, roles, exámenes o consultas..."></busqueda-chivomed>
+                    </div>
+
+                    <!-- Enlaces Directos a los Módulos del Sistema -->
+                    <div class="hero-actions">
+                        <a href="paginas/medico/atencion.html" class="btn-action btn-action-medico">
+                            🩺 Estación Médica &rarr;
+                        </a>
+                        <a href="paginas/personal/administracion.html" class="btn-action btn-action-personal">
+                            🏢 Personal y Administración &rarr;
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Escena Orbital Care Preview -->
+                <div class="hero-right">
+                    <div class="care-scene">
+                        <div class="scene-orbit orbit-outer"></div>
+                        <div class="scene-orbit orbit-inner"></div>
+
+                        <span class="scene-spark spark-1">+</span>
+                        <span class="scene-spark spark-2">+</span>
+
+                        <!-- Ventana Central -->
+                        <div class="care-window">
+                            <div class="care-window-badge">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                </svg>
+                            </div>
+                            <h3>Las personas.</h3>
+                            <p>Cada historia merece una atención clínica conectada.</p>
+                            <div class="care-soundwave">
+                                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                            <small style="color: var(--muted); font-size: 8px;">Un mismo espacio. Un mejor recorrido.</small>
+                        </div>
+
+                        <!-- Tarjetas orbitales flotantes -->
+                        <a href="paginas/medico/atencion.html" class="floating-card-sample card-pacientes">
+                            <span class="badge-icon mint">👥</span>
+                            <div>
+                                <strong>Pacientes</strong>
+                                <small>Expedientes y cola clínica</small>
+                            </div>
+                        </a>
+
+                        <a href="paginas/medico/atencion.html" class="floating-card-sample card-consultas">
+                            <span class="badge-icon blue">🩺</span>
+                            <div>
+                                <strong>Consultas</strong>
+                                <small>Workflows y protocolos</small>
+                            </div>
+                        </a>
+
+                        <a href="paginas/personal/administracion.html" class="floating-card-sample card-examenes">
+                            <span class="badge-icon lavender">🧪</span>
+                            <div>
+                                <strong>Exámenes</strong>
+                                <small>Taxonomía y órdenes</small>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Monitor de Conexión en Vivo con GalenoSV Backend -->
+            <section class="backend-monitor">
+                <div class="monitor-header">
+                    <div class="monitor-title">
+                        <span>⚡ Estado de Conexión con GalenoSV (Open Liberty)</span>
+                        <span id="monitorPill" class="monitor-pill loading">Verificando conexión...</span>
+                    </div>
+                    <button type="button" class="btn-retry" id="btnReintentar">🔄 Comprobar Conexión</button>
+                </div>
+                <div id="monitorDetalle" class="monitor-grid">
+                    <div class="monitor-stat-card">
+                        <h4>Sedes Clínicas Registradas</h4>
+                        <div id="listaClinicas" style="color: var(--muted);">Consultando...</div>
+                    </div>
+                    <div class="monitor-stat-card">
+                        <h4>Roles de Personal</h4>
+                        <div id="listaRoles" style="color: var(--muted);">Consultando...</div>
+                    </div>
+                    <div class="monitor-stat-card">
+                        <h4>API Endpoint</h4>
+                        <div id="infoEndpoint" style="color: var(--muted);">/galenosv/api &rarr; http://localhost:9080</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Principios Inferiores -->
+            <footer class="principles-bar">
+                <div>Diseñado alrededor de <strong>las personas.</strong></div>
+                <div class="principles-item"><span>◎</span> Atención conectada</div>
+                <div class="principles-item"><span>⊞</span> Información organizada</div>
+                <div class="principles-item"><span>↗</span> Un recorrido claro</div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Integración del Web Component y Servicios Control -->
+    <script type="module">
+        import './js/boundary/components/busqueda_chivomed.js';
+        import { ClinicaService, RolService, ExamenService, PersonaService, ConsultaService, API_CONFIG } from './js/control/index.js';
+
+        const monitorPill = document.getElementById('monitorPill');
+        const globalStatusDot = document.getElementById('globalStatusDot');
+        const listaClinicas = document.getElementById('listaClinicas');
+        const listaRoles = document.getElementById('listaRoles');
+        const infoEndpoint = document.getElementById('infoEndpoint');
+        const btnReintentar = document.getElementById('btnReintentar');
+        const buscadorGlobal = document.getElementById('buscadorGlobal');
+        const btnThemeToggle = document.getElementById('btnThemeToggle');
+
+        // Toggle Modo Claro / Oscuro
+        btnThemeToggle.addEventListener('click', () => {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            html.setAttribute('data-theme', newTheme);
+            btnThemeToggle.innerHTML = newTheme === 'light' ? '🌙 <span>Modo Oscuro</span>' : '☀️ <span>Modo Claro</span>';
+        });
+
+        // Verificación de conexión y carga de catálogo al buscador
+        async function verificarConexion() {
+            monitorPill.className = 'monitor-pill loading';
+            monitorPill.textContent = 'Verificando...';
+
+            try {
+                const clinicaService = new ClinicaService();
+                const rolService = new RolService();
+                const examenService = new ExamenService();
+                const personaService = new PersonaService();
+                const consultaService = new ConsultaService();
+
+                const [resClinicas, resRoles, resExamenes, resPersonas, resConsultas] = await Promise.all([
+                    clinicaService.listar(),
+                    rolService.listar(),
+                    examenService.listar().catch(() => ({ data: [] })),
+                    personaService.listar().catch(() => ({ data: [] })),
+                    consultaService.listar().catch(() => ({ data: [] })),
+                ]);
+
+                const clinicas = resClinicas.data || [];
+                const roles = resRoles.data || [];
+                const examenes = resExamenes.data || [];
+                const personas = resPersonas.data || [];
+                const consultas = resConsultas.data || [];
+
+                monitorPill.className = 'monitor-pill success';
+                monitorPill.textContent = '● En línea (200 OK)';
+                globalStatusDot.className = 'status-dot';
+
+                listaClinicas.innerHTML = `<ul>${clinicas.slice(0, 4).map(c => `<li><strong>${c.nombre}</strong> <small style="color:var(--muted);">${c.tipo || 'General'}</small></li>`).join('')}</ul>`;
+                listaRoles.innerHTML = `<ul>${roles.slice(0, 4).map(r => `<li><strong>${r.nombre}</strong> <small style="color:var(--accent);">Activo</small></li>`).join('')}</ul>`;
+                infoEndpoint.innerHTML = `
+                    <div><strong>URL:</strong> <code>${API_CONFIG.baseUrl}</code></div>
+                    <div style="margin-top: 4px; font-size: 11px; color: var(--muted);">Proxy reverso activo en puerto local 3000</div>
+                `;
+
+                // Poblar catálogo de búsqueda interactiva
+                const catalogo = [
+                    ...personas.map(p => ({
+                        id: p.idPersona,
+                        categoria: 'paciente',
+                        nombre: `${p.nombres || ''} ${p.apellidos || ''}`.trim() || 'Paciente',
+                        detalle: `Persona / Paciente · ${(p.idPersona || '').slice(0, 8)}`,
+                        observaciones: `Fecha nacimiento: ${p.fechaNacimiento || 'No registrada'}`,
+                    })),
+                    ...consultas.map(c => ({
+                        id: c.idConsulta,
+                        categoria: 'consulta',
+                        nombre: `Consulta: ${c.pacienteNombre || 'Paciente'}`,
+                        detalle: `Atención médica · ${c.fechaFin ? 'Finalizada' : 'Activa'}`,
+                        observaciones: c.observaciones || 'Consulta clínica',
+                    })),
+                    ...clinicas.map(c => ({
+                        id: c.idClinica,
+                        categoria: 'clinica',
+                        nombre: c.nombre,
+                        detalle: `Sede ${c.tipo || 'General'} · GalenoSV`,
+                        observaciones: c.comentarios || 'Atención hospitalaria',
+                    })),
+                    ...roles.map(r => ({
+                        id: r.idRol,
+                        categoria: 'clinica',
+                        nombre: `Rol: ${r.nombre}`,
+                        detalle: 'Perfil profesional operativo',
+                        observaciones: r.observaciones || 'Asignación de personal clínico',
+                    })),
+                    ...examenes.map(e => ({
+                        id: e.idExamen,
+                        categoria: 'examen',
+                        nombre: e.nombre,
+                        detalle: 'Prueba diagnóstica de laboratorio',
+                        observaciones: e.observaciones || 'Catálogo de exámenes',
+                    })),
+                ];
+
+                if (buscadorGlobal) {
+                    buscadorGlobal.items = catalogo;
+                }
+            } catch (error) {
+                monitorPill.className = 'monitor-pill error';
+                monitorPill.textContent = '✕ Error de Conexión';
+                globalStatusDot.className = 'status-dot offline';
+
+                listaClinicas.innerHTML = `<span style="color:#ef4444;">No disponible</span>`;
+                listaRoles.innerHTML = `<span style="color:#ef4444;">No disponible</span>`;
+                infoEndpoint.innerHTML = `
+                    <div style="color: #ef4444; font-size: 12px;"><strong>Error:</strong> ${error.message || 'Sin conexión'}</div>
+                    <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Asegúrate de que Open Liberty esté en el puerto 9080 y corre 'npm start'</div>
+                `;
+            }
+        }
+
+        if (btnReintentar) {
+            btnReintentar.addEventListener('click', verificarConexion);
+        }
+
+        // Navegación al seleccionar un resultado en el buscador
+        if (buscadorGlobal) {
+            const manejarNavegacion = (e) => {
+                const item = e.detail?.item || e.detail;
+                if (!item) return;
+                if (item.categoria === 'clinica' || item.categoria === 'examen') {
+                    window.location.href = 'paginas/personal/administracion.html';
+                } else {
+                    window.location.href = 'paginas/medico/atencion.html';
+                }
+            };
+            buscadorGlobal.addEventListener('item-seleccionado', manejarNavegacion);
+            buscadorGlobal.addEventListener('elemento-seleccionado', manejarNavegacion);
+        }
+
+        verificarConexion();
+    </script>
+</body>
 </html>
