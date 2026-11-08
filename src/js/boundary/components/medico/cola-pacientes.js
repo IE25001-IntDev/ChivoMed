@@ -63,7 +63,9 @@ class ColaPacientes extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <style>
                 :host {
-                    display: block;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: calc(100vh - 190px);
                     background: var(--card-glass, rgba(29, 51, 56, 0.65));
                     backdrop-filter: blur(28px) saturate(180%);
                     -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -72,9 +74,10 @@ class ColaPacientes extends HTMLElement {
                     overflow: hidden;
                     box-shadow: var(--card-shadow, var(--glass-shadow));
                     transition: var(--transition-card, all 0.28s ease);
+                    box-sizing: border-box;
                 }
                 .panel-header {
-                    padding: 1rem 1.25rem;
+                    padding: 1.35rem 1.75rem;
                     background: var(--surface-muted, rgba(0, 0, 0, 0.15));
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
                     display: flex;
@@ -82,34 +85,34 @@ class ColaPacientes extends HTMLElement {
                     justify-content: space-between;
                 }
                 .panel-title {
-                    font-size: 0.95rem;
+                    font-size: 1.05rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                     display: flex;
                     align-items: center;
-                    gap: 0.4rem;
+                    gap: 0.75rem;
                 }
                 .counter-badge {
                     background: var(--mint-soft, #284b43);
                     color: var(--accent-text, #8bdbbc);
                     border: 1px solid var(--border-strong, rgba(160, 208, 193, 0.2));
                     border-radius: 9999px;
-                    padding: 0.18rem 0.6rem;
+                    padding: 0.22rem 0.65rem;
                     font-size: 0.75rem;
                     font-weight: bold;
                     box-shadow: 0 0 10px var(--glow-mint);
                 }
                 .filter-tabs {
                     display: flex;
-                    padding: 0.4rem 0.6rem;
-                    gap: 0.35rem;
+                    padding: 0.75rem 1.25rem;
+                    gap: 0.65rem;
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
                     background: var(--surface-muted, rgba(0, 0, 0, 0.12));
                 }
                 .tab-btn {
                     flex: 1;
-                    padding: 0.45rem 0.6rem;
-                    font-size: 0.78rem;
+                    padding: 0.6rem 1rem;
+                    font-size: 0.85rem;
                     font-weight: 600;
                     border: 1px solid transparent;
                     border-radius: 9999px;
@@ -132,7 +135,7 @@ class ColaPacientes extends HTMLElement {
                 }
                 .search-bar-wrap {
                     position: relative;
-                    padding: 0.65rem 0.85rem;
+                    padding: 1rem 1.5rem;
                     background: var(--surface-muted, rgba(0, 0, 0, 0.08));
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
                     display: flex;
@@ -140,17 +143,18 @@ class ColaPacientes extends HTMLElement {
                 }
                 .search-ico {
                     position: absolute;
-                    left: 1.4rem;
-                    font-size: 0.8rem;
+                    left: 2.15rem;
+                    font-size: 0.95rem;
                     color: var(--muted, #a2b9b8);
                     pointer-events: none;
                 }
                 .search-input {
                     width: 100%;
-                    padding: 0.5rem 1.8rem 0.5rem 2.2rem;
+                    padding: 0.75rem 2.2rem 0.75rem 2.85rem;
+                    min-height: 2.9rem;
                     border: 1px solid var(--border-strong, rgba(172, 223, 206, 0.2));
                     border-radius: 9999px;
-                    font-size: 0.8rem;
+                    font-size: 0.9rem;
                     outline: none;
                     background: var(--surface-solid, #20383d);
                     color: var(--text, #e2f0eb);
@@ -163,25 +167,26 @@ class ColaPacientes extends HTMLElement {
                 }
                 .btn-clear {
                     position: absolute;
-                    right: 1.4rem;
+                    right: 2.15rem;
                     border: none;
                     background: transparent;
                     color: var(--muted, #a2b9b8);
                     cursor: pointer;
-                    font-size: 0.8rem;
-                    padding: 0.2rem;
+                    font-size: 0.85rem;
+                    padding: 0.25rem;
                 }
                 .btn-clear:hover { color: var(--text, #e2f0eb); }
                 .list-container {
-                    max-height: 560px;
+                    flex: 1;
+                    max-height: calc(100vh - 360px);
                     overflow-y: auto;
-                    padding: 0.75rem;
+                    padding: 1.25rem 1.5rem;
                     display: flex;
                     flex-direction: column;
-                    gap: 0.5rem;
+                    gap: 0.85rem;
                 }
                 .item-card {
-                    padding: 0.9rem 1rem;
+                    padding: 1.15rem 1.25rem;
                     border: 1px solid var(--card-border, rgba(172, 223, 206, 0.12));
                     border-radius: 14px;
                     cursor: pointer;
@@ -189,7 +194,7 @@ class ColaPacientes extends HTMLElement {
                     background: var(--surface-solid, #20383d);
                     display: flex;
                     flex-direction: column;
-                    gap: 0.35rem;
+                    gap: 0.55rem;
                 }
                 .item-card:hover {
                     border-color: var(--accent, #78d4b0);
@@ -207,17 +212,17 @@ class ColaPacientes extends HTMLElement {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    gap: 0.5rem;
+                    gap: 0.65rem;
                 }
                 .patient-name {
                     font-weight: 700;
-                    font-size: 0.92rem;
+                    font-size: 0.95rem;
                     color: var(--text, #e2f0eb);
                 }
                 .status-chip {
-                    font-size: 0.68rem;
+                    font-size: 0.72rem;
                     font-weight: 700;
-                    padding: 0.18rem 0.55rem;
+                    padding: 0.25rem 0.65rem;
                     border-radius: 9999px;
                     text-transform: uppercase;
                     white-space: nowrap;

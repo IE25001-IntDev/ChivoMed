@@ -42,9 +42,9 @@ class PersonalHeader extends HTMLElement {
                     -webkit-backdrop-filter: blur(28px) saturate(180%);
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.14));
                     border-radius: 9999px;
-                    padding: 0.75rem 1.75rem;
+                    padding: 1.15rem 2.75rem;
                     box-shadow: var(--glass-shadow);
-                    margin: 1.25rem 2rem 0;
+                    margin: 1.75rem 2.75rem 0.5rem;
                 }
                 .header-container {
                     display: flex;
@@ -52,49 +52,52 @@ class PersonalHeader extends HTMLElement {
                     justify-content: space-between;
                     width: 100%;
                     flex-wrap: wrap;
-                    gap: 1rem;
+                    gap: 1.5rem;
                 }
                 .brand-section {
                     display: flex;
                     align-items: center;
-                    gap: 0.85rem;
+                    gap: 1.25rem;
+                    padding-left: 0.5rem;
                 }
                 .brand-icon {
-                    width: 38px;
-                    height: 38px;
+                    width: 48px;
+                    height: 48px;
                     background: var(--accent, #78d4b0);
                     color: var(--on-accent, #122e2a);
-                    border-radius: 10px;
+                    border-radius: 14px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 1.25rem;
+                    font-size: 1.55rem;
                     font-weight: 800;
-                    box-shadow: 0 0 12px rgba(120, 212, 176, 0.3);
+                    box-shadow: 0 0 16px rgba(120, 212, 176, 0.35);
                 }
                 .brand-title {
-                    font-size: 1.25rem;
+                    font-size: 1.35rem;
                     font-weight: 800;
                     color: var(--text, #e2f0eb);
                     line-height: 1.2;
                 }
                 .brand-subtitle {
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     color: var(--muted, #a2b9b8);
+                    margin-top: 0.15rem;
                 }
                 .info-section {
                     display: flex;
                     align-items: center;
-                    gap: 0.65rem;
+                    gap: 1rem;
+                    padding-right: 0.5rem;
                     flex-wrap: wrap;
                 }
                 .badge {
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.35rem;
-                    padding: 0.4rem 0.85rem;
+                    gap: 0.5rem;
+                    padding: 0.5rem 1rem;
                     border-radius: 9999px;
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     font-weight: 600;
                 }
                 .badge-clinic {
@@ -108,9 +111,9 @@ class PersonalHeader extends HTMLElement {
                     border: 1px solid var(--border-strong, rgba(160, 208, 193, 0.25));
                 }
                 .nav-pill-btn {
-                    padding: 0.4rem 0.85rem;
+                    padding: 0.55rem 1.15rem;
                     border-radius: 9999px;
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     font-weight: 600;
                     text-decoration: none;
                     color: var(--muted, #a2b9b8);
@@ -119,7 +122,7 @@ class PersonalHeader extends HTMLElement {
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.35rem;
+                    gap: 0.65rem;
                 }
                 .nav-pill-btn:hover {
                     color: var(--text, #e2f0eb);
@@ -134,13 +137,13 @@ class PersonalHeader extends HTMLElement {
                     background: var(--surface-solid, #20383d);
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.15));
                     border-radius: 9999px;
-                    padding: 0.4rem 0.85rem;
-                    font-size: 0.8rem;
+                    padding: 0.55rem 1.15rem;
+                    font-size: 0.85rem;
                     color: var(--text, #e2f0eb);
                     cursor: pointer;
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.35rem;
+                    gap: 0.65rem;
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
                 }
                 .btn-refresh:hover:not(:disabled) {

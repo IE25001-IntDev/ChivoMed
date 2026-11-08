@@ -70,53 +70,63 @@ class PanelExamenes extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <style>
                 :host {
-                    display: block;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: calc(100vh - 190px);
                     background: var(--card-glass, rgba(29, 51, 56, 0.7));
                     backdrop-filter: blur(28px) saturate(180%);
                     -webkit-backdrop-filter: blur(28px) saturate(180%);
                     border: 1px solid var(--card-border, rgba(172, 223, 206, 0.14));
                     border-radius: var(--card-radius, 20px);
-                    padding: 1.75rem;
+                    padding: 3.25rem 3.75rem;
                     box-shadow: var(--card-shadow, var(--glass-shadow));
                     transition: var(--transition-card, all 0.28s ease);
+                    box-sizing: border-box;
                 }
                 .section-header {
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    padding-bottom: 1rem;
-                    margin-bottom: 1.25rem;
+                    padding-top: 0.5rem;
+                    padding-bottom: 1.75rem;
+                    margin-bottom: 2.25rem;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     flex-wrap: wrap;
-                    gap: 0.75rem;
+                    gap: 1.25rem;
+                }
+                .title-box {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                    padding: 0.25rem 0.5rem;
                 }
                 .title-box h3 {
-                    font-size: 1.15rem;
+                    font-size: 1.35rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                     margin: 0;
                 }
                 .title-box p {
-                    font-size: 0.85rem;
+                    font-size: 0.92rem;
                     color: var(--muted, #a2b9b8);
-                    margin-top: 0.25rem;
-                    margin-bottom: 0;
+                    margin: 0;
+                    line-height: 1.5;
                 }
                 .nav-pills {
                     display: flex;
-                    gap: 0.4rem;
-                    margin-bottom: 1.25rem;
+                    gap: 0.65rem;
+                    margin-bottom: 2.25rem;
                     background: var(--surface-muted, rgba(0, 0, 0, 0.15));
-                    padding: 0.35rem;
+                    padding: 0.55rem;
                     border-radius: 9999px;
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.12));
                     width: fit-content;
                     flex-wrap: wrap;
                 }
                 .pill-btn {
-                    padding: 0.45rem 1rem;
+                    padding: 0.7rem 1.35rem;
                     border-radius: 9999px;
-                    font-size: 0.825rem;
+                    font-size: 0.9rem;
                     font-weight: 600;
                     border: 1px solid transparent;
                     background: transparent;
@@ -135,16 +145,21 @@ class PanelExamenes extends HTMLElement {
                     box-shadow: 0 2px 10px var(--glow-mint);
                 }
                 .btn {
-                    padding: 0.45rem 1rem;
+                    padding: 0.75rem 1.6rem;
                     border-radius: 9999px;
-                    font-size: 0.85rem;
+                    font-size: 0.92rem;
                     font-weight: 600;
                     cursor: pointer;
                     border: none;
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.35rem;
+                    gap: 0.65rem;
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+                }
+                .btn-sm {
+                    padding: 0.5rem 1.1rem;
+                    font-size: 0.85rem;
+                    gap: 0.55rem;
                 }
                 .btn:hover:not(:disabled) {
                     transform: translateY(-2px);
@@ -185,35 +200,37 @@ class PanelExamenes extends HTMLElement {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 1rem;
-                    gap: 1rem;
+                    margin-bottom: 2.25rem;
+                    gap: 1.5rem;
                     flex-wrap: wrap;
                 }
                 .search-box {
                     position: relative;
                     display: inline-flex;
                     align-items: center;
-                    min-width: 280px;
-                    max-width: 420px;
+                    min-width: 320px;
+                    max-width: 480px;
                     flex: 1;
                 }
                 .search-icon {
                     position: absolute;
-                    left: 0.85rem;
-                    font-size: 0.85rem;
+                    left: 1.15rem;
+                    font-size: 0.95rem;
                     color: var(--muted, #a2b9b8);
                     pointer-events: none;
                 }
                 .search-input {
-                    padding: 0.55rem 2rem 0.55rem 2.3rem;
+                    padding: 0.85rem 2.6rem 0.85rem 2.85rem;
+                    min-height: 3.1rem;
                     border: 1px solid var(--border-strong, rgba(172, 223, 206, 0.25));
                     border-radius: 9999px;
-                    font-size: 0.85rem;
+                    font-size: 0.92rem;
                     width: 100%;
                     outline: none;
                     background: var(--surface-solid, #20383d);
                     color: var(--text, #e2f0eb);
                     transition: all 0.2s;
+                    box-sizing: border-box;
                 }
                 .search-input:focus {
                     border-color: var(--accent, #78d4b0);
@@ -221,13 +238,13 @@ class PanelExamenes extends HTMLElement {
                 }
                 .btn-clear-search {
                     position: absolute;
-                    right: 0.75rem;
+                    right: 0.9rem;
                     background: transparent;
                     border: none;
                     color: var(--muted, #a2b9b8);
                     cursor: pointer;
                     font-size: 0.85rem;
-                    padding: 0.2rem;
+                    padding: 0.25rem;
                 }
                 .btn-clear-search:hover { color: var(--text, #e2f0eb); }
                 mark.resaltado-busqueda {
@@ -242,31 +259,38 @@ class PanelExamenes extends HTMLElement {
                 .table-container {
                     overflow-x: auto;
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.15));
-                    border-radius: 12px;
+                    border-radius: 16px;
                     background: var(--surface-solid, #20383d);
+                    flex: 1;
+                    min-height: 360px;
                 }
                 table {
                     width: 100%;
                     border-collapse: collapse;
-                    font-size: 0.875rem;
+                    font-size: 0.9rem;
                     text-align: left;
                 }
                 th {
                     background: var(--table-header-bg, rgba(0, 0, 0, 0.25));
                     color: var(--muted, #a2b9b8);
-                    padding: 0.75rem 1rem;
+                    padding: 1.15rem 1.5rem;
                     font-weight: 700;
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.15));
                 }
                 td {
-                    padding: 0.75rem 1rem;
+                    padding: 1.15rem 1.5rem;
                     border-bottom: 1px solid rgba(172, 223, 206, 0.08);
                     color: var(--text, #e2f0eb);
                 }
                 tr:hover { background: rgba(255, 255, 255, 0.04); }
+                .table-actions {
+                    display: inline-flex;
+                    gap: 0.65rem;
+                    align-items: center;
+                }
                 .badge {
                     display: inline-block;
-                    padding: 0.2rem 0.5rem;
+                    padding: 0.25rem 0.65rem;
                     border-radius: 9999px;
                     font-size: 0.75rem;
                     font-weight: 700;
@@ -299,11 +323,11 @@ class PanelExamenes extends HTMLElement {
                     border: 1px solid var(--border-strong, rgba(160, 208, 193, 0.28));
                     border-radius: var(--card-radius, 24px);
                     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(120, 212, 176, 0.1);
-                    max-width: 620px;
+                    max-width: 660px;
                     width: 100%;
                     max-height: 85vh;
                     overflow-y: auto;
-                    padding: 1.75rem;
+                    padding: 2.5rem;
                     animation: modalScaleIn 0.2s ease-out;
                     box-sizing: border-box;
                     backdrop-filter: blur(28px) saturate(180%);
@@ -320,33 +344,33 @@ class PanelExamenes extends HTMLElement {
                     justify-content: space-between;
                     align-items: flex-start;
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    padding-bottom: 1rem;
-                    margin-bottom: 1.25rem;
+                    padding-bottom: 1.5rem;
+                    margin-bottom: 1.75rem;
                 }
 
                 .modal-title {
-                    font-size: 1.15rem;
+                    font-size: 1.25rem;
                     font-weight: 700;
                     color: var(--accent, #78d4b0);
                     margin: 0;
                 }
 
                 .modal-subtitle {
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     color: var(--muted, #a2b9b8);
-                    margin-top: 0.25rem;
+                    margin-top: 0.35rem;
                 }
 
                 .btn-close-modal {
                     background: var(--surface-muted, rgba(255, 255, 255, 0.06));
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.15));
                     border-radius: 50%;
-                    width: 32px;
-                    height: 32px;
+                    width: 36px;
+                    height: 36px;
                     display: grid;
                     place-items: center;
                     color: var(--muted, #a2b9b8);
-                    font-size: 0.9rem;
+                    font-size: 1rem;
                     cursor: pointer;
                     transition: all 0.15s;
                 }
@@ -360,31 +384,32 @@ class PanelExamenes extends HTMLElement {
                 .form-card {
                     background: var(--surface-muted, rgba(0, 0, 0, 0.2));
                     border: 1px solid var(--border-strong, rgba(172, 223, 206, 0.2));
-                    border-radius: 12px;
-                    padding: 1.25rem;
-                    margin-bottom: 1.25rem;
+                    border-radius: 14px;
+                    padding: 1.75rem;
+                    margin-bottom: 1.75rem;
                 }
                 .form-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                    gap: 1rem;
-                    margin-bottom: 1rem;
+                    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 1.5rem;
                 }
                 .form-group {
                     display: flex;
                     flex-direction: column;
-                    gap: 0.35rem;
+                    gap: 0.65rem;
                 }
                 .form-label {
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                 }
                 .input-field {
-                    padding: 0.6rem 0.85rem;
+                    padding: 0.7rem 1rem;
+                    min-height: 2.75rem;
                     border: 1px solid var(--border-strong, rgba(172, 223, 206, 0.25));
-                    border-radius: 8px;
-                    font-size: 0.85rem;
+                    border-radius: 10px;
+                    font-size: 0.9rem;
                     font-family: inherit;
                     box-sizing: border-box;
                     background: var(--input-bg, var(--surface-solid, #20383d));
@@ -457,7 +482,7 @@ class PanelExamenes extends HTMLElement {
                                     <input type="text" class="input-field" id="obsEx" name="observaciones" placeholder="Indicaciones clínicas o de preparación..." value="${escapeHtml(this._itemEnEdicion?.observaciones || '')}"/>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+                            <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 1.5rem;">
                                 <button type="button" class="btn btn-outline" id="btnCancelForm">✕ Cancelar</button>
                                 <button type="submit" class="btn btn-primary" ${this._cargando ? 'disabled' : ''}>
                                     ${this._cargando ? '⏳ Guardando...' : '💾 Guardar'}
@@ -500,8 +525,10 @@ class PanelExamenes extends HTMLElement {
                                     <td><span class="badge ${te.activo ? 'badge-active' : 'badge-inactive'}">${te.activo ? 'Activo' : 'Inactivo'}</span></td>
                                     <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(te.observaciones || '—', this._filtroBusquedaTipos, 'resaltado-busqueda')}</td>
                                     <td style="text-align: right; white-space: nowrap;">
-                                        <button type="button" class="btn btn-outline btn-edit-tipo" data-id="${escapeHtml(te.idTipoExamen)}">✏️ Editar</button>
-                                        <button type="button" class="btn btn-danger btn-del-tipo" data-id="${escapeHtml(te.idTipoExamen)}">🗑️ Eliminar</button>
+                                        <div class="table-actions">
+                                            <button type="button" class="btn btn-sm btn-outline btn-edit-tipo" data-id="${escapeHtml(te.idTipoExamen)}">✏️ Editar</button>
+                                            <button type="button" class="btn btn-sm btn-danger btn-del-tipo" data-id="${escapeHtml(te.idTipoExamen)}">🗑️ Eliminar</button>
+                                        </div>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -542,8 +569,10 @@ class PanelExamenes extends HTMLElement {
                                     <td><span class="badge ${ex.activo ? 'badge-active' : 'badge-inactive'}">${ex.activo ? 'Activo' : 'Inactivo'}</span></td>
                                     <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(ex.observaciones || '—', this._filtroBusquedaExamenes, 'resaltado-busqueda')}</td>
                                     <td style="text-align: right; white-space: nowrap;">
-                                        <button type="button" class="btn btn-outline btn-edit-examen" data-id="${escapeHtml(ex.idExamen)}">✏️ Editar</button>
-                                        <button type="button" class="btn btn-danger btn-del-examen" data-id="${escapeHtml(ex.idExamen)}">🗑️ Eliminar</button>
+                                        <div class="table-actions">
+                                            <button type="button" class="btn btn-sm btn-outline btn-edit-examen" data-id="${escapeHtml(ex.idExamen)}">✏️ Editar</button>
+                                            <button type="button" class="btn btn-sm btn-danger btn-del-examen" data-id="${escapeHtml(ex.idExamen)}">🗑️ Eliminar</button>
+                                        </div>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -608,7 +637,7 @@ class PanelExamenes extends HTMLElement {
                                         <td><span class="badge badge-active">${escapeHtml(te?.nombre || cl.idTipoExamen)}</span></td>
                                         <td style="color: var(--muted, #a2b9b8);">${escapeHtml(cl.observaciones || '—')}</td>
                                         <td style="text-align: right;">
-                                            <button type="button" class="btn btn-danger btn-del-clasif" data-id="${escapeHtml(cl.idExamenTipoExamen)}">✕ Quitar</button>
+                                            <button type="button" class="btn btn-sm btn-danger btn-del-clasif" data-id="${escapeHtml(cl.idExamenTipoExamen)}">✕ Quitar</button>
                                         </td>
                                     </tr>
                                 `;

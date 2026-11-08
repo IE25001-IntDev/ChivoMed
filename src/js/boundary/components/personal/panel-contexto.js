@@ -65,85 +65,103 @@ class PanelContexto extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <style>
                 :host {
-                    display: block;
+                    display: flex;
+                    flex-direction: column;
+                    min-height: calc(100vh - 190px);
                     background: var(--card-glass, rgba(29, 51, 56, 0.7));
                     backdrop-filter: blur(28px) saturate(180%);
                     -webkit-backdrop-filter: blur(28px) saturate(180%);
                     border: 1px solid var(--card-border, rgba(172, 223, 206, 0.14));
                     border-radius: var(--card-radius, 20px);
-                    padding: 1.75rem;
+                    padding: 3.25rem 3.75rem;
                     box-shadow: var(--card-shadow, var(--glass-shadow));
                     transition: var(--transition-card, all 0.28s ease);
+                    box-sizing: border-box;
                 }
                 .section-header {
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    padding-bottom: 1rem;
-                    margin-bottom: 1.25rem;
+                    padding-top: 0.5rem;
+                    padding-bottom: 1.75rem;
+                    margin-bottom: 2.25rem;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     flex-wrap: wrap;
-                    gap: 0.75rem;
+                    gap: 1.25rem;
+                }
+                .title-box {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                    padding: 0.25rem 0.5rem;
                 }
                 .title {
-                    font-size: 1.15rem;
+                    font-size: 1.35rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                     display: flex;
                     align-items: center;
-                    gap: 0.5rem;
+                    gap: 0.85rem;
+                    margin: 0;
                 }
                 .subtitle {
-                    font-size: 0.85rem;
+                    font-size: 0.92rem;
                     color: var(--muted, #a2b9b8);
-                    margin-top: 0.25rem;
+                    margin: 0;
+                    line-height: 1.5;
                 }
                 .current-badge-box {
                     background: var(--gradient-accent-card, linear-gradient(135deg, rgba(23, 131, 109, 0.88), rgba(120, 212, 176, 0.75)));
                     border: 1px solid var(--border-strong, rgba(160, 208, 193, 0.25));
-                    border-radius: 16px;
-                    padding: 1rem 1.35rem;
-                    margin-bottom: 1.5rem;
+                    border-radius: 18px;
+                    padding: 1.75rem 2.25rem;
+                    margin-bottom: 2.5rem;
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                     flex-wrap: wrap;
-                    gap: 0.75rem;
+                    gap: 1.5rem;
                     box-shadow: 0 10px 25px var(--glow-mint, rgba(45, 133, 111, 0.25));
                     color: #ffffff;
                 }
                 .current-badge-text {
-                    font-size: 0.92rem;
+                    font-size: 1rem;
                     color: #ffffff;
                     font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.65rem;
+                    flex-wrap: wrap;
                 }
                 .current-badge-text code {
                     background: rgba(0, 0, 0, 0.25);
-                    padding: 0.2rem 0.5rem;
-                    border-radius: 6px;
+                    padding: 0.35rem 0.75rem;
+                    border-radius: 8px;
                     color: #ffffff;
+                    font-size: 0.95rem;
                 }
                 .form-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                    gap: 1.25rem;
-                    margin-bottom: 1.5rem;
+                    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                    gap: 2.25rem;
+                    margin-bottom: 2.5rem;
                 }
                 .form-group {
                     display: flex;
                     flex-direction: column;
-                    gap: 0.4rem;
+                    gap: 0.75rem;
                 }
                 .form-label {
-                    font-size: 0.85rem;
+                    font-size: 0.9rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                 }
                 .select-input, .input-text {
-                    padding: 0.65rem 0.85rem;
+                    padding: 0.85rem 1.25rem;
+                    min-height: 3.1rem;
                     border: 1px solid var(--border-strong, rgba(172, 223, 206, 0.25));
-                    border-radius: 8px;
-                    font-size: 0.9rem;
+                    border-radius: 12px;
+                    font-size: 0.95rem;
                     background: var(--input-bg, var(--surface-solid, #20383d));
                     color: var(--text, #e2f0eb);
                     outline: none;
@@ -160,15 +178,15 @@ class PanelContexto extends HTMLElement {
                     color: var(--text, #e2f0eb);
                 }
                 .btn {
-                    padding: 0.55rem 1.25rem;
+                    padding: 0.75rem 1.6rem;
                     border-radius: 9999px;
-                    font-size: 0.875rem;
+                    font-size: 0.92rem;
                     font-weight: 600;
                     cursor: pointer;
                     border: none;
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.4rem;
+                    gap: 0.65rem;
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
                 }
                 .btn:hover:not(:disabled) {
@@ -223,11 +241,11 @@ class PanelContexto extends HTMLElement {
                     border: 1px solid var(--border-strong, rgba(160, 208, 193, 0.28));
                     border-radius: var(--card-radius, 24px);
                     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(120, 212, 176, 0.1);
-                    max-width: 620px;
+                    max-width: 660px;
                     width: 100%;
                     max-height: 85vh;
                     overflow-y: auto;
-                    padding: 1.75rem;
+                    padding: 2.5rem;
                     animation: modalScaleIn 0.2s ease-out;
                     box-sizing: border-box;
                     backdrop-filter: blur(28px) saturate(180%);
@@ -244,33 +262,33 @@ class PanelContexto extends HTMLElement {
                     justify-content: space-between;
                     align-items: flex-start;
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    padding-bottom: 1rem;
-                    margin-bottom: 1.25rem;
+                    padding-bottom: 1.5rem;
+                    margin-bottom: 1.75rem;
                 }
 
                 .modal-title {
-                    font-size: 1.15rem;
+                    font-size: 1.25rem;
                     font-weight: 700;
                     color: var(--accent, #78d4b0);
                     margin: 0;
                 }
 
                 .modal-subtitle {
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     color: var(--muted, #a2b9b8);
-                    margin-top: 0.25rem;
+                    margin-top: 0.35rem;
                 }
 
                 .btn-close-modal {
                     background: var(--surface-muted, rgba(255, 255, 255, 0.06));
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.15));
                     border-radius: 50%;
-                    width: 32px;
-                    height: 32px;
+                    width: 36px;
+                    height: 36px;
                     display: grid;
                     place-items: center;
                     color: var(--muted, #a2b9b8);
-                    font-size: 0.9rem;
+                    font-size: 1rem;
                     cursor: pointer;
                     transition: all 0.15s;
                 }
@@ -283,7 +301,7 @@ class PanelContexto extends HTMLElement {
             </style>
 
             <div class="section-header">
-                <div>
+                <div class="title-box">
                     <div class="title">
                         <span>👥 Turnos y Personal</span>
                     </div>
@@ -353,7 +371,7 @@ class PanelContexto extends HTMLElement {
                                 </div>
                             </div>
 
-                            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+                            <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 1.5rem;">
                                 <button type="button" class="btn btn-outline" id="btnCancelNuevaAsign">✕ Cancelar</button>
                                 <button type="submit" class="btn btn-primary" ${this._cargando ? 'disabled' : ''}>
                                     ${this._cargando ? '⏳ Guardando...' : '💾 Guardar'}

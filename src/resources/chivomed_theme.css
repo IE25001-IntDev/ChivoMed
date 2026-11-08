@@ -168,8 +168,8 @@ body.dark-theme,
 
 .glass-pill-btn {
     border-radius: var(--dock-radius);
-    padding: 0.45rem 1rem;
-    font-size: 0.825rem;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.875rem;
     font-weight: 600;
     border: 1px solid var(--border);
     background: var(--glass);
@@ -177,7 +177,7 @@ body.dark-theme,
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.65rem;
     transition: all 0.22s var(--ease-spring);
     text-decoration: none;
     -webkit-backdrop-filter: blur(20px);

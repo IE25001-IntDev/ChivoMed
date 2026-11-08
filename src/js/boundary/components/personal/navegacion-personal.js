@@ -42,7 +42,10 @@ class NavegacionPersonal extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <style>
                 :host {
-                    display: block;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    min-height: calc(100vh - 190px);
                     background: var(--card-glass, rgba(29, 51, 56, 0.7));
                     backdrop-filter: blur(28px) saturate(180%);
                     -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -53,32 +56,33 @@ class NavegacionPersonal extends HTMLElement {
                     transition: var(--transition-card, all 0.28s ease);
                 }
                 .nav-header {
-                    padding: 1rem 1.25rem;
+                    padding: 1.35rem 1.75rem;
                     background: var(--surface-muted, rgba(255, 255, 255, 0.03));
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    font-size: 0.95rem;
+                    font-size: 1.05rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                     display: flex;
                     align-items: center;
-                    gap: 0.5rem;
+                    gap: 0.75rem;
                 }
                 .nav-list {
                     list-style: none;
-                    padding: 0.65rem;
+                    padding: 1.15rem 1rem;
                     display: flex;
                     flex-direction: column;
-                    gap: 0.4rem;
+                    gap: 0.65rem;
                     margin: 0;
+                    flex: 1;
                 }
                 .nav-item {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    padding: 0.75rem 1rem;
-                    border-radius: 12px;
+                    padding: 0.95rem 1.35rem;
+                    border-radius: 14px;
                     color: var(--muted, #a2b9b8);
-                    font-size: 0.875rem;
+                    font-size: 0.92rem;
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
@@ -99,11 +103,11 @@ class NavegacionPersonal extends HTMLElement {
                 .item-title-box {
                     display: flex;
                     align-items: center;
-                    gap: 0.65rem;
+                    gap: 0.85rem;
                 }
                 .nav-badge {
-                    font-size: 0.72rem;
-                    padding: 0.18rem 0.55rem;
+                    font-size: 0.75rem;
+                    padding: 0.25rem 0.65rem;
                     border-radius: 9999px;
                     background: var(--badge-inactive-bg, rgba(0, 0, 0, 0.2));
                     color: var(--badge-inactive-color, var(--muted, #a2b9b8));
@@ -117,10 +121,38 @@ class NavegacionPersonal extends HTMLElement {
                     border-color: transparent;
                     box-shadow: 0 0 10px var(--glow-mint);
                 }
+                .nav-footer {
+                    padding: 1.25rem 1.5rem;
+                    background: var(--surface-muted, rgba(255, 255, 255, 0.02));
+                    border-top: 1px solid var(--border, rgba(172, 223, 206, 0.12));
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    font-size: 0.78rem;
+                    color: var(--muted, #a2b9b8);
+                }
+                .nav-footer-status {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
+                .status-dot {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: var(--accent, #78d4b0);
+                    box-shadow: 0 0 8px var(--glow-mint, rgba(120, 212, 176, 0.5));
+                }
+                .nav-footer-version {
+                    font-weight: 600;
+                    opacity: 0.75;
+                }
 
                 /* Modo Dock Flotante Inferior en Pantallas Móviles / Tabletas */
                 @media (max-width: 960px) {
                     :host {
+                        min-height: auto;
+                        display: block;
                         position: fixed;
                         bottom: 1.25rem;
                         left: 50%;
@@ -132,13 +164,14 @@ class NavegacionPersonal extends HTMLElement {
                         background: var(--dock-glass, rgba(18, 34, 38, 0.85));
                         box-shadow: var(--dock-shadow, 0 15px 40px rgba(0, 0, 0, 0.4));
                     }
-                    .nav-header {
+                    .nav-header,
+                    .nav-footer {
                         display: none;
                     }
                     .nav-list {
                         flex-direction: row;
-                        padding: 0.4rem 0.65rem;
-                        gap: 0.35rem;
+                        padding: 0.5rem 0.85rem;
+                        gap: 0.5rem;
                         overflow-x: auto;
                         scrollbar-width: none;
                     }
@@ -146,9 +179,9 @@ class NavegacionPersonal extends HTMLElement {
                         display: none;
                     }
                     .nav-item {
-                        padding: 0.5rem 0.85rem;
+                        padding: 0.65rem 1.1rem;
                         border-radius: 9999px;
-                        font-size: 0.8rem;
+                        font-size: 0.85rem;
                         white-space: nowrap;
                     }
                     .nav-item:hover, .nav-item.active {
@@ -181,6 +214,14 @@ class NavegacionPersonal extends HTMLElement {
                     `;
                 }).join('')}
             </ul>
+
+            <div class="nav-footer">
+                <div class="nav-footer-status">
+                    <span class="status-dot"></span>
+                    <span>Sistema Activo</span>
+                </div>
+                <span class="nav-footer-version">ChivoMed v2.0</span>
+            </div>
         `;
 
         this.shadowRoot.querySelectorAll('.nav-item').forEach(item => {

@@ -92,20 +92,25 @@ class WorkbenchMedico extends HTMLElement {
             this.shadowRoot.innerHTML = `
                 <style>
                     :host {
-                        display: block;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                        min-height: calc(100vh - 190px);
                         background: var(--card-glass, rgba(29, 51, 56, 0.64));
                         backdrop-filter: blur(28px) saturate(180%);
                         -webkit-backdrop-filter: blur(28px) saturate(180%);
                         border: 1px dashed var(--border-strong, rgba(160, 208, 193, 0.25));
                         border-radius: var(--card-radius, 20px);
-                        padding: 3.5rem 2rem;
+                        padding: 6rem 3rem;
                         text-align: center;
                         color: var(--muted, #a2b9b8);
                         box-shadow: var(--card-shadow, var(--glass-shadow));
+                        box-sizing: border-box;
                     }
-                    .icon { font-size: 3.5rem; margin-bottom: 0.75rem; }
-                    h3 { color: var(--text, #e2f0eb); margin-bottom: 0.5rem; font-size: 1.35rem; font-weight: 700; }
-                    p { max-width: 540px; margin: 0 auto; line-height: 1.6; }
+                    .icon { font-size: 4rem; margin-bottom: 1rem; }
+                    h3 { color: var(--text, #e2f0eb); margin-bottom: 0.65rem; font-size: 1.45rem; font-weight: 700; }
+                    p { max-width: 560px; margin: 0 auto; line-height: 1.7; font-size: 0.95rem; }
                 </style>
                 <div class="icon">🩺</div>
                 <h3>Estación de Trabajo Clínica (Workbench Médico)</h3>
@@ -130,7 +135,9 @@ class WorkbenchMedico extends HTMLElement {
                 :host {
                     display: flex;
                     flex-direction: column;
-                    gap: 1.25rem;
+                    gap: 2rem;
+                    min-height: calc(100vh - 190px);
+                    box-sizing: border-box;
                 }
                 .card {
                     background: var(--card-glass, rgba(29, 51, 56, 0.64));
@@ -145,7 +152,7 @@ class WorkbenchMedico extends HTMLElement {
                 }
                 /* Encabezado Clínico de Consulta */
                 .clinical-header {
-                    padding: 1.25rem 1.75rem;
+                    padding: 1.75rem 2.25rem;
                     border-left: 6px solid var(--accent, #78d4b0);
                     background: var(--surface-muted, rgba(0, 0, 0, 0.15));
                 }
@@ -154,25 +161,25 @@ class WorkbenchMedico extends HTMLElement {
                     justify-content: space-between;
                     align-items: flex-start;
                     flex-wrap: wrap;
-                    gap: 1rem;
-                    margin-bottom: 0.75rem;
+                    gap: 1.25rem;
+                    margin-bottom: 1rem;
                 }
                 .patient-name-box {
                     display: flex;
                     align-items: center;
-                    gap: 0.75rem;
+                    gap: 1rem;
                     flex-wrap: wrap;
                 }
                 .patient-title {
-                    font-size: 1.35rem;
+                    font-size: 1.45rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                 }
                 .badge {
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.35rem;
-                    padding: 0.25rem 0.65rem;
+                    gap: 0.45rem;
+                    padding: 0.3rem 0.75rem;
                     border-radius: 9999px;
                     font-size: 0.75rem;
                     font-weight: 700;
@@ -183,40 +190,40 @@ class WorkbenchMedico extends HTMLElement {
                 .nav-lock-banner {
                     display: flex;
                     align-items: center;
-                    gap: 0.5rem;
+                    gap: 0.65rem;
                     background: rgba(245, 158, 11, 0.15);
                     color: #fbbf24;
                     border: 1px solid rgba(245, 158, 11, 0.25);
-                    padding: 0.5rem 0.85rem;
+                    padding: 0.65rem 1.15rem;
                     border-radius: 9999px;
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     font-weight: 600;
-                    margin-top: 0.5rem;
+                    margin-top: 0.65rem;
                 }
                 .header-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                    gap: 0.85rem;
-                    margin-top: 0.85rem;
-                    padding-top: 0.85rem;
+                    gap: 1.25rem;
+                    margin-top: 1.25rem;
+                    padding-top: 1.25rem;
                     border-top: 1px solid var(--border, rgba(172, 223, 206, 0.1));
                 }
                 .meta-col {
                     display: flex;
                     flex-direction: column;
+                    gap: 0.25rem;
                 }
                 .meta-label {
-                    font-size: 0.7rem;
+                    font-size: 0.72rem;
                     text-transform: uppercase;
                     color: var(--muted, #a2b9b8);
                     font-weight: 700;
                     letter-spacing: 0.05em;
                 }
                 .meta-val {
-                    font-size: 0.9rem;
+                    font-size: 0.92rem;
                     font-weight: 600;
                     color: var(--text, #e2f0eb);
-                    margin-top: 0.15rem;
                 }
 
                 /* Sistema de Pestañas (Tabs) */
@@ -225,13 +232,13 @@ class WorkbenchMedico extends HTMLElement {
                     background: var(--surface-muted, rgba(0, 0, 0, 0.15));
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.12));
                     overflow-x: auto;
-                    padding: 0.45rem 0.65rem;
-                    gap: 0.35rem;
+                    padding: 0.65rem 1rem;
+                    gap: 0.6rem;
                 }
                 .tab-btn {
-                    padding: 0.5rem 1rem;
+                    padding: 0.65rem 1.25rem;
                     border-radius: 9999px;
-                    font-size: 0.825rem;
+                    font-size: 0.875rem;
                     font-weight: 600;
                     color: var(--muted, #a2b9b8);
                     background: transparent;
@@ -239,7 +246,7 @@ class WorkbenchMedico extends HTMLElement {
                     cursor: pointer;
                     display: flex;
                     align-items: center;
-                    gap: 0.4rem;
+                    gap: 0.65rem;
                     white-space: nowrap;
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
                 }
@@ -256,7 +263,9 @@ class WorkbenchMedico extends HTMLElement {
                 }
                 .tab-pane {
                     display: none;
-                    padding: 1.5rem;
+                    padding: 2.25rem 2.5rem;
+                    flex: 1;
+                    min-height: 480px;
                 }
                 .tab-pane.active {
                     display: block;
@@ -266,33 +275,34 @@ class WorkbenchMedico extends HTMLElement {
                 .form-section {
                     background: var(--surface-solid, #20383d);
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    border-radius: 14px;
-                    padding: 1.15rem;
-                    margin-bottom: 1.25rem;
+                    border-radius: 18px;
+                    padding: 1.75rem 2rem;
+                    margin-bottom: 2rem;
                 }
                 .form-row {
                     display: flex;
-                    gap: 1rem;
-                    margin-bottom: 0.85rem;
+                    gap: 1.25rem;
+                    margin-bottom: 1.15rem;
                     flex-wrap: wrap;
                 }
                 .form-group {
                     flex: 1;
                     display: flex;
                     flex-direction: column;
-                    gap: 0.35rem;
+                    gap: 0.55rem;
                     min-width: 240px;
                 }
                 .form-label {
-                    font-size: 0.8rem;
+                    font-size: 0.85rem;
                     font-weight: 700;
                     color: var(--text, #e2f0eb);
                 }
                 .input-text, .textarea-input, .select-input {
-                    padding: 0.55rem 0.85rem;
+                    padding: 0.7rem 1rem;
+                    min-height: 2.75rem;
                     border: 1px solid var(--border-strong, rgba(172, 223, 206, 0.2));
                     border-radius: 10px;
-                    font-size: 0.875rem;
+                    font-size: 0.9rem;
                     font-family: inherit;
                     box-sizing: border-box;
                     outline: none;
@@ -306,19 +316,24 @@ class WorkbenchMedico extends HTMLElement {
                 }
                 .textarea-input {
                     resize: vertical;
-                    min-height: 70px;
+                    min-height: 85px;
                 }
                 .btn {
-                    padding: 0.45rem 1rem;
+                    padding: 0.65rem 1.35rem;
                     border-radius: 9999px;
-                    font-size: 0.825rem;
+                    font-size: 0.875rem;
                     font-weight: 600;
                     cursor: pointer;
                     border: none;
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.4rem;
+                    gap: 0.65rem;
                     transition: all 0.22s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+                }
+                .btn-sm {
+                    padding: 0.45rem 0.95rem;
+                    font-size: 0.825rem;
+                    gap: 0.55rem;
                 }
                 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
                 .btn:hover:not(:disabled) {
@@ -340,15 +355,15 @@ class WorkbenchMedico extends HTMLElement {
                 /* Tablas y Listas */
                 .proc-card {
                     border: 1px solid var(--border, rgba(172, 223, 206, 0.12));
-                    border-radius: 14px;
-                    margin-bottom: 1rem;
+                    border-radius: 16px;
+                    margin-bottom: 1.25rem;
                     overflow: hidden;
                     background: var(--surface-solid, #20383d);
                     transition: var(--transition-card, all 0.28s ease);
                 }
                 .proc-header {
                     background: var(--surface-muted, rgba(0, 0, 0, 0.15));
-                    padding: 0.75rem 1rem;
+                    padding: 1rem 1.35rem;
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.1));
                     display: flex;
                     justify-content: space-between;
@@ -359,10 +374,10 @@ class WorkbenchMedico extends HTMLElement {
                 }
                 .step-item {
                     border-bottom: 1px solid var(--border, rgba(172, 223, 206, 0.08));
-                    padding: 1rem;
+                    padding: 1.25rem 1.5rem;
                     display: flex;
                     flex-direction: column;
-                    gap: 0.5rem;
+                    gap: 0.75rem;
                     background: transparent;
                     transition: all 0.2s ease;
                 }
@@ -382,15 +397,15 @@ class WorkbenchMedico extends HTMLElement {
                     justify-content: space-between;
                     align-items: center;
                     font-weight: 600;
-                    font-size: 0.9rem;
+                    font-size: 0.92rem;
                     color: var(--text, #e2f0eb);
                 }
                 .step-actions {
                     display: flex;
                     justify-content: flex-end;
-                    gap: 0.5rem;
+                    gap: 0.75rem;
                     align-items: center;
-                    margin-top: 0.35rem;
+                    margin-top: 0.65rem;
                     flex-wrap: wrap;
                 }
                 .step-meta {
@@ -402,12 +417,12 @@ class WorkbenchMedico extends HTMLElement {
                     background: var(--mint-soft, #284b43);
                     border: 1px solid var(--border-strong, rgba(160, 208, 193, 0.25));
                     border-radius: 12px;
-                    padding: 0.75rem 1rem;
-                    margin-bottom: 1rem;
+                    padding: 1rem 1.35rem;
+                    margin-bottom: 1.25rem;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    font-size: 0.85rem;
+                    font-size: 0.9rem;
                     color: var(--accent-text, #8bdbbc);
                     font-weight: 600;
                     box-shadow: 0 2px 10px var(--glow-mint);
@@ -515,7 +530,7 @@ class WorkbenchMedico extends HTMLElement {
                         </div>
 
                         ${!isCerrada ? `
-                            <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                            <div style="display: flex; justify-content: flex-end; gap: 0.85rem;">
                                 <button type="button" class="btn btn-primary" id="btnGuardarNotas" ${this._accionEnCurso === 'guardar-notas' ? 'disabled' : ''}>
                                     ${this._accionEnCurso === 'guardar-notas' ? '⏳ Guardando...' : '💾 Guardar'}
                                 </button>
@@ -528,12 +543,12 @@ class WorkbenchMedico extends HTMLElement {
 
                     <!-- Incorporación de Procedimiento del Catálogo -->
                     ${!isCerrada ? `
-                        <div class="form-section" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+                        <div class="form-section" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                             <div>
                                 <strong style="font-size: 0.9rem; color: var(--text, #e2f0eb);">Incorporar Procedimiento:</strong>
                                 <div style="font-size: 0.8rem; color: var(--muted, #a2b9b8);">Agrega protocolos clínicos desde el catálogo de la clínica.</div>
                             </div>
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <div style="display: flex; gap: 0.75rem; align-items: center;">
                                 <select class="select-input" id="selectProc">
                                     <option value="">-- Seleccionar Procedimiento --</option>
                                     ${this._catalogoProcedimientos.map(pr => `
@@ -602,17 +617,17 @@ class WorkbenchMedico extends HTMLElement {
                                                             : '⚠️ Sin responsable'}
                                                     </span>
 
-                                                    <button type="button" class="btn btn-outline btn-select-step" data-id="${escapeHtml(paso.idConsultaProcedimientoPaso)}">
+                                                    <button type="button" class="btn btn-sm btn-outline btn-select-step" data-id="${escapeHtml(paso.idConsultaProcedimientoPaso)}">
                                                         ${isActivo ? '✔️ Activo' : '👉 Seleccionar'}
                                                     </button>
 
                                                     ${!isCompleted && !isCerrada ? `
                                                         ${!isMine ? `
-                                                            <button type="button" class="btn btn-outline btn-asignar-paso" data-id="${escapeHtml(paso.idConsultaProcedimientoPaso)}" ${isWorking ? 'disabled' : ''}>
+                                                            <button type="button" class="btn btn-sm btn-outline btn-asignar-paso" data-id="${escapeHtml(paso.idConsultaProcedimientoPaso)}" ${isWorking ? 'disabled' : ''}>
                                                                 ✋ Asignar
                                                             </button>
                                                         ` : ''}
-                                                        <button type="button" class="btn btn-success btn-completar-paso" data-id="${escapeHtml(paso.idConsultaProcedimientoPaso)}" ${isWorking ? 'disabled' : ''}>
+                                                        <button type="button" class="btn btn-sm btn-success btn-completar-paso" data-id="${escapeHtml(paso.idConsultaProcedimientoPaso)}" ${isWorking ? 'disabled' : ''}>
                                                             ${isWorking ? '⏳...' : '✔️ Completar'}
                                                         </button>
                                                     ` : ''}
@@ -656,7 +671,7 @@ class WorkbenchMedico extends HTMLElement {
                                     <label class="form-label" for="txtObsExamenReg">Observaciones / Indicaciones Clínicas:</label>
                                     <input type="text" class="input-text" id="txtObsExamenReg" placeholder="Notas adicionales sobre la prueba diagnóstica..."/>
                                 </div>
-                                <div style="display: flex; justify-content: flex-end;">
+                                <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
                                     <button type="button" class="btn btn-primary" id="btnVincularExamen" ${this._accionEnCurso === 'vincular-examen' ? 'disabled' : ''}>
                                         ${this._accionEnCurso === 'vincular-examen' ? '⏳ Registrando...' : '🔗 Registrar'}
                                     </button>
@@ -682,8 +697,8 @@ class WorkbenchMedico extends HTMLElement {
 
                         ${!isCerrada ? `
                             <div class="form-section">
-                                <h4 style="margin-bottom: 0.5rem; color: var(--text, #e2f0eb);">Prescribir Orden de Examen</h4>
-                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <h4 style="margin-bottom: 0.75rem; color: var(--text, #e2f0eb);">Prescribir Orden de Examen</h4>
+                                <div class="form-group" style="margin-bottom: 1rem;">
                                     <label class="form-label" for="inputIndicacionesOrden">Indicaciones Médicas para Laboratorio:</label>
                                     <input 
                                         type="text" 
@@ -707,15 +722,15 @@ class WorkbenchMedico extends HTMLElement {
                                     No se han emitido órdenes de laboratorio para este paso.
                                 </div>
                             ` : this._ordenesPaso.map(o => `
-                                <div class="card" style="padding: 1rem 1.15rem; margin-bottom: 0.85rem; background: var(--surface-solid, #20383d); border: 1px solid var(--border);">
-                                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem;">
+                                <div class="card" style="padding: 1.25rem 1.5rem; margin-bottom: 1rem; background: var(--surface-solid, #20383d); border: 1px solid var(--border);">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">
                                         <span>Orden #${escapeHtml((o.idOrdenExamen || '').slice(0, 8))}</span>
                                         <span style="color: var(--muted, #a2b9b8); font-weight: normal;">📅 ${escapeHtml(formatearFecha(o.fechaCreacion))}</span>
                                     </div>
                                     <div style="font-size: 0.9rem; color: var(--text, #e2f0eb);">
                                         <strong>Indicaciones:</strong> ${escapeHtml(o.indicaciones || 'Sin indicaciones')}
                                     </div>
-                                    <div style="margin-top: 0.4rem; font-size: 0.8rem; color: var(--muted, #a2b9b8);">
+                                    <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted, #a2b9b8);">
                                         ${(o.resultados || []).length > 0 
                                             ? `✅ ${o.resultados.length} resultado(s) procesado(s). Ver en pestaña Resultados.`
                                             : '⏳ Pendiente de resultados de laboratorio.'}
@@ -750,21 +765,21 @@ class WorkbenchMedico extends HTMLElement {
                                 const isFormOpen = this._mostrarFormResultadoId === o.idOrdenExamen;
 
                                 return `
-                                    <div class="card" style="padding: 1.15rem; margin-bottom: 1rem; background: var(--surface-solid, #20383d); border: 1px solid var(--border);">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <div class="card" style="padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; background: var(--surface-solid, #20383d); border: 1px solid var(--border);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
                                             <div>
                                                 <strong>Orden #${escapeHtml((o.idOrdenExamen || '').slice(0, 8))}</strong>
-                                                <div style="font-size: 0.85rem; color: var(--muted, #a2b9b8);">Indicación: ${escapeHtml(o.indicaciones || 'General')}</div>
+                                                <div style="font-size: 0.85rem; color: var(--muted, #a2b9b8); margin-top: 0.15rem;">Indicación: ${escapeHtml(o.indicaciones || 'General')}</div>
                                             </div>
                                             ${!isCerrada ? `
-                                                <button type="button" class="btn btn-outline btn-toggle-res" data-id="${escapeHtml(o.idOrdenExamen)}">
+                                                <button type="button" class="btn btn-sm btn-outline btn-toggle-res" data-id="${escapeHtml(o.idOrdenExamen)}">
                                                     ${isFormOpen ? '✕ Cancelar' : '➕ Resultado'}
                                                 </button>
                                             ` : ''}
                                         </div>
 
                                         ${resultados.length > 0 ? `
-                                            <div style="background: var(--mint-soft, rgba(40, 75, 67, 0.3)); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.75rem 1rem; margin-top: 0.5rem;">
+                                            <div style="background: var(--mint-soft, rgba(40, 75, 67, 0.3)); border: 1px solid var(--border-strong); border-radius: 12px; padding: 1rem 1.25rem; margin-top: 0.75rem;">
                                                 ${resultados.map(r => `
                                                     <div style="font-size: 0.9rem; color: var(--accent-text, #8bdbbc); margin-bottom: 0.35rem;">
                                                         <strong>Valor Reportado:</strong> ${escapeHtml(r.resultado || 'Sin valor')}
@@ -783,7 +798,7 @@ class WorkbenchMedico extends HTMLElement {
                                         `}
 
                                         ${isFormOpen ? `
-                                            <div style="background: var(--surface-muted, rgba(0, 0, 0, 0.2)); border: 1px dashed var(--border-strong); border-radius: 10px; padding: 1rem; margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.65rem;">
+                                            <div style="background: var(--surface-muted, rgba(0, 0, 0, 0.2)); border: 1px dashed var(--border-strong); border-radius: 12px; padding: 1.25rem; margin-top: 1rem; display: flex; flex-direction: column; gap: 0.85rem;">
                                                 <div class="form-group">
                                                     <label class="form-label" for="inputRes-${escapeHtml(o.idOrdenExamen)}">Resultado / Valor Medido:</label>
                                                     <input type="text" class="input-text" id="inputRes-${escapeHtml(o.idOrdenExamen)}" placeholder="Ej: Glucosa 95 mg/dL, Leucocitos 7,200 /mm³..."/>
@@ -792,7 +807,7 @@ class WorkbenchMedico extends HTMLElement {
                                                     <label class="form-label" for="inputInterp-${escapeHtml(o.idOrdenExamen)}">Interpretación Médica:</label>
                                                     <input type="text" class="input-text" id="inputInterp-${escapeHtml(o.idOrdenExamen)}" placeholder="Ej: Parámetros dentro de rangos normales de referencia..."/>
                                                 </div>
-                                                <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                                                <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 0.5rem;">
                                                     <button type="button" class="btn btn-success btn-guardar-res" data-id="${escapeHtml(o.idOrdenExamen)}" ${this._accionEnCurso === 'guardar-res' ? 'disabled' : ''}>
                                                         ${this._accionEnCurso === 'guardar-res' ? '⏳ Guardando...' : '💾 Guardar'}
                                                     </button>
