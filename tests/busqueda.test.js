@@ -6,10 +6,12 @@ import {
     coincideTexto,
     extraerTextos,
     filtrarColeccion,
-    crearBuscadorDebounce,
+    crearBuscadorDebounce
+} from '../src/js/control/busqueda_util.js';
+import {
     escaparHtml,
     resaltarCoincidencias
-} from '../src/js/control/busqueda_util.js';
+} from '../src/js/boundary/utils.js';
 
 describe('Módulo busqueda_util (Pruebas Unitarias)', () => {
 

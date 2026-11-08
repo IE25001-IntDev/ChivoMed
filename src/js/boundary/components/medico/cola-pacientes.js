@@ -1,8 +1,7 @@
-import { escapeHtml, formatearFecha } from '../../utils.js';
+import { escapeHtml, formatearFecha, resaltarCoincidencias } from '../../utils.js';
 import {
     filtrarColeccion,
     crearBuscadorDebounce,
-    resaltarCoincidencias,
 } from '../../../control/busqueda_util.js';
 
 /**

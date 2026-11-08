@@ -6,10 +6,12 @@
 
 import {
     filtrarColeccion,
-    crearBuscadorDebounce,
+    crearBuscadorDebounce
+} from '../../control/busqueda_util.js';
+import {
     resaltarCoincidencias,
     escaparHtml
-} from '../../control/busqueda_util.js';
+} from '../utils.js';
 
 // Iconos vectoriales consistentes con la identidad de ChivoMed
 const ICONOS = {
