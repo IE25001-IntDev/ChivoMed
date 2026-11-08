@@ -102,24 +102,46 @@ function mostrarFeedback(mensaje, tipo = 'info', duracionMs = 5000) {
 }
 
 /**
- * Manejo unificado de errores
+ * Manejo unificado de errores distinguiendo 401/403, 5xx/red y errores de cliente.
  */
 function manejarError(error, accion = 'operación') {
     console.error(`Error en ${accion}:`, error);
     let msg = `Error al realizar ${accion}.`;
     if (error instanceof DefaultError) {
-        msg = `${error.message || 'Error del servidor'} (Código: ${error.code || error.status})`;
+        if (error.status === 401) {
+            msg = `Sesión no autorizada o expirada (401) al cargar ${accion}. Por favor inicie sesión en GalenoSV.`;
+        } else if (error.status === 403) {
+            msg = `Acceso denegado (403): Permisos insuficientes para ${accion}.`;
+        } else if (error.status === 0 || error.code === 'conexion.error') {
+            msg = `Fallo de conexión o red: No se pudo comunicar con el servidor para ${accion}.`;
+        } else if (error.status >= 500) {
+            msg = `Error interno del servidor (${error.status}) al procesar ${accion}.`;
+        } else {
+            msg = `${error.message || 'Error del servidor'} (Código: ${error.code || error.status})`;
+        }
     } else if (error?.message) {
         msg = error.message;
     }
-    mostrarFeedback(msg, 'error', 7000);
+    mostrarFeedback(msg, 'error', 8000);
+}
+
+/**
+ * Ejecuta una petición capturando y distinguiendo errores sin silenciarlos como listas vacías.
+ */
+async function consultarConManejo(promesa, descripcion, fallback = { data: [] }) {
+    try {
+        return await promesa;
+    } catch (err) {
+        manejarError(err, descripcion);
+        return fallback;
+    }
 }
 
 /**
  * Recarga la lista de asignaciones PersonaRol enriquecida con nombres
  */
 async function recargarRolesPersonal() {
-    const resPR = await personaRolService.listar().catch(() => ({ data: [] }));
+    const resPR = await consultarConManejo(personaRolService.listar(), 'asignaciones de personal');
     const asignaciones = resPR.data || [];
 
     estado.rolesPersonal = await Promise.all(asignaciones.map(async (pr) => {
@@ -128,8 +150,8 @@ async function recargarRolesPersonal() {
             try {
                 const p = await personaService.buscarPorId(pr.idPersona);
                 nombrePersona = `${p.data.nombres || ''} ${p.data.apellidos || ''}`.trim();
-            } catch {
-                // fallback
+            } catch (err) {
+                manejarError(err, `detalles de la persona ${(pr.idPersona || '').slice(0, 8)}`);
             }
         }
         const r = estado.roles.find(rol => rol.idRol === pr.idRol);
@@ -149,15 +171,15 @@ async function inicializar() {
         if (elHeader) elHeader.cargando = true;
         mostrarFeedback('Cargando catálogos del hospital y sesión operativa...', 'info', 2000);
 
-        // 1. Cargar Clínicas, Roles, Personas y todos los Catálogos maestros en paralelo
+        // 1. Cargar Clínicas, Roles, Personas y todos los Catálogos maestros con notificación ante errores
         const [resClinicas, resRoles, resPersonas, resDocs, resContactos, resExamenes, resProcs] = await Promise.all([
-            clinicaService.listar().catch(() => ({ data: [] })),
-            rolService.listar().catch(() => ({ data: [] })),
-            personaService.listar().catch(() => ({ data: [] })),
-            tipoDocumentoService.listar().catch(() => ({ data: [] })),
-            tipoMedioContactoService.listar().catch(() => ({ data: [] })),
-            examenService.listar().catch(() => ({ data: [] })),
-            procedimientoService.listar().catch(() => ({ data: [] })),
+            consultarConManejo(clinicaService.listar(), 'sedes clínicas'),
+            consultarConManejo(rolService.listar(), 'roles institucionales'),
+            consultarConManejo(personaService.listar(), 'directorio de personas'),
+            consultarConManejo(tipoDocumentoService.listar(), 'tipos de documento'),
+            consultarConManejo(tipoMedioContactoService.listar(), 'medios de contacto'),
+            consultarConManejo(examenService.listar(), 'catálogo de exámenes'),
+            consultarConManejo(procedimientoService.listar(), 'protocolos médicos'),
         ]);
 
         estado.clinicas = resClinicas.data || [];
@@ -359,7 +381,7 @@ async function recargarExamenes() {
     const [resTipos, resEx, resClasif] = await Promise.all([
         tipoExamenService.listar(),
         examenService.listar(),
-        examenTipoExamenService.listar().catch(() => ({ data: [] })),
+        consultarConManejo(examenTipoExamenService.listar(), 'clasificaciones de examen'),
     ]);
     estado.tiposExamen = resTipos.data || [];
     estado.examenes = resEx.data || [];
@@ -371,7 +393,7 @@ async function recargarProtocolos() {
     const res = await procedimientoService.listar();
     estado.procedimientos = res.data || [];
     if (estado.examenes.length === 0) {
-        const resEx = await examenService.listar().catch(() => ({ data: [] }));
+        const resEx = await consultarConManejo(examenService.listar(), 'catálogo de exámenes');
         estado.examenes = resEx.data || [];
     }
     actualizarNavegacion();

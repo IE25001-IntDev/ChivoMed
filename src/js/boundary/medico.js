@@ -86,17 +86,39 @@ function mostrarFeedback(mensaje, tipo = 'info', duracionMs = 5000) {
 }
 
 /**
- * Manejo centralizado de errores de la API.
+ * Manejo centralizado de errores de la API distinguiendo 401/403, 5xx/red y errores de cliente.
  */
 function manejarError(error, accion = 'operación') {
     console.error(`Error en ${accion}:`, error);
     let msg = `Error al realizar ${accion}.`;
     if (error instanceof DefaultError) {
-        msg = `${error.message || 'Error del servidor'} (Código: ${error.code || error.status})`;
+        if (error.status === 401) {
+            msg = `Sesión no autorizada o expirada (401) al cargar ${accion}. Por favor inicie sesión en GalenoSV.`;
+        } else if (error.status === 403) {
+            msg = `Acceso denegado (403): Permisos insuficientes para ${accion}.`;
+        } else if (error.status === 0 || error.code === 'conexion.error') {
+            msg = `Fallo de conexión o red: No se pudo comunicar con el servidor para ${accion}.`;
+        } else if (error.status >= 500) {
+            msg = `Error interno del servidor (${error.status}) al procesar ${accion}.`;
+        } else {
+            msg = `${error.message || 'Error del servidor'} (Código: ${error.code || error.status})`;
+        }
     } else if (error?.message) {
         msg = error.message;
     }
-    mostrarFeedback(msg, 'error', 7000);
+    mostrarFeedback(msg, 'error', 8000);
+}
+
+/**
+ * Ejecuta una petición capturando y distinguiendo errores sin silenciarlos como listas vacías.
+ */
+async function consultarConManejo(promesa, descripcion, fallback = { data: [] }) {
+    try {
+        return await promesa;
+    } catch (err) {
+        manejarError(err, descripcion);
+        return fallback;
+    }
 }
 
 /**
@@ -114,8 +136,8 @@ async function inicializar() {
 
         // 2. Cargar catálogos de procedimientos y tipos de examen
         const [resProcedimientos, resTiposExamen] = await Promise.all([
-            procedimientoService.listar().catch(() => ({ data: [] })),
-            tipoExamenService.listar().catch(() => ({ data: [] })),
+            consultarConManejo(procedimientoService.listar(), 'catálogo de procedimientos'),
+            consultarConManejo(tipoExamenService.listar(), 'tipos de examen'),
         ]);
 
         estado.catalogoProcedimientos = resProcedimientos.data || [];
@@ -133,7 +155,7 @@ async function inicializar() {
             filtroDoctores.idClinica = estado.clinicaActiva.idClinica;
         }
 
-        const resDoctores = await personaRolService.listar(filtroDoctores).catch(() => ({ data: [] }));
+        const resDoctores = await consultarConManejo(personaRolService.listar(filtroDoctores), 'doctores de la sede');
         const rolesDoctores = resDoctores.data || [];
 
         const doctoresConNombres = await Promise.all(rolesDoctores.map(async (docRol) => {
@@ -278,8 +300,8 @@ async function seleccionarConsulta(idConsulta) {
                 const pr = await personaRolService.buscarPorId(consulta.idPersonaRol);
                 if (pr.data?.idPersona) {
                     const [resPersona, resDocs] = await Promise.all([
-                        personaService.buscarPorId(pr.data.idPersona).catch(() => null),
-                        personaService.documentos(pr.data.idPersona).listar().catch(() => ({ data: [] })),
+                        consultarConManejo(personaService.buscarPorId(pr.data.idPersona), 'datos del paciente', null),
+                        consultarConManejo(personaService.documentos(pr.data.idPersona).listar(), 'documentos del paciente'),
                     ]);
                     datosPaciente = resPersona?.data;
                     documentosPaciente = resDocs.data || [];
@@ -332,7 +354,7 @@ async function cargarProcedimientosConsulta(idConsulta) {
 
         const procsConPasos = await Promise.all(procedimientos.map(async (proc) => {
             const servicioPasos = new ConsultaProcedimientoService().pasos(proc.idConsultaProcedimiento);
-            const resPasos = await servicioPasos.listar().catch(() => ({ data: [] }));
+            const resPasos = await consultarConManejo(servicioPasos.listar(), `pasos del procedimiento #${proc.idConsultaProcedimiento}`);
 
             const cat = estado.catalogoProcedimientos.find(p => p.idProcedimiento === proc.idProcedimiento);
 
@@ -369,7 +391,7 @@ async function cargarOrdenesPaso(idPaso) {
 
         const ordenesConResultados = await Promise.all(ordenes.map(async (o) => {
             const servicioOrden = new OrdenExamenService();
-            const resRes = await servicioOrden.resultados(o.idOrdenExamen).listar().catch(() => ({ data: [] }));
+            const resRes = await consultarConManejo(servicioOrden.resultados(o.idOrdenExamen).listar(), `resultados de la orden #${o.idOrdenExamen}`);
             return {
                 ...o,
                 resultados: resRes.data || [],
