@@ -25,7 +25,7 @@ class PanelCatalogoSimple extends HTMLElement {
         this._mostrarFormulario = false;
         this._cargando = false;
         this._regexPruebaMuestra = '';
-        this._debounceBuscar = crearBuscadorDebounce(() => this.render(), 180);
+        this._debounceBuscar = crearBuscadorDebounce(() => this._actualizarFiltrado(), 180);
     }
 
     set tipoCatalogo(val) {
@@ -142,11 +142,122 @@ class PanelCatalogoSimple extends HTMLElement {
         }
     }
 
-    render() {
-        const config = this.getConfig();
-        const itemsFiltrados = filtrarColeccion(this._items, this._filtroBusqueda, {
+    _obtenerItemsFiltrados() {
+        return filtrarColeccion(this._items, this._filtroBusqueda, {
             campos: ['nombre', 'tipo', 'observaciones', 'comentarios', 'indicaciones', 'expresionRegular']
         });
+    }
+
+    _renderTablaHtml(itemsFiltrados, config) {
+        if (itemsFiltrados.length === 0) {
+            return `
+                <div style="padding: 2.5rem; text-align: center; color: var(--muted, #a2b9b8);">
+                    No se encontraron registros ${this._filtroBusqueda ? 'que coincidan con la búsqueda.' : 'en este catálogo.'}
+                </div>
+            `;
+        }
+        return `
+            <table>
+                <thead>
+                    <tr>
+                        ${config.columnas.map(col => `<th>${escapeHtml(col)}</th>`).join('')}
+                        <th style="text-align: right;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsFiltrados.map(item => {
+                        const id = item[config.idField];
+                        const isActivo = Boolean(item.activo);
+
+                        return `
+                            <tr>
+                                <td><strong>${resaltarCoincidencias(item.nombre || 'Sin nombre', this._filtroBusqueda, 'resaltado-busqueda')}</strong></td>
+                                ${this._tipoCatalogo === 'clinicas' ? `
+                                    <td>${resaltarCoincidencias(item.tipo || 'General', this._filtroBusqueda, 'resaltado-busqueda')}</td>
+                                    <td><span class="badge ${isActivo ? 'badge-active' : 'badge-inactive'}">${isActivo ? 'Activa' : 'Inactiva'}</span></td>
+                                    <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(item.comentarios || '—', this._filtroBusqueda, 'resaltado-busqueda')}</td>
+                                ` : ''}
+                                ${this._tipoCatalogo === 'roles' ? `
+                                    <td><span class="badge ${isActivo ? 'badge-active' : 'badge-inactive'}">${isActivo ? 'Activo' : 'Inactivo'}</span></td>
+                                    <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(item.observaciones || '—', this._filtroBusqueda, 'resaltado-busqueda')}</td>
+                                ` : ''}
+                                ${(this._tipoCatalogo === 'documentos' || this._tipoCatalogo === 'contactos') ? `
+                                    <td><code class="regex-code">${resaltarCoincidencias(item.expresionRegular || '.', this._filtroBusqueda, 'resaltado-busqueda')}</code></td>
+                                    <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(item.indicaciones || '—', this._filtroBusqueda, 'resaltado-busqueda')}</td>
+                                    <td><span class="badge ${isActivo ? 'badge-active' : 'badge-inactive'}">${isActivo ? 'Activo' : 'Inactivo'}</span></td>
+                                ` : ''}
+                                <td style="text-align: right; white-space: nowrap;">
+                                    <div class="table-actions">
+                                        <button type="button" class="btn btn-sm btn-outline btn-edit" data-id="${escapeHtml(id)}">✏️ Editar</button>
+                                        <button type="button" class="btn btn-sm btn-danger btn-delete" data-id="${escapeHtml(id)}">🗑️ Eliminar</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    _conectarAccionesTabla(config) {
+        this.shadowRoot.querySelectorAll('.btn-edit').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                const item = this._items.find(it => it[config.idField] === id);
+                if (item) {
+                    this._itemEnEdicion = item;
+                    this._mostrarFormulario = true;
+                    this.render();
+                }
+            });
+        });
+
+        this.shadowRoot.querySelectorAll('.btn-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!confirm('¿Estás seguro de que deseas eliminar este registro del catálogo?')) return;
+                this.dispatchEvent(new CustomEvent('eliminar-item', {
+                    detail: {
+                        tipoCatalogo: this._tipoCatalogo,
+                        id,
+                    },
+                    bubbles: true,
+                    composed: true,
+                }));
+            });
+        });
+    }
+
+    _actualizarFiltrado() {
+        const tableContainer = this.shadowRoot.querySelector('.table-container');
+        const countSpan = this.shadowRoot.querySelector('.toolbar-count');
+        const btnClear = this.shadowRoot.getElementById('btnClearSearch');
+        if (!tableContainer) {
+            this.render();
+            return;
+        }
+
+        const config = this.getConfig();
+        const itemsFiltrados = this._obtenerItemsFiltrados();
+
+        tableContainer.innerHTML = this._renderTablaHtml(itemsFiltrados, config);
+        this._conectarAccionesTabla(config);
+
+        if (countSpan) {
+            countSpan.innerHTML = this._filtroBusqueda
+                ? `Coincidencias: <strong>${itemsFiltrados.length}</strong> de ${this._items.length}`
+                : `Total: <strong>${itemsFiltrados.length}</strong> registro(s)`;
+        }
+
+        if (btnClear) {
+            btnClear.style.display = this._filtroBusqueda ? 'inline-flex' : 'none';
+        }
+    }
+
+    render() {
+        const config = this.getConfig();
+        const itemsFiltrados = this._obtenerItemsFiltrados();
 
         const idEdicion = this._itemEnEdicion ? this._itemEnEdicion[config.idField] : null;
 
@@ -561,60 +672,15 @@ class PanelCatalogoSimple extends HTMLElement {
                 <div class="search-box">
                     <span class="search-icon">🔍</span>
                     <input type="text" class="search-input" id="inputBuscar" placeholder="Buscar por nombre, tipo u observaciones (insensible a tildes)..." value="${escapeHtml(this._filtroBusqueda)}"/>
-                    ${this._filtroBusqueda ? `<button type="button" class="btn-clear-search" id="btnClearSearch">✕</button>` : ''}
+                    <button type="button" class="btn-clear-search" id="btnClearSearch" style="display: ${this._filtroBusqueda ? 'inline-flex' : 'none'};">✕</button>
                 </div>
-                <span style="font-size: 0.85rem; color: var(--muted, #a2b9b8);">
+                <span class="toolbar-count" style="font-size: 0.85rem; color: var(--muted, #a2b9b8);">
                     ${this._filtroBusqueda ? `Coincidencias: <strong>${itemsFiltrados.length}</strong> de ${this._items.length}` : `Total: <strong>${itemsFiltrados.length}</strong> registro(s)`}
                 </span>
             </div>
 
             <div class="table-container">
-                ${itemsFiltrados.length === 0 ? `
-                    <div style="padding: 2.5rem; text-align: center; color: var(--muted, #a2b9b8);">
-                        No se encontraron registros ${this._filtroBusqueda ? 'que coincidan con la búsqueda.' : 'en este catálogo.'}
-                    </div>
-                ` : `
-                    <table>
-                        <thead>
-                            <tr>
-                                ${config.columnas.map(col => `<th>${escapeHtml(col)}</th>`).join('')}
-                                <th style="text-align: right;">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsFiltrados.map(item => {
-                                const id = item[config.idField];
-                                const isActivo = Boolean(item.activo);
-
-                                return `
-                                    <tr>
-                                        <td><strong>${resaltarCoincidencias(item.nombre || 'Sin nombre', this._filtroBusqueda, 'resaltado-busqueda')}</strong></td>
-                                        ${this._tipoCatalogo === 'clinicas' ? `
-                                            <td>${resaltarCoincidencias(item.tipo || 'General', this._filtroBusqueda, 'resaltado-busqueda')}</td>
-                                            <td><span class="badge ${isActivo ? 'badge-active' : 'badge-inactive'}">${isActivo ? 'Activa' : 'Inactiva'}</span></td>
-                                            <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(item.comentarios || '—', this._filtroBusqueda, 'resaltado-busqueda')}</td>
-                                        ` : ''}
-                                        ${this._tipoCatalogo === 'roles' ? `
-                                            <td><span class="badge ${isActivo ? 'badge-active' : 'badge-inactive'}">${isActivo ? 'Activo' : 'Inactivo'}</span></td>
-                                            <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(item.observaciones || '—', this._filtroBusqueda, 'resaltado-busqueda')}</td>
-                                        ` : ''}
-                                        ${(this._tipoCatalogo === 'documentos' || this._tipoCatalogo === 'contactos') ? `
-                                            <td><code class="regex-code">${resaltarCoincidencias(item.expresionRegular || '.', this._filtroBusqueda, 'resaltado-busqueda')}</code></td>
-                                            <td style="color: var(--muted, #a2b9b8);">${resaltarCoincidencias(item.indicaciones || '—', this._filtroBusqueda, 'resaltado-busqueda')}</td>
-                                            <td><span class="badge ${isActivo ? 'badge-active' : 'badge-inactive'}">${isActivo ? 'Activo' : 'Inactivo'}</span></td>
-                                        ` : ''}
-                                        <td style="text-align: right; white-space: nowrap;">
-                                            <div class="table-actions">
-                                                <button type="button" class="btn btn-sm btn-outline btn-edit" data-id="${escapeHtml(id)}">✏️ Editar</button>
-                                                <button type="button" class="btn btn-sm btn-danger btn-delete" data-id="${escapeHtml(id)}">🗑️ Eliminar</button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                `}
+                ${this._renderTablaHtml(itemsFiltrados, config)}
             </div>
         `;
 
@@ -657,6 +723,10 @@ class PanelCatalogoSimple extends HTMLElement {
         if (inputBuscar) {
             inputBuscar.addEventListener('input', (e) => {
                 this._filtroBusqueda = e.target.value;
+                const btnClear = this.shadowRoot.getElementById('btnClearSearch');
+                if (btnClear) {
+                    btnClear.style.display = this._filtroBusqueda ? 'inline-flex' : 'none';
+                }
                 this._debounceBuscar();
             });
         }
@@ -664,8 +734,14 @@ class PanelCatalogoSimple extends HTMLElement {
         const btnClearSearch = this.shadowRoot.getElementById('btnClearSearch');
         if (btnClearSearch) {
             btnClearSearch.addEventListener('click', () => {
+                if (this._debounceBuscar?.cancel) this._debounceBuscar.cancel();
                 this._filtroBusqueda = '';
-                this.render();
+                const input = this.shadowRoot.getElementById('inputBuscar');
+                if (input) {
+                    input.value = '';
+                    input.focus();
+                }
+                this._actualizarFiltrado();
             });
         }
 
@@ -730,34 +806,8 @@ class PanelCatalogoSimple extends HTMLElement {
             });
         }
 
-        // Editar
-        this.shadowRoot.querySelectorAll('.btn-edit').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                const item = this._items.find(it => it[config.idField] === id);
-                if (item) {
-                    this._itemEnEdicion = item;
-                    this._mostrarFormulario = true;
-                    this.render();
-                }
-            });
-        });
-
-        // Eliminar
-        this.shadowRoot.querySelectorAll('.btn-delete').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                if (!confirm('¿Estás seguro de que deseas eliminar este registro del catálogo?')) return;
-                this.dispatchEvent(new CustomEvent('eliminar-item', {
-                    detail: {
-                        tipoCatalogo: this._tipoCatalogo,
-                        id,
-                    },
-                    bubbles: true,
-                    composed: true,
-                }));
-            });
-        });
+        // Acciones de tabla (Editar y Eliminar)
+        this._conectarAccionesTabla(config);
     }
 }
 
