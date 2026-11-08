@@ -674,6 +674,7 @@
     <!-- Integración del Web Component y Servicios Control -->
     <script type="module">
         import './js/boundary/components/busqueda_chivomed.js';
+        import { escapeHtml } from './js/boundary/utils.js';
         import { ClinicaService, RolService, ExamenService, PersonaService, ConsultaService, API_CONFIG } from './js/control/index.js';
 
         const monitorPill = document.getElementById('monitorPill');
@@ -724,10 +725,10 @@
                 monitorPill.textContent = '● En línea (200 OK)';
                 globalStatusDot.className = 'status-dot';
 
-                listaClinicas.innerHTML = `<ul>${clinicas.slice(0, 4).map(c => `<li><strong>${c.nombre}</strong> <small style="color:var(--muted);">${c.tipo || 'General'}</small></li>`).join('')}</ul>`;
-                listaRoles.innerHTML = `<ul>${roles.slice(0, 4).map(r => `<li><strong>${r.nombre}</strong> <small style="color:var(--accent);">Activo</small></li>`).join('')}</ul>`;
+                listaClinicas.innerHTML = `<ul>${clinicas.slice(0, 4).map(c => `<li><strong>${escapeHtml(c.nombre)}</strong> <small style="color:var(--muted);">${escapeHtml(c.tipo || 'General')}</small></li>`).join('')}</ul>`;
+                listaRoles.innerHTML = `<ul>${roles.slice(0, 4).map(r => `<li><strong>${escapeHtml(r.nombre)}</strong> <small style="color:var(--accent);">Activo</small></li>`).join('')}</ul>`;
                 infoEndpoint.innerHTML = `
-                    <div><strong>URL:</strong> <code>${API_CONFIG.baseUrl}</code></div>
+                    <div><strong>URL:</strong> <code>${escapeHtml(API_CONFIG.baseUrl)}</code></div>
                     <div style="margin-top: 4px; font-size: 11px; color: var(--muted);">Proxy reverso activo en puerto local 3000</div>
                 `;
 
@@ -781,7 +782,7 @@
                 listaClinicas.innerHTML = `<span style="color:#ef4444;">No disponible</span>`;
                 listaRoles.innerHTML = `<span style="color:#ef4444;">No disponible</span>`;
                 infoEndpoint.innerHTML = `
-                    <div style="color: #ef4444; font-size: 12px;"><strong>Error:</strong> ${error.message || 'Sin conexión'}</div>
+                    <div style="color: #ef4444; font-size: 12px;"><strong>Error:</strong> ${escapeHtml(error.message || 'Sin conexión')}</div>
                     <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Asegúrate de que Open Liberty esté en el puerto 9080 y corre 'npm start'</div>
                 `;
             }

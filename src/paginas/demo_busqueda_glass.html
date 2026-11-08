@@ -582,6 +582,7 @@
     <!-- Scripts de inicialización y datos de muestra -->
     <script type="module">
         import '../js/boundary/components/busqueda_chivomed.js';
+        import { escapeHtml } from '../js/boundary/utils.js';
 
         // Base de datos de prueba simulada con las entidades clínicas de ChivoMed
         const catalogoClinico = [
@@ -608,8 +609,8 @@
             const item = e.detail.item;
             feedback.classList.add('show');
             feedbackContent.innerHTML = `
-                Seleccionado: <strong>${item.nombre}</strong> (${item.categoria.toUpperCase()}) — 
-                <em>${item.detalle || ''}</em>
+                Seleccionado: <strong>${escapeHtml(item.nombre)}</strong> (${escapeHtml(item.categoria ? String(item.categoria).toUpperCase() : '')}) — 
+                <em>${escapeHtml(item.detalle || '')}</em>
             `;
         });
 

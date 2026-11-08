@@ -411,7 +411,7 @@ class BusquedaChivoMed extends HTMLElement {
                     type="text" 
                     class="search-input" 
                     id="inputSearch" 
-                    placeholder="${placeholder}"
+                    placeholder="${escaparHtml(placeholder)}"
                     autocomplete="off"
                     spellcheck="false"
                 />
@@ -534,7 +534,7 @@ class BusquedaChivoMed extends HTMLElement {
         }
 
         resultsGrid.innerHTML = filtrados.map(item => {
-            const cat = (item.categoria || item.tipo || 'clinica').toLowerCase();
+            const cat = String(item.categoria || item.tipo || 'clinica').toLowerCase();
             let tone = 'mint';
             let iconSvg = ICONOS.paciente;
 
