@@ -70,14 +70,13 @@ const server = http.createServer((req, res) => {
         });
 
         proxyReq.on('error', (err) => {
-            console.error('Error de conexión con GalenoSV:', err.message);
+            console.error(`[Proxy Error] No se pudo conectar con GalenoSV en ${targetBackend.origin}:`, err.message);
             if (!res.headersSent) {
                 res.writeHead(502, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     status: 502,
-                    code: 'conexion.error',
-                    message: 'No se pudo conectar con el backend de GalenoSV en ' + API_URL,
-                    cause: err.message,
+                    code: 'gateway.error',
+                    message: 'El servicio de datos de GalenoSV no se encuentra disponible temporalmente.',
                 }));
             }
         });
@@ -87,7 +86,14 @@ const server = http.createServer((req, res) => {
     }
 
     // 2. Servidor de archivos estáticos desde src/
-    let reqPath = decodeURIComponent(new URL(req.url, `http://localhost:${PORT}`).pathname);
+    let reqPath;
+    try {
+        reqPath = decodeURIComponent(new URL(req.url, `http://127.0.0.1:${PORT}`).pathname);
+    } catch {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('400 Solicitud Inválida: URL malformada');
+        return;
+    }
     if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
 
     const safePath = path.normalize(reqPath).replace(/^(\.\.[\/\\])+/, '');
@@ -115,8 +121,12 @@ const server = http.createServer((req, res) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`\n🚀 Servidor ChivoMed (Estáticos + Proxy GalenoSV) corriendo en:`);
-    console.log(`👉 http://localhost:${PORT}`);
-    console.log(`🔗 Proxy configurado: /galenosv/api -> ${API_URL}\n`);
-});
+export { server };
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+    server.listen(PORT, '127.0.0.1', () => {
+        console.log(`\n🚀 Servidor ChivoMed (Estáticos + Proxy GalenoSV) corriendo en:`);
+        console.log(`👉 http://127.0.0.1:${PORT}`);
+        console.log(`🔗 Proxy configurado: /galenosv/api -> ${API_URL}\n`);
+    });
+}
