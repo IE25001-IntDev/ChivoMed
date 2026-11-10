@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChivoMed - Estación Médica (Workbench)</title>
+    <link rel="stylesheet" href="../../resources/chivomed_theme.css">
+    <link rel="stylesheet" href="../../resources/medico.css">
+    <style>
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 81% 14%, var(--glow-mint), transparent 45%),
+                radial-gradient(ellipse at 9% 36%, var(--glow-blue), transparent 45%),
+                radial-gradient(ellipse at 83% 77%, var(--glow-lavender), transparent 45%);
+        }
+    </style>
+</head>
+<body>
+    <div class="medico-layout">
+        <!-- Cabecera de la estación médica -->
+        <medico-header></medico-header>
+
+        <!-- Banner de notificaciones / alertas -->
+        <div id="feedbackBanner" class="feedback-banner">
+            <span id="feedbackText"></span>
+            <button type="button" id="btnCerrarFeedback">✕</button>
+        </div>
+
+        <!-- Área principal de trabajo clínico -->
+        <main class="medico-main">
+            <!-- Barra lateral: Directorio de pacientes y consultas -->
+            <aside class="sidebar-panel">
+                <cola-pacientes></cola-pacientes>
+            </aside>
+
+            <!-- Workbench Clínico Activo (Replicación de consulta.xhtml) -->
+            <section class="workspace-panel">
+                <workbench-medico></workbench-medico>
+            </section>
+        </main>
+    </div>
+
+    <!-- Orquestador Boundary que conecta los Web Components con Control -->
+    <script type="module" src="../../js/boundary/medico.js"></script>
+</body>
+</html>

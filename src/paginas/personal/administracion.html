@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChivoMed - Personal de Clínica y Administración</title>
+    <link rel="stylesheet" href="../../resources/chivomed_theme.css">
+    <link rel="stylesheet" href="../../resources/personal.css">
+    <style>
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 81% 14%, var(--glow-mint), transparent 45%),
+                radial-gradient(ellipse at 9% 36%, var(--glow-blue), transparent 45%),
+                radial-gradient(ellipse at 83% 77%, var(--glow-lavender), transparent 45%);
+        }
+    </style>
+</head>
+<body>
+    <div class="personal-layout">
+        <!-- Cabecera de personal y administración -->
+        <personal-header></personal-header>
+
+        <!-- Banner de notificaciones / alertas -->
+        <div id="feedbackBanner" class="feedback-banner">
+            <span id="feedbackText"></span>
+            <button type="button" id="btnCerrarFeedback">✕</button>
+        </div>
+
+        <!-- Área principal de administración -->
+        <main class="personal-main">
+            <!-- Barra lateral: Menú de Catálogos y Secciones -->
+            <aside class="sidebar-panel">
+                <navegacion-personal></navegacion-personal>
+            </aside>
+
+            <!-- Área de trabajo de parametrización -->
+            <section class="workspace-panel">
+                <!-- 1. Gestión de Turnos y Contexto (cambiar-rol.xhtml) -->
+                <panel-contexto></panel-contexto>
+
+                <!-- 2. Catálogos Simples (clinica, rol, tipoDocumento, tipoMedioContacto) -->
+                <panel-catalogo-simple style="display: none;"></panel-catalogo-simple>
+
+                <!-- 3. Catálogo y Taxonomía de Exámenes (tipoExamen, examen, clasificaciones) -->
+                <panel-examenes style="display: none;"></panel-examenes>
+
+                <!-- 4. Diseñador de Protocolos y Workflows (procedimiento, pasos, exámenes) -->
+                <panel-protocolos style="display: none;"></panel-protocolos>
+            </section>
+        </main>
+    </div>
+
+    <!-- Orquestador Boundary que conecta los Web Components con Control -->
+    <script type="module" src="../../js/boundary/personal.js"></script>
+</body>
+</html>

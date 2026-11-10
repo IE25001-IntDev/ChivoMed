@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "LanzarServidorChivoMed",
+            "type": "shell",
+            "command": "fuser -k 3000/tcp 2>/dev/null || true; node scripts/dev_server.js",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*🚀 Servidor ChivoMed.*",
+                    "endsPattern": ".*http://localhost:3000.*"
+                }
+            }
+        },
+        {
+            "label": "LanzarBrowserSync",
+            "type": "shell",
+            "command": "fuser -k 3000/tcp 2>/dev/null || true; browser-sync start --server src -f \"**/*\" ./src --no-open",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^\\[Browsersync\\].*",
+                    "endsPattern": ".*\\[Browsersync\\] Watching files.*"
+                }
+            }
+        }
+    ]
+}

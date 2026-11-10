@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "ChivoMed (Iniciar Servidor + Chrome)",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}/src",
+            "runtimeExecutable": "/usr/bin/google-chrome-stable",
+            "preLaunchTask": "LanzarServidorChivoMed"
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "ChivoMed (Solo Chrome - Si ya corre npm start)",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}/src",
+            "runtimeExecutable": "/usr/bin/google-chrome-stable"
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "ChivoMed (BrowserSync + Chrome)",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}/src",
+            "runtimeExecutable": "/usr/bin/google-chrome-stable",
+            "preLaunchTask": "LanzarBrowserSync"
+        }
+    ]
+}
