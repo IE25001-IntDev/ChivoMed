@@ -106,3 +106,21 @@ export function formatearFecha(fechaStr, conHora = true) {
         return String(fechaStr);
     }
 }
+
+/** Valida las restricciones nativas también en acciones que no envían un formulario. */
+export function validarCampos(campos) {
+    let primero;
+    for (const campo of [...campos].filter(c => c && !c.disabled)) {
+        campo.setCustomValidity('');
+        let mensaje = '';
+        if (campo.required && typeof campo.value === 'string' && !campo.value.trim()) mensaje = 'Completa este campo; no puede contener solo espacios.';
+        if (campo.maxLength >= 0 && campo.value.length > campo.maxLength) mensaje = `Este campo admite hasta ${campo.maxLength} caracteres.`;
+        if (campo.validity.patternMismatch) mensaje = campo.title || 'El valor no tiene el formato requerido.';
+        campo.setCustomValidity(mensaje);
+        campo.setAttribute('aria-invalid', String(!campo.validity.valid));
+        campo.addEventListener('input', () => { campo.setCustomValidity(''); campo.removeAttribute('aria-invalid'); }, { once: true });
+        if (!campo.validity.valid) primero ??= campo;
+    }
+    if (primero) { primero.focus(); primero.reportValidity(); }
+    return !primero;
+}

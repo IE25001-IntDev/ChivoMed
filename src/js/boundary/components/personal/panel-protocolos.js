@@ -1,4 +1,4 @@
-import { escapeHtml } from '../../utils.js';
+import { escapeHtml, validarCampos } from '../../utils.js';
 
 /**
  * Web Component: <panel-protocolos>
@@ -417,7 +417,7 @@ class PanelProtocolos extends HTMLElement {
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label class="form-label" for="procNombre">Nombre: *</label>
-                                        <input type="text" class="input-field" id="procNombre" required placeholder="Ej: Consulta Externa, Triage..." value="${escapeHtml(this._procEnEdicion?.nombre || '')}"/>
+                                        <input type="text" class="input-field" id="procNombre" maxlength="155" required placeholder="Ej: Consulta Externa, Triage..." value="${escapeHtml(this._procEnEdicion?.nombre || '')}"/>
                                     </div>
                                     <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
                                         <input type="checkbox" id="procActivo" ${this._procEnEdicion ? (this._procEnEdicion.activo ? 'checked' : '') : 'checked'}/>
@@ -425,7 +425,7 @@ class PanelProtocolos extends HTMLElement {
                                     </div>
                                     <div class="form-group" style="grid-column: 1 / -1;">
                                         <label class="form-label" for="procObs">Observaciones:</label>
-                                        <input type="text" class="input-field" id="procObs" placeholder="Descripción general del flujo..." value="${escapeHtml(this._procEnEdicion?.observaciones || '')}"/>
+                                        <input type="text" class="input-field" id="procObs" maxlength="255" placeholder="Descripción general del flujo..." value="${escapeHtml(this._procEnEdicion?.observaciones || '')}"/>
                                     </div>
                                 </div>
                                 <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 1.5rem;">
@@ -501,13 +501,13 @@ class PanelProtocolos extends HTMLElement {
                                     <div class="form-grid">
                                         <div class="form-group">
                                             <label class="form-label" for="pasoNombre">Nombre del Paso: *</label>
-                                            <input type="text" class="input-field" id="pasoNombre" required placeholder="Ej: Toma de signos vitales..."/>
+                                            <input type="text" class="input-field" id="pasoNombre" maxlength="155" required placeholder="Ej: Toma de signos vitales..."/>
                                         </div>
                                         <div class="form-group">
                                             <label class="form-label" for="pasoRol">Rol Responsable: *</label>
                                             <select class="input-field" id="pasoRol" required>
                                                 <option value="">-- Seleccionar Rol --</option>
-                                                ${this._roles.map(r => `
+                                                ${this._roles.filter(r => r.activo === true).map(r => `
                                                     <option value="${escapeHtml(r.idRol)}">${escapeHtml(r.nombre)}</option>
                                                 `).join('')}
                                             </select>
@@ -612,14 +612,14 @@ class PanelProtocolos extends HTMLElement {
                                             <label class="form-label" for="selExamenPaso">Prueba Diagnóstica: *</label>
                                             <select class="input-field" id="selExamenPaso" required>
                                                 <option value="">-- Seleccionar Examen --</option>
-                                                ${this._examenes.map(ex => `
+                                                ${this._examenes.filter(e => e.activo === true).map(ex => `
                                                     <option value="${escapeHtml(ex.idExamen)}">${escapeHtml(ex.nombre)}</option>
                                                 `).join('')}
                                             </select>
                                         </div>
                                         <div class="form-group">
                                             <label class="form-label" for="obsPasoExamen">Observaciones:</label>
-                                            <input type="text" class="input-field" id="obsPasoExamen" placeholder="Condiciones para ordenar esta prueba..."/>
+                                            <input type="text" class="input-field" id="obsPasoExamen" maxlength="255" placeholder="Condiciones para ordenar esta prueba..."/>
                                         </div>
                                     </div>
                                     <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 1.5rem;">
@@ -723,6 +723,7 @@ class PanelProtocolos extends HTMLElement {
         if (formProc) {
             formProc.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(e.currentTarget.elements)) return;
                 const nombre = this.shadowRoot.getElementById('procNombre').value.trim();
                 const activo = this.shadowRoot.getElementById('procActivo').checked;
                 const observaciones = this.shadowRoot.getElementById('procObs').value.trim() || null;
@@ -806,6 +807,7 @@ class PanelProtocolos extends HTMLElement {
         if (formPaso) {
             formPaso.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(e.currentTarget.elements)) return;
                 const nombre = this.shadowRoot.getElementById('pasoNombre').value.trim();
                 const idRol = this.shadowRoot.getElementById('pasoRol').value;
                 const indicaFin = this.shadowRoot.getElementById('pasoIndicaFin').checked;
@@ -893,6 +895,7 @@ class PanelProtocolos extends HTMLElement {
         if (formPasoEx) {
             formPasoEx.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(e.currentTarget.elements)) return;
                 const idExamen = this.shadowRoot.getElementById('selExamenPaso').value;
                 const observaciones = this.shadowRoot.getElementById('obsPasoExamen').value.trim() || null;
 

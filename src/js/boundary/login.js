@@ -31,10 +31,11 @@ passwordToggle.addEventListener("click", () => {
 passwordToggle.hidden = false;
 
 function validate(field) {
-  const valid = field === username ? Boolean(field.value.trim()) : Boolean(field.value);
+  const largoValido = field.value.length <= field.maxLength;
+  const valid = largoValido && Boolean(field.value.trim());
   const error = document.querySelector(`#${field.id}-error`);
   field.setAttribute("aria-invalid", String(!valid));
-  error.textContent = valid ? "" : field === username ? "Escribe tu usuario o correo electrónico." : "Escribe tu contraseña.";
+  error.textContent = valid ? "" : !largoValido ? `Este campo admite hasta ${field.maxLength} caracteres.` : field === username ? "Escribe tu usuario o correo electrónico." : "Escribe tu contraseña.";
   error.hidden = valid;
   return valid;
 }

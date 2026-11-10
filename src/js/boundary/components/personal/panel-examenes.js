@@ -1,4 +1,4 @@
-import { escapeHtml, resaltarCoincidencias } from '../../utils.js';
+import { escapeHtml, resaltarCoincidencias, validarCampos } from '../../utils.js';
 import {
     filtrarColeccion,
     crearBuscadorDebounce,
@@ -470,7 +470,7 @@ class PanelExamenes extends HTMLElement {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label" for="nombreEx">Nombre: *</label>
-                                    <input type="text" class="input-field" id="nombreEx" name="nombre" required placeholder="Ej: Hematología, Hemograma..." value="${escapeHtml(this._itemEnEdicion?.nombre || '')}"/>
+                                    <input type="text" class="input-field" id="nombreEx" maxlength="155" name="nombre" required placeholder="Ej: Hematología, Hemograma..." value="${escapeHtml(this._itemEnEdicion?.nombre || '')}"/>
                                 </div>
                                 <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
                                     <input type="checkbox" id="activoEx" name="activo" ${this._itemEnEdicion ? (this._itemEnEdicion.activo ? 'checked' : '') : 'checked'}/>
@@ -478,7 +478,7 @@ class PanelExamenes extends HTMLElement {
                                 </div>
                                 <div class="form-group" style="grid-column: 1 / -1;">
                                     <label class="form-label" for="obsEx">Observaciones:</label>
-                                    <input type="text" class="input-field" id="obsEx" name="observaciones" placeholder="Indicaciones clínicas o de preparación..." value="${escapeHtml(this._itemEnEdicion?.observaciones || '')}"/>
+                                    <input type="text" class="input-field" id="obsEx" maxlength="255" name="observaciones" placeholder="Indicaciones clínicas o de preparación..." value="${escapeHtml(this._itemEnEdicion?.observaciones || '')}"/>
                                 </div>
                             </div>
                             <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 1.5rem;">
@@ -732,6 +732,7 @@ class PanelExamenes extends HTMLElement {
         if (formEx) {
             formEx.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(e.currentTarget.elements)) return;
                 const nombre = this.shadowRoot.getElementById('nombreEx').value.trim();
                 const activo = this.shadowRoot.getElementById('activoEx').checked;
                 const observaciones = this.shadowRoot.getElementById('obsEx').value.trim() || null;
@@ -756,6 +757,7 @@ class PanelExamenes extends HTMLElement {
         if (formClasif) {
             formClasif.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(e.currentTarget.elements)) return;
                 const idExamen = this.shadowRoot.getElementById('selExamen').value;
                 const idTipoExamen = this.shadowRoot.getElementById('selTipoEx').value;
                 if (!idExamen || !idTipoExamen) return;

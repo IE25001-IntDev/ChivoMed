@@ -1,4 +1,4 @@
-import { escapeHtml, resaltarCoincidencias } from '../../utils.js';
+import { escapeHtml, resaltarCoincidencias, validarCampos } from '../../utils.js';
 import {
     filtrarColeccion,
     crearBuscadorDebounce,
@@ -77,10 +77,10 @@ class PanelCatalogoSimple extends HTMLElement {
                 subtitulo: 'Administración de sedes y centros médicos.',
                 idField: 'idClinica',
                 campos: [
-                    { name: 'nombre', label: 'Nombre de la Sede', type: 'text', required: true, placeholder: 'Ej: Hospital Central San Salvador' },
-                    { name: 'tipo', label: 'Tipo de Establecimiento', type: 'text', placeholder: 'Ej: Hospital, Clínica General, Unidad Médica' },
+                    { name: 'nombre', maxLength: 255, label: 'Nombre de la Sede', type: 'text', required: true, placeholder: 'Ej: Hospital Central San Salvador' },
+                    { name: 'tipo', maxLength: 20, label: 'Tipo de Establecimiento', type: 'text', placeholder: 'Ej: Hospital, Clínica General, Unidad Médica' },
                     { name: 'activo', label: 'Estado Operativo Activo', type: 'checkbox', default: true },
-                    { name: 'comentarios', label: 'Observaciones / Horarios', type: 'textarea', placeholder: 'Comentarios o indicaciones generales...' },
+                    { name: 'comentarios', maxLength: 255, label: 'Observaciones / Horarios', type: 'textarea', placeholder: 'Comentarios o indicaciones generales...' },
                 ],
                 columnas: ['Nombre', 'Tipo', 'Estado', 'Comentarios'],
             },
@@ -89,9 +89,9 @@ class PanelCatalogoSimple extends HTMLElement {
                 subtitulo: 'Roles institucionales de atención.',
                 idField: 'idRol',
                 campos: [
-                    { name: 'nombre', label: 'Nombre del Rol', type: 'text', required: true, placeholder: 'Ej: Médico Especialista, Enfermero' },
+                    { name: 'nombre', maxLength: 155, label: 'Nombre del Rol', type: 'text', required: true, placeholder: 'Ej: Médico Especialista, Enfermero' },
                     { name: 'activo', label: 'Rol Activo', type: 'checkbox', default: true },
-                    { name: 'observaciones', label: 'Descripción / Responsabilidades', type: 'textarea', placeholder: 'Alcance de las funciones del rol...' },
+                    { name: 'observaciones', maxLength: 255, label: 'Descripción / Responsabilidades', type: 'textarea', placeholder: 'Alcance de las funciones del rol...' },
                 ],
                 columnas: ['Nombre', 'Estado', 'Observaciones'],
             },
@@ -101,9 +101,9 @@ class PanelCatalogoSimple extends HTMLElement {
                 idField: 'idTipoDocumento',
                 tieneRegex: true,
                 campos: [
-                    { name: 'nombre', label: 'Nombre del Documento', type: 'text', required: true, placeholder: 'Ej: DUI, NIT, Pasaporte' },
-                    { name: 'expresionRegular', label: 'Expresión Regular (RegEx)', type: 'text', required: true, placeholder: 'Ej: ^\\d{8}-\\d$' },
-                    { name: 'indicaciones', label: 'Instrucciones al Usuario', type: 'text', placeholder: 'Ej: Formato requerido: 8 dígitos guion 1 dígito' },
+                    { name: 'nombre', maxLength: 155, label: 'Nombre del Documento', type: 'text', required: true, placeholder: 'Ej: DUI, NIT, Pasaporte' },
+                    { name: 'expresionRegular', maxLength: 255, label: 'Expresión Regular (RegEx)', type: 'text', required: true, placeholder: 'Ej: ^\\d{8}-\\d$' },
+                    { name: 'indicaciones', maxLength: 255, label: 'Instrucciones al Usuario', type: 'text', placeholder: 'Ej: Formato requerido: 8 dígitos guion 1 dígito' },
                     { name: 'activo', label: 'Documento Activo', type: 'checkbox', default: true },
                 ],
                 columnas: ['Nombre', 'RegEx de Validación', 'Indicaciones', 'Estado'],
@@ -114,9 +114,9 @@ class PanelCatalogoSimple extends HTMLElement {
                 idField: 'idTipoMedioContacto',
                 tieneRegex: true,
                 campos: [
-                    { name: 'nombre', label: 'Nombre del Canal', type: 'text', required: true, placeholder: 'Ej: Teléfono Móvil, Correo Electrónico' },
-                    { name: 'expresionRegular', label: 'Expresión Regular (RegEx)', type: 'text', required: true, placeholder: 'Ej: ^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$' },
-                    { name: 'indicaciones', label: 'Instrucciones de Captura', type: 'text', placeholder: 'Ej: Ingrese una dirección de correo válida' },
+                    { name: 'nombre', maxLength: 155, label: 'Nombre del Canal', type: 'text', required: true, placeholder: 'Ej: Teléfono Móvil, Correo Electrónico' },
+                    { name: 'expresionRegular', maxLength: 255, label: 'Expresión Regular (RegEx)', type: 'text', required: true, placeholder: 'Ej: ^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$' },
+                    { name: 'indicaciones', maxLength: 255, label: 'Instrucciones de Captura', type: 'text', placeholder: 'Ej: Ingrese una dirección de correo válida' },
                     { name: 'activo', label: 'Canal Activo', type: 'checkbox', default: true },
                 ],
                 columnas: ['Nombre', 'RegEx de Validación', 'Indicaciones', 'Estado'],
@@ -634,14 +634,14 @@ class PanelCatalogoSimple extends HTMLElement {
                                         return `
                                             <div class="form-group" style="grid-column: 1 / -1;">
                                                 <label class="form-label" for="field-${c.name}">${escapeHtml(c.label)}</label>
-                                                <textarea class="input-field" id="field-${c.name}" name="${c.name}" placeholder="${escapeHtml(c.placeholder || '')}">${escapeHtml(val || '')}</textarea>
+                                                <textarea class="input-field" id="field-${c.name}" name="${c.name}" maxlength="${c.maxLength}" placeholder="${escapeHtml(c.placeholder || '')}">${escapeHtml(val || '')}</textarea>
                                             </div>
                                         `;
                                     }
                                     return `
                                         <div class="form-group">
                                             <label class="form-label" for="field-${c.name}">${escapeHtml(c.label)} ${c.required ? '<span style="color:#ef4444;">*</span>' : ''}</label>
-                                            <input type="${c.type}" class="input-field" id="field-${c.name}" name="${c.name}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(c.placeholder || '')}" ${c.required ? 'required' : ''}/>
+                                            <input type="${c.type}" class="input-field" id="field-${c.name}" name="${c.name}" maxlength="${c.maxLength}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(c.placeholder || '')}" ${c.required ? 'required' : ''}/>
                                         </div>
                                     `;
                                 }).join('')}
@@ -770,6 +770,7 @@ class PanelCatalogoSimple extends HTMLElement {
         if (form) {
             form.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(form.elements)) return;
                 const formData = new FormData(form);
                 const datos = {};
                 for (const campo of config.campos) {

@@ -1,4 +1,4 @@
-import { escapeHtml } from '../../utils.js';
+import { escapeHtml, validarCampos } from '../../utils.js';
 
 /**
  * Web Component: <panel-contexto>
@@ -353,7 +353,7 @@ class PanelContexto extends HTMLElement {
                                     <label class="form-label" for="selRolAsignar">Rol: *</label>
                                     <select class="select-input" id="selRolAsignar" required>
                                         <option value="">-- Seleccionar Rol --</option>
-                                        ${this._roles.map(r => `
+                                        ${this._roles.filter(r => r.activo === true).map(r => `
                                             <option value="${escapeHtml(r.idRol)}">${escapeHtml(r.nombre)}</option>
                                         `).join('')}
                                     </select>
@@ -362,7 +362,7 @@ class PanelContexto extends HTMLElement {
                                 <div class="form-group">
                                     <label class="form-label" for="selClinicaAsignar">Sede Clínica: *</label>
                                     <select class="select-input" id="selClinicaAsignar" required>
-                                        ${this._clinicas.map(c => `
+                                        ${this._clinicas.filter(c => c.activo === true).map(c => `
                                             <option value="${escapeHtml(c.idClinica)}" ${c.idClinica === this._idClinicaSeleccionada ? 'selected' : ''}>
                                                 ${escapeHtml(c.nombre)}
                                             </option>
@@ -386,7 +386,7 @@ class PanelContexto extends HTMLElement {
                 <div class="form-group">
                     <label class="form-label" for="selectClinica">1. Sede Hospitalaria:</label>
                     <select disabled class="select-input" id="selectClinica">
-                        ${this._clinicas.map(cl => `
+                        ${this._clinicas.filter(c => c.activo === true).map(cl => `
                             <option value="${escapeHtml(cl.idClinica)}" ${cl.idClinica === this._idClinicaSeleccionada ? 'selected' : ''}>
                                 ${escapeHtml(cl.nombre)} (${escapeHtml(cl.tipo || 'General')})
                             </option>
@@ -452,6 +452,7 @@ class PanelContexto extends HTMLElement {
         if (formNueva) {
             formNueva.addEventListener('submit', (e) => {
                 e.preventDefault();
+                if (!validarCampos(e.currentTarget.elements)) return;
                 const idPersona = this.shadowRoot.getElementById('selPersonaAsignar').value;
                 const idRol = this.shadowRoot.getElementById('selRolAsignar').value;
                 const idClinica = this.shadowRoot.getElementById('selClinicaAsignar').value;

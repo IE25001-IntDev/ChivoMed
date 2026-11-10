@@ -1,4 +1,4 @@
-import { escapeHtml, formatearFecha } from '../../utils.js';
+import { escapeHtml, formatearFecha, validarCampos } from '../../utils.js';
 
 /**
  * Web Component: <workbench-medico>
@@ -511,7 +511,7 @@ class WorkbenchMedico extends HTMLElement {
                                 <label class="form-label" for="txtNotas">Diagnóstico y Observaciones Clínicas:</label>
                                 <textarea
                                     class="textarea-input"
-                                    id="txtNotas"
+                                    id="txtNotas" maxlength="255"
                                     placeholder="Notas del médico, diagnóstico clínico, evolución del paciente..."
                                     ${isCerrada ? 'disabled' : ''}
                                 >${escapeHtml(this._notasDraft)}</textarea>
@@ -521,7 +521,7 @@ class WorkbenchMedico extends HTMLElement {
                                 <input
                                     type="text"
                                     class="input-text"
-                                    id="txtRefExterna"
+                                    id="txtRefExterna" maxlength="255"
                                     placeholder="Ej: EXP-2026-004"
                                     value="${escapeHtml(this._refExternaDraft)}"
                                     ${isCerrada ? 'disabled' : ''}
@@ -549,9 +549,9 @@ class WorkbenchMedico extends HTMLElement {
                                 <div style="font-size: 0.8rem; color: var(--muted, #a2b9b8);">Agrega protocolos clínicos desde el catálogo de la clínica.</div>
                             </div>
                             <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                <select class="select-input" id="selectProc">
+                                <select class="select-input" id="selectProc" required>
                                     <option value="">-- Seleccionar Procedimiento --</option>
-                                    ${this._catalogoProcedimientos.map(pr => `
+                                    ${this._catalogoProcedimientos.filter(p => p.activo === true).map(pr => `
                                         <option value="${escapeHtml(pr.idProcedimiento)}">${escapeHtml(pr.nombre)}</option>
                                     `).join('')}
                                 </select>
@@ -655,21 +655,21 @@ class WorkbenchMedico extends HTMLElement {
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label class="form-label" for="selectTipoExamenReg">Tipo de Examen:</label>
-                                        <select class="select-input" id="selectTipoExamenReg">
+                                        <select class="select-input" id="selectTipoExamenReg" required>
                                             <option value="">-- Seleccionar Tipo de Examen --</option>
-                                            ${this._catalogoTiposExamen.map(te => `
+                                            ${this._catalogoTiposExamen.filter(t => t.activo === true).map(te => `
                                                 <option value="${escapeHtml(te.idTipoExamen)}">${escapeHtml(te.nombre)}</option>
                                             `).join('')}
                                         </select>
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label" for="inputNombreExamenReg">Nombre del Examen:</label>
-                                        <input type="text" class="input-text" id="inputNombreExamenReg" placeholder="Ej: Hemograma completo, Glucosa en ayunas..."/>
+                                        <input type="text" class="input-text" id="inputNombreExamenReg" maxlength="155" required placeholder="Ej: Hemograma completo, Glucosa en ayunas..."/>
                                     </div>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0.85rem;">
                                     <label class="form-label" for="txtObsExamenReg">Observaciones / Indicaciones Clínicas:</label>
-                                    <input type="text" class="input-text" id="txtObsExamenReg" placeholder="Notas adicionales sobre la prueba diagnóstica..."/>
+                                    <input type="text" class="input-text" id="txtObsExamenReg" maxlength="255" placeholder="Notas adicionales sobre la prueba diagnóstica..."/>
                                 </div>
                                 <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
                                     <button type="button" class="btn btn-primary" id="btnVincularExamen" ${this._accionEnCurso === 'vincular-examen' ? 'disabled' : ''}>
@@ -703,7 +703,7 @@ class WorkbenchMedico extends HTMLElement {
                                     <input
                                         type="text"
                                         class="input-text"
-                                        id="inputIndicacionesOrden"
+                                        id="inputIndicacionesOrden" maxlength="255" required
                                         placeholder="Ej: Perfil lipídico y enzimas hepáticas con 12h de ayuno..."
                                     />
                                 </div>
@@ -801,11 +801,11 @@ class WorkbenchMedico extends HTMLElement {
                                             <div style="background: var(--surface-muted, rgba(0, 0, 0, 0.2)); border: 1px dashed var(--border-strong); border-radius: 12px; padding: 1.25rem; margin-top: 1rem; display: flex; flex-direction: column; gap: 0.85rem;">
                                                 <div class="form-group">
                                                     <label class="form-label" for="inputRes-${escapeHtml(o.idOrdenExamen)}">Resultado / Valor Medido:</label>
-                                                    <input type="text" class="input-text" id="inputRes-${escapeHtml(o.idOrdenExamen)}" placeholder="Ej: Glucosa 95 mg/dL, Leucocitos 7,200 /mm³..."/>
+                                                    <input type="text" class="input-text" id="inputRes-${escapeHtml(o.idOrdenExamen)}" maxlength="255" required placeholder="Ej: Glucosa 95 mg/dL, Leucocitos 7,200 /mm³..."/>
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="form-label" for="inputInterp-${escapeHtml(o.idOrdenExamen)}">Interpretación Médica:</label>
-                                                    <input type="text" class="input-text" id="inputInterp-${escapeHtml(o.idOrdenExamen)}" placeholder="Ej: Parámetros dentro de rangos normales de referencia..."/>
+                                                    <input type="text" class="input-text" id="inputInterp-${escapeHtml(o.idOrdenExamen)}" maxlength="255" placeholder="Ej: Parámetros dentro de rangos normales de referencia..."/>
                                                 </div>
                                                 <div style="display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 0.5rem;">
                                                     <button type="button" class="btn btn-success btn-guardar-res" data-id="${escapeHtml(o.idOrdenExamen)}" ${this._accionEnCurso === 'guardar-res' ? 'disabled' : ''}>
@@ -863,6 +863,7 @@ class WorkbenchMedico extends HTMLElement {
         const btnGuardarNotas = this.shadowRoot.getElementById('btnGuardarNotas');
         if (btnGuardarNotas) {
             btnGuardarNotas.addEventListener('click', () => {
+                if (!validarCampos([txtNotas, txtRef])) return;
                 this.dispatchEvent(new CustomEvent('guardar-notas', {
                     detail: {
                         idConsulta: c.idConsulta,
@@ -879,6 +880,7 @@ class WorkbenchMedico extends HTMLElement {
         const btnCerrar = this.shadowRoot.getElementById('btnCerrarConsulta');
         if (btnCerrar) {
             btnCerrar.addEventListener('click', () => {
+                if (!validarCampos([txtNotas, txtRef])) return;
                 if (!confirm('¿Deseas finalizar y cerrar esta consulta médica?')) return;
                 this.dispatchEvent(new CustomEvent('cerrar-consulta', {
                     detail: {
@@ -896,6 +898,7 @@ class WorkbenchMedico extends HTMLElement {
         const selectProc = this.shadowRoot.getElementById('selectProc');
         if (btnAddProc && selectProc) {
             btnAddProc.addEventListener('click', () => {
+                if (!validarCampos([selectProc])) return;
                 const idProcedimiento = selectProc.value;
                 if (!idProcedimiento) return;
                 this.dispatchEvent(new CustomEvent('agregar-procedimiento', {
@@ -953,6 +956,7 @@ class WorkbenchMedico extends HTMLElement {
         const txtObsEx = this.shadowRoot.getElementById('txtObsExamenReg');
         if (btnVincular && selectTipoEx && inputNombreEx) {
             btnVincular.addEventListener('click', () => {
+                if (!validarCampos([selectTipoEx, inputNombreEx, txtObsEx])) return;
                 const idTipoExamen = selectTipoEx.value;
                 const nombre = inputNombreEx.value.trim();
                 const observaciones = txtObsEx ? txtObsEx.value.trim() : '';
@@ -978,6 +982,7 @@ class WorkbenchMedico extends HTMLElement {
         const inputIndOrden = this.shadowRoot.getElementById('inputIndicacionesOrden');
         if (btnCrearOrden && inputIndOrden) {
             btnCrearOrden.addEventListener('click', () => {
+                if (!validarCampos([inputIndOrden])) return;
                 const indicaciones = inputIndOrden.value.trim();
                 if (!indicaciones || !this._pasoSeleccionadoId) return;
                 this.dispatchEvent(new CustomEvent('crear-orden-examen', {
@@ -1007,6 +1012,7 @@ class WorkbenchMedico extends HTMLElement {
                 const idOrdenExamen = e.currentTarget.dataset.id;
                 const inputRes = this.shadowRoot.getElementById(`inputRes-${idOrdenExamen}`);
                 const inputInterp = this.shadowRoot.getElementById(`inputInterp-${idOrdenExamen}`);
+                if (!validarCampos([inputRes, inputInterp])) return;
                 const resultado = inputRes ? inputRes.value.trim() : '';
                 const interpretacion = inputInterp ? inputInterp.value.trim() : '';
                 if (!resultado) return;

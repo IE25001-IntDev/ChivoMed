@@ -153,3 +153,52 @@ test('un guardado correcto se conserva aunque falle la recarga del listado',asyn
         assert.equal(escrituras.filter(e=>e.ruta==='recepcion/pacientes').length,antes+1);
     }finally{fallarProximaCarga=false;await context.close();}
 });
+
+test('nombres y apellidos bloquean números al escribir y pegar; aceptan tildes y ñ',async()=>{
+    const {context,page}=await entrar('ADMINISTRACION');try{
+        await page.waitForURL('**/personal/administracion.html');const panel=page.locator('panel-recepcion');
+        const nombres=panel.getByLabel('Nombres',{exact:true});const apellidos=panel.getByLabel('Apellidos',{exact:true});
+        await nombres.pressSequentially('Ana123');assert.equal(await nombres.inputValue(),'Ana');
+        await apellidos.fill('Peña');
+        assert.equal(await apellidos.evaluate(campo=>{
+            const portapapeles=new DataTransfer();portapapeles.setData('text','López99');
+            const evento=new ClipboardEvent('paste',{clipboardData:portapapeles,cancelable:true,bubbles:true});campo.dispatchEvent(evento);return evento.defaultPrevented;
+        }),true);
+        assert.equal(await apellidos.inputValue(),'Peña');
+        await nombres.fill('María José');await panel.getByLabel('Fecha de nacimiento',{exact:true}).fill('2000-01-01');
+        const antes=escrituras.length;
+        for(const campo of [nombres,apellidos]){
+            const original=await campo.inputValue();await campo.evaluate(c=>{c.value='Ana123';});
+            assert.equal(await panel.locator('#paciente').evaluate(f=>f.checkValidity()),false);
+            await panel.getByRole('button',{name:'Guardar paciente',exact:true}).click();
+            assert.equal(escrituras.length,antes);await campo.fill(original);
+        }
+        assert.equal(await panel.locator('#paciente').evaluate(f=>f.checkValidity()),true);
+        await panel.getByLabel('Fecha de nacimiento',{exact:true}).fill('3000-01-01');
+        assert.equal(await panel.locator('#paciente').evaluate(f=>f.checkValidity()),false);
+    }finally{await context.close();}
+});
+
+test('los catálogos rechazan nombres vacíos y respetan los tamaños de sus campos',async()=>{
+    const {context,page}=await entrar('ADMINISTRACION');try{
+        await page.waitForURL('**/personal/administracion.html');
+        await page.locator('navegacion-personal').getByRole('tab',{name:/Roles/}).click();
+        const panel=page.locator('panel-catalogo-simple');await panel.getByRole('button',{name:/Nuevo/}).click();
+        const campo=panel.locator('[name="nombre"]');await campo.fill('   ');
+        const antes=escrituras.length;await panel.getByRole('button',{name:/Guardar/}).click();
+        assert.equal(await campo.evaluate(c=>c.validity.customError),true);assert.equal(escrituras.length,antes);
+        await campo.fill('Rol 2');assert.equal(await campo.evaluate(c=>c.checkValidity()),true);
+        assert.equal(await campo.getAttribute('maxlength'),'155');
+        assert.equal(await panel.locator('[name="observaciones"]').getAttribute('maxlength'),'255');
+    }finally{await context.close();}
+});
+
+test('el login rechaza una contraseña vacía o compuesta solo por espacios',async()=>{
+    const context=await browser.newContext();const page=await context.newPage();try{
+        await page.goto(base);await page.getByLabel('Usuario o correo electrónico').fill('ADMINISTRACION');
+        await page.getByLabel('Contraseña',{exact:true}).fill('   ');
+        await page.getByRole('button',{name:'Iniciar sesión',exact:true}).click();
+        await page.locator('#password-error').getByText('Escribe tu contraseña.',{exact:true}).waitFor();
+        assert.equal(new URL(page.url()).pathname,'/');
+    }finally{await context.close();}
+});

@@ -268,7 +268,7 @@ async function cambiarSeccion(seccion) {
             case 'contexto':
                 if (elPanelContexto) {
                     elPanelContexto.style.display = 'block';
-                    elPanelContexto.clinicas = estado.clinicas;
+                    elPanelContexto.clinicas = estado.clinicas.filter(c => c.idClinica === sesionAutenticada.rolActivo.idClinica);
                     elPanelContexto.roles = estado.roles;
                     elPanelContexto.personas = estado.personas;
                     elPanelContexto.rolesDisponibles = estado.rolesPersonal;

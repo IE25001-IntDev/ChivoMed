@@ -4,6 +4,7 @@ import './components/patient_nav.js';
 import './components/simple_card.js';
 import './components/card_consulta.js';
 import PatientPortalService from '../control/patient_portal_service.js';
+import { validarCampos } from './utils.js';
 import { API_CONFIG } from '../control/api_config.js';
 import { fecha, estadoConsulta, fechaResultado, resultadoReciente, enlaceAdjunto } from './patient_format.js';
 
@@ -129,7 +130,7 @@ function documentos() {
     select.addEventListener('change', render); render();
     form.addEventListener('submit', async event => {
         event.preventDefault();
-        if (enviando) return;
+        if (enviando || !validarCampos(form.elements)) return;
         const payload = Object.fromEntries(new FormData(form));
         if (!payload.valor.trim()) { form.elements.valor.focus(); feedback.textContent = 'Escribe el número o referencia del documento.'; return; }
         enviando = true; refresh.disabled = true; openForm.disabled = true;
