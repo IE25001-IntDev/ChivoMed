@@ -1,3 +1,5 @@
+import { exigirVista } from "./session.js";
+const sesionAutenticada = await exigirVista("ADMINISTRACION");
 /**
  * Orquestador de la Vista de Personal de Clínica (Boundary)
  * Conecta los Web Components de administración y parametrización con los servicios de Control de GalenoSV.
@@ -6,6 +8,7 @@
 
 // Importar Web Components
 import './components/personal/personal-header.js';
+import './components/personal/panel-recepcion.js';
 import './components/personal/navegacion-personal.js';
 import './components/personal/panel-contexto.js';
 import './components/personal/panel-catalogo-simple.js';
@@ -14,7 +17,6 @@ import './components/personal/panel-protocolos.js';
 
 // Importar Servicios de Control
 import {
-    AtencionService,
     ClinicaService,
     RolService,
     TipoDocumentoService,
@@ -31,7 +33,6 @@ import {
 import DefaultError from '../entities/default_error.js';
 
 // Instancias de servicios
-const atencionService = new AtencionService();
 const clinicaService = new ClinicaService();
 const rolService = new RolService();
 const tipoDocumentoService = new TipoDocumentoService();
@@ -47,7 +48,7 @@ const personaService = new PersonaService();
 
 // Estado de la Vista
 const estado = {
-    seccionActiva: 'contexto',
+    seccionActiva: 'recepcion',
     clinicaActiva: null,
     operadorActivo: null,
     contextoSesion: null,
@@ -141,7 +142,7 @@ async function consultarConManejo(promesa, descripcion, fallback = { data: [] })
  * Recarga la lista de asignaciones PersonaRol enriquecida con nombres
  */
 async function recargarRolesPersonal() {
-    const resPR = await consultarConManejo(personaRolService.listar(), 'asignaciones de personal');
+    const resPR = await consultarConManejo(personaRolService.listar({ idClinica: sesionAutenticada.rolActivo.idClinica }), 'asignaciones de personal');
     const asignaciones = resPR.data || [];
 
     estado.rolesPersonal = await Promise.all(asignaciones.map(async (pr) => {
@@ -175,7 +176,7 @@ async function inicializar() {
         const [resClinicas, resRoles, resPersonas, resDocs, resContactos, resExamenes, resProcs] = await Promise.all([
             consultarConManejo(clinicaService.listar(), 'sedes clínicas'),
             consultarConManejo(rolService.listar(), 'roles institucionales'),
-            consultarConManejo(personaService.listar(), 'directorio de personas'),
+            consultarConManejo(personaService.listar({ idClinica: sesionAutenticada.rolActivo.idClinica }), 'directorio de personas'),
             consultarConManejo(tipoDocumentoService.listar(), 'tipos de documento'),
             consultarConManejo(tipoMedioContactoService.listar(), 'medios de contacto'),
             consultarConManejo(examenService.listar(), 'catálogo de exámenes'),
@@ -189,42 +190,21 @@ async function inicializar() {
         estado.contactos = resContactos.data || [];
         estado.examenes = resExamenes.data || [];
         estado.procedimientos = resProcs.data || [];
-        estado.clinicaActiva = estado.clinicas[0] || null;
+        estado.clinicaActiva = estado.clinicas.find(c => c.idClinica === sesionAutenticada.rolActivo.idClinica) || null;
 
         // Leer parámetro de URL si se desea abrir una sección específica
         const urlParams = new URLSearchParams(window.location.search);
         const seccionUrl = urlParams.get('seccion');
-        if (seccionUrl && ['contexto', 'clinicas', 'roles', 'documentos', 'contactos', 'examenes', 'protocolos'].includes(seccionUrl)) {
+        if (seccionUrl && ['recepcion', 'contexto', 'clinicas', 'roles', 'documentos', 'contactos', 'examenes', 'protocolos'].includes(seccionUrl)) {
             estado.seccionActiva = seccionUrl;
         }
 
         // 2. Cargar Asignaciones de personal (PersonaRol)
         await recargarRolesPersonal();
 
-        // 3. Verificar contexto de sesión
-        try {
-            const resContexto = await atencionService.contexto();
-            estado.contextoSesion = resContexto.data || null;
-
-            if (estado.contextoSesion?.idPersonaRol) {
-                const asignacionActiva = estado.rolesPersonal.find(pr => pr.idPersonaRol === estado.contextoSesion.idPersonaRol);
-                if (asignacionActiva) {
-                    estado.operadorActivo = {
-                        idPersonaRol: asignacionActiva.idPersonaRol,
-                        nombreCompleto: asignacionActiva.nombrePersona,
-                        rolNombre: asignacionActiva.nombreRol,
-                    };
-                    if (asignacionActiva.idClinica) {
-                        const clinicaEncontrada = estado.clinicas.find(c => c.idClinica === asignacionActiva.idClinica);
-                        if (clinicaEncontrada) {
-                            estado.clinicaActiva = clinicaEncontrada;
-                        }
-                    }
-                }
-            }
-        } catch {
-            // Sesión no inicializada
-        }
+        estado.contextoSesion = { idPersonaRol: sesionAutenticada.rolActivo.idPersonaRol };
+        estado.operadorActivo = { idPersonaRol: sesionAutenticada.rolActivo.idPersonaRol,
+            nombreCompleto: `${sesionAutenticada.usuario.nombres} ${sesionAutenticada.usuario.apellidos}`.trim(), rolNombre: 'Administración' };
 
         actualizarHeader();
         actualizarNavegacion();
@@ -272,6 +252,8 @@ async function cambiarSeccion(seccion) {
     if (elPanelExamenes?.cerrarFormulario) elPanelExamenes.cerrarFormulario();
     if (elPanelProtocolos?.cerrarFormulario) elPanelProtocolos.cerrarFormulario();
 
+    const recepcion = document.querySelector('panel-recepcion');
+    recepcion.hidden = seccion !== 'recepcion';
     // Ocultar todos los paneles primero
     if (elPanelContexto) elPanelContexto.style.display = 'none';
     if (elPanelCatalogo) elPanelCatalogo.style.display = 'none';
@@ -280,6 +262,9 @@ async function cambiarSeccion(seccion) {
 
     try {
         switch (seccion) {
+            case 'recepcion':
+                recepcion.sesion = sesionAutenticada;
+                break;
             case 'contexto':
                 if (elPanelContexto) {
                     elPanelContexto.style.display = 'block';
@@ -414,45 +399,6 @@ document.addEventListener('refrescar-datos', async () => {
     mostrarFeedback('Catálogos y contexto sincronizados con GalenoSV.', 'success', 2500);
 });
 
-// 3. Activar Rol en Sesión (cambiar-rol)
-document.addEventListener('activar-rol', async (e) => {
-    const { idPersonaRol } = e.detail;
-    try {
-        if (elPanelContexto) elPanelContexto.cargando = true;
-        mostrarFeedback('Estableciendo rol activo en la sesión del servidor...', 'info', 2000);
-
-        await atencionService.cambiarRol(idPersonaRol);
-
-        const asignacion = estado.rolesPersonal.find(pr => pr.idPersonaRol === idPersonaRol);
-        if (asignacion) {
-            if (asignacion.idClinica) {
-                const clinicaEncontrada = estado.clinicas.find(c => c.idClinica === asignacion.idClinica);
-                if (clinicaEncontrada) {
-                    estado.clinicaActiva = clinicaEncontrada;
-                }
-            }
-            estado.operadorActivo = {
-                idPersonaRol,
-                nombreCompleto: asignacion.nombrePersona,
-                rolNombre: asignacion.nombreRol,
-            };
-        }
-
-        estado.contextoSesion = { idPersonaRol };
-        actualizarHeader();
-        if (elPanelContexto) {
-            elPanelContexto.contextoActual = estado.contextoSesion;
-            elPanelContexto.idClinicaSeleccionada = estado.clinicaActiva?.idClinica;
-        }
-
-        mostrarFeedback('Turno y rol activo establecidos satisfactoriamente en la sesión.', 'success', 3000);
-    } catch (error) {
-        manejarError(error, 'el cambio de turno y rol');
-    } finally {
-        if (elPanelContexto) elPanelContexto.cargando = false;
-    }
-});
-
 // 3.1 Registrar Nueva Asignación de Personal (PersonaRol)
 document.addEventListener('crear-asignacion', async (e) => {
     const { idPersona, idRol, idClinica } = e.detail;
@@ -471,16 +417,6 @@ document.addEventListener('crear-asignacion', async (e) => {
         manejarError(error, 'la asignación de personal');
     } finally {
         if (elPanelContexto) elPanelContexto.cargando = false;
-    }
-});
-
-// 3.2 Seleccionar Clínica desde el Panel Contextual
-document.addEventListener('seleccionar-clinica', (e) => {
-    const { idClinica } = e.detail;
-    const clinicaEncontrada = estado.clinicas.find(c => c.idClinica === idClinica);
-    if (clinicaEncontrada) {
-        estado.clinicaActiva = clinicaEncontrada;
-        actualizarHeader();
     }
 });
 
@@ -783,4 +719,4 @@ document.addEventListener('eliminar-examen-paso-config', async (e) => {
 });
 
 // Inicializar en DOMContentLoaded
-window.addEventListener('DOMContentLoaded', inicializar);
+inicializar();

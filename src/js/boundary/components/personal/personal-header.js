@@ -172,7 +172,7 @@ class PersonalHeader extends HTMLElement {
 
                 <div class="info-section">
                     <a href="../../index.html" class="nav-pill-btn">← Inicio</a>
-                    <a href="../medico/atencion.html" class="nav-pill-btn">🩺 Médico</a>
+
 
                     <span class="badge badge-clinic">🏢 ${escapeHtml(nombreClinica)}</span>
                     <span class="badge badge-user">👤 ${escapeHtml(nombreOperador)} (${escapeHtml(nombreRol)})</span>

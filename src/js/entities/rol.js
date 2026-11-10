@@ -6,6 +6,7 @@ class Rol extends DefaultEntity {
         super({
             idRol: null,
             nombre: null,
+            codigo: null,
             activo: null,
             observaciones: null,
         }, datos);

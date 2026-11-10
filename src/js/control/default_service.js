@@ -1,6 +1,7 @@
 import DefaultResponse from "../entities/default_response.js";
 import DefaultError from "../entities/default_error.js";
 import { API_CONFIG } from "./api_config.js";
+import { verificarSesionActual } from "./auth_service.js";
 
 /** CRUD compartido. Todas las operaciones resuelven DefaultResponse o rechazan DefaultError. */
 class DefaultService {
@@ -11,6 +12,7 @@ class DefaultService {
         this.credentials = opciones.credentials ?? API_CONFIG.credentials;
         this.headers = new Headers(opciones.headers);
         this.fetchImpl = opciones.fetchImpl ?? globalThis.fetch.bind(globalThis);
+        this.autenticar = opciones.autenticar ?? (typeof window === "undefined" ? null : verificarSesionActual);
         this.metodos = new Set(opciones.metodos ?? ["POST", "PUT", "PATCH", "DELETE"]);
     }
 
@@ -30,6 +32,10 @@ class DefaultService {
         const url = `${this.baseUrl}/${ruta}${query.size ? `?${query}` : ""}`;
         const headers = new Headers(this.headers);
         new Headers(adicionales).forEach((valor, campo) => headers.set(campo, valor));
+        if (!["GET", "HEAD", "OPTIONS"].includes(metodo) && this.autenticar) {
+            const sesion = await this.autenticar();
+            headers.set("X-CSRF-Token", sesion.csrfToken);
+        }
         if (!headers.has("Accept")) headers.set("Accept", "application/json");
         if (data !== undefined && !headers.has("Content-Type")) {
             headers.set("Content-Type", metodo === "PATCH"
@@ -40,7 +46,8 @@ class DefaultService {
         let texto;
         try {
             respuesta = await this.fetchImpl(url, {
-                credentials: this.credentials, ...opciones, method: metodo, headers, body,
+                credentials: this.credentials, cache: "no-store", redirect: "error",
+                signal: AbortSignal.timeout(10000), ...opciones, method: metodo, headers, body,
             });
             texto = await respuesta.text();
         } catch (cause) {
@@ -65,6 +72,7 @@ class DefaultService {
             }
         }
         if (!respuesta.ok) {
+            if (respuesta.status === 401 && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));
             throw new DefaultError({ status: respuesta.status,
                 code: datos?.code ?? "http.error",
                 message: datos?.message ?? (respuesta.statusText || `Error HTTP ${respuesta.status}.`),
@@ -107,7 +115,7 @@ class DefaultService {
 
     relacionados(id, coleccion, Servicio, metodos = []) {
         return new Servicio({ baseUrl: this.baseUrl, credentials: this.credentials,
-            headers: this.headers, fetchImpl: this.fetchImpl,
+            headers: this.headers, fetchImpl: this.fetchImpl, autenticar: this.autenticar,
             recurso: `${this.ruta(id)}/${coleccion}`, metodos });
     }
 

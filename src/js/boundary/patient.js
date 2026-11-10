@@ -1,3 +1,5 @@
+import { exigirVista } from "./session.js";
+const sesionAutenticada = await exigirVista("PACIENTE");
 import './components/patient_nav.js';
 import './components/simple_card.js';
 import './components/card_consulta.js';
@@ -51,7 +53,7 @@ function adjunto(ruta, texto) {
     const a = enlace(texto, url); a.target = '_blank'; a.rel = 'noopener noreferrer'; return a;
 }
 function mostrarError(error) {
-    const mensaje = error.status === 401 ? 'Tu sesión requiere identificación. Selecciona tu rol de paciente en Galeno y vuelve a actualizar.'
+    const mensaje = error.status === 401 ? 'Tu sesión ha finalizado. Vuelve a iniciar sesión.'
         : error.status === 403 ? (error.message || 'No tienes acceso al portal del paciente con la sesión actual.')
         : ['conexion.error', 'galeno.noDisponible'].includes(error.code) ? 'No se pudo conectar con Galeno. Comprueba que el servicio esté disponible y vuelve a actualizar.'
         : error.status >= 500 ? 'Galeno no pudo completar la operación. Intenta de nuevo en unos momentos.'
@@ -61,11 +63,6 @@ function mostrarError(error) {
         const list = nodo('ul');
         error.details.forEach(detail => list.append(nodo('li', detail.message || 'Revisa los datos ingresados.')));
         errorPanel.append(list);
-    }
-    if (error.status === 401 || error.status === 403) {
-        const base = API_CONFIG.baseUrl.replace(/\/api\/?$/, '/');
-        const a = enlace('Abrir selección de rol en Galeno', `${base}paginas/cambiar-rol.xhtml`);
-        a.target = '_blank'; a.rel = 'noopener'; errorPanel.append(a);
     }
     errorPanel.hidden = false;
 }

@@ -208,7 +208,7 @@ class MedicoHeader extends HTMLElement {
 
                 <div class="info-section">
                     <a href="../../index.html" class="nav-pill-btn">← Inicio</a>
-                    <a href="../personal/administracion.html" class="nav-pill-btn">🏢 Administración</a>
+
 
                     <span class="badge badge-clinic">🏥 ${escapeHtml(nombreClinica)}</span>
                     <span class="badge badge-doctor">👨‍⚕️ ${escapeHtml(nombreMedico)}</span>

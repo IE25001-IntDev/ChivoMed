@@ -2,6 +2,7 @@
 <html lang="es" data-theme="dark">
 <head>
     <meta charset="UTF-8">
+    <script src="../../js/boundary/theme_init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChivoMed - Personal de Clínica y Administración</title>
     <link rel="stylesheet" href="../../resources/chivomed_theme.css">
@@ -19,8 +20,11 @@
                 radial-gradient(ellipse at 83% 77%, var(--glow-lavender), transparent 45%);
         }
     </style>
+    <style>[hidden]{display:none!important}</style>
+    <noscript><style>body[hidden]{display:block!important}</style></noscript>
 </head>
-<body>
+<body hidden>
+    <session-bar></session-bar>
     <div class="personal-layout">
         <!-- Cabecera de personal y administración -->
         <personal-header></personal-header>
@@ -41,7 +45,8 @@
             <!-- Área de trabajo de parametrización -->
             <section class="workspace-panel">
                 <!-- 1. Gestión de Turnos y Contexto (cambiar-rol.xhtml) -->
-                <panel-contexto></panel-contexto>
+                <panel-recepcion></panel-recepcion>
+                <panel-contexto style="display:none"></panel-contexto>
 
                 <!-- 2. Catálogos Simples (clinica, rol, tipoDocumento, tipoMedioContacto) -->
                 <panel-catalogo-simple style="display: none;"></panel-catalogo-simple>

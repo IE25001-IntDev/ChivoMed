@@ -385,7 +385,7 @@ class PanelContexto extends HTMLElement {
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label" for="selectClinica">1. Sede Hospitalaria:</label>
-                    <select class="select-input" id="selectClinica">
+                    <select disabled class="select-input" id="selectClinica">
                         ${this._clinicas.map(cl => `
                             <option value="${escapeHtml(cl.idClinica)}" ${cl.idClinica === this._idClinicaSeleccionada ? 'selected' : ''}>
                                 ${escapeHtml(cl.nombre)} (${escapeHtml(cl.tipo || 'General')})
@@ -396,7 +396,7 @@ class PanelContexto extends HTMLElement {
 
                 <div class="form-group">
                     <label class="form-label" for="selectPersonaRol">2. Personal y Turno Activo:</label>
-                    <select class="select-input" id="selectPersonaRol">
+                    <select disabled class="select-input" id="selectPersonaRol">
                         <option value="">-- Seleccionar Asignación --</option>
                         ${rolesDeClinica.map(pr => `
                             <option value="${escapeHtml(pr.idPersonaRol)}" ${pr.idPersonaRol === idRolActivo ? 'selected' : ''}>
@@ -408,7 +408,7 @@ class PanelContexto extends HTMLElement {
             </div>
 
             <div style="display: flex; justify-content: flex-end;">
-                <button type="button" class="btn btn-primary" id="btnActivarRol" ${this._cargando ? 'disabled' : ''}>
+                <button hidden type="button" class="btn btn-primary" id="btnActivarRol" ${this._cargando ? 'disabled' : ''}>
                     ${this._cargando ? '⏳ Activando...' : '✔️ Activar'}
                 </button>
             </div>

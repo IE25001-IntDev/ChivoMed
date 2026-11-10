@@ -1,5 +1,5 @@
 import "./theme.js";
-import { obtenerSesion, cerrarSesion, ROLES } from "../control/auth_service.js";
+import { obtenerSesion, cerrarSesion, ROLES, destinoSesion } from "../control/auth_service.js";
 
 const details = document.querySelector("#session-details");
 const status = document.querySelector("#session-status");
@@ -20,6 +20,7 @@ async function cargarSesion() {
     document.querySelector("#account-role").textContent = ROLES[sesion.rolActivo.codigo];
     document.querySelector("#account-clinic").textContent = sesion.rolActivo.nombreClinica;
     document.title = `${ROLES[sesion.rolActivo.codigo]} | ChivoMed`;
+    document.querySelector("#open-workspace").href = destinoSesion(sesion);
     details.hidden = false;
     volver.hidden = true;
     status.hidden = true;

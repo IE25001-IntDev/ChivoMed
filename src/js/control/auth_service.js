@@ -6,6 +6,30 @@ export const ROLES = Object.freeze({
     PACIENTE: "Paciente",
 });
 
+export const DESTINOS = Object.freeze({
+    ADMINISTRACION: "paginas/personal/administracion.html",
+    DOCTOR: "paginas/medico/atencion.html",
+    PACIENTE: "paginas/pacientes/homepage-user.html",
+});
+let sesionActual;
+let sesionVista;
+export function fijarSesionVista(sesion) { sesionVista = sesion; }
+export const urlAplicacion = ruta => new URL(`../../${ruta}`, import.meta.url).href;
+export function destinoSesion(sesion) {
+    if (!Object.hasOwn(DESTINOS, sesion?.rolActivo?.codigo)) throw new AuthError("Perfil no autorizado.", 403);
+    return urlAplicacion(DESTINOS[sesion.rolActivo.codigo]);
+}
+export async function verificarSesionActual() {
+    const anterior = sesionVista ?? sesionActual;
+    const actual = await obtenerSesion();
+    if (anterior && (actual.usuario.idUsuario !== anterior.usuario.idUsuario
+        || actual.rolActivo.idPersonaRol !== anterior.rolActivo.idPersonaRol
+        || actual.rolActivo.idClinica !== anterior.rolActivo.idClinica)) {
+        throw new AuthError("La sesión cambió. Recarga la página antes de guardar.", 409);
+    }
+    return actual;
+}
+
 export class AuthError extends Error {
     constructor(message, status = 0) {
         super(message);
@@ -33,6 +57,7 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken } = {}) {
             : "No pudimos conectar con el servicio. Inténtalo de nuevo.");
     }
     if (!respuesta.ok) {
+        if (respuesta.status === 401 && ruta !== "login" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));
         const mensajes = {
             400: "Revisa tu usuario o correo y contraseña.",
             401: ruta === "login" ? "Usuario o contraseña incorrectos." : "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
@@ -45,7 +70,7 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken } = {}) {
     return respuesta;
 }
 
-// Contrato propuesto de /auth/me; la identidad y el rol siempre los decide el backend.
+// Contrato de /auth/me; la identidad y el rol siempre los decide el backend.
 // { usuario: { idUsuario, idPersona, nombres, apellidos },
 //   rolActivo: { idPersonaRol, codigo, idClinica, nombreClinica }, csrfToken }
 export async function obtenerSesion() {
@@ -69,6 +94,7 @@ export async function obtenerSesion() {
         || !texto(csrfToken) || /[\r\n]/.test(csrfToken)) {
         throw new AuthError("No pudimos cargar tu acceso. Comunícate con tu clínica.");
     }
+    sesionActual = sesion;
     return sesion;
 }
 
@@ -82,4 +108,5 @@ export async function cerrarSesion(csrfToken) {
         throw new AuthError("No pudimos verificar tu sesión. Recarga la página.");
     }
     await solicitar("logout", { method: "POST", csrfToken });
+    sesionActual = null;
 }

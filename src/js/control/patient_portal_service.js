@@ -1,4 +1,5 @@
 import AtencionService from './atencion_service.js';
+import { obtenerSesion } from './auth_service.js';
 import PersonaService from './persona_service.js';
 import PersonaRolService from './persona_rol_service.js';
 import RolService from './rol_service.js';
@@ -32,21 +33,14 @@ export default class PatientPortalService {
     }
 
     async contexto(opciones = {}) {
-        const { data: sesion } = await this.atencion.contexto(opciones);
-        if (!sesion?.idPersonaRol) {
-            throw new DefaultError({ status: 401, code: 'sesion.pacienteRequerida',
-                message: 'Selecciona tu rol de paciente en Galeno para acceder a tu expediente.' });
+        const sesion = await obtenerSesion();
+        if (sesion.rolActivo.codigo !== 'PACIENTE') throw new DefaultError({ status: 403,
+            code: 'sesion.rolPacienteRequerido', message: 'Este espacio requiere un perfil de paciente.' });
+        const asignacion = entidad(await this.asignaciones.buscarPorId(sesion.rolActivo.idPersonaRol, opciones), 'idPersonaRol');
+        if (asignacion.idPersona !== sesion.usuario.idPersona || asignacion.idClinica !== sesion.rolActivo.idClinica) {
+            throw new DefaultError({ status: 403, code: 'sesion.asignacionInvalida', message: 'La asignación no corresponde a tu sesión.' });
         }
-        const asignacion = entidad(await this.asignaciones.buscarPorId(sesion.idPersonaRol, opciones), 'idPersonaRol');
-        if (!asignacion.idPersona || !asignacion.idRol || !asignacion.idClinica) {
-            throw new DefaultError({ status: 403, code: 'sesion.asignacionInvalida',
-                message: 'Tu asignación debe tener una persona, una clínica y un rol de paciente.' });
-        }
-        const rol = entidad(await this.roles.buscarPorId(asignacion.idRol, opciones), 'idRol');
-        if (rol.nombre?.trim().toLocaleLowerCase('es') !== 'paciente' || rol.activo !== true) {
-            throw new DefaultError({ status: 403, code: 'sesion.rolPacienteRequerido',
-                message: 'Este portal requiere el rol de paciente activo en Galeno.' });
-        }
+        const rol = { codigo: sesion.rolActivo.codigo };
         const [persona, clinica] = await Promise.all([
             this.personas.buscarPorId(asignacion.idPersona, opciones).then(r => entidad(r, 'idPersona')),
             this.clinicas.buscarPorId(asignacion.idClinica, opciones).then(r => entidad(r, 'idClinica')),

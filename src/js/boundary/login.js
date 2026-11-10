@@ -1,5 +1,5 @@
 import "./theme.js";
-import { iniciarSesion } from "../control/auth_service.js";
+import { iniciarSesion, destinoSesion } from "../control/auth_service.js";
 
 const form = document.querySelector("#login-form");
 const username = document.querySelector("#username");
@@ -54,8 +54,8 @@ form.addEventListener("submit", async event => {
   for (const control of [username, password, passwordToggle, submit]) control.disabled = true;
   submitLabel.textContent = "Iniciando sesión…";
   try {
-    await iniciarSesion(username.value.trim(), password.value);
-    location.replace("./inicio.html");
+    const sesion = await iniciarSesion(username.value.trim(), password.value);
+    location.replace(destinoSesion(sesion));
   } catch (error) {
     mostrarError(error.message);
   } finally {

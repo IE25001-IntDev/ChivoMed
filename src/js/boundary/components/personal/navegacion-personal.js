@@ -30,6 +30,7 @@ class NavegacionPersonal extends HTMLElement {
 
     render() {
         const secciones = [
+            { id: 'recepcion', icono: '', titulo: 'Recepción', subtitulo: 'Pacientes y consultas' },
             { id: 'contexto', icono: '👥', titulo: 'Turnos', subtitulo: 'Sede y personal activo' },
             { id: 'clinicas', icono: '🏢', titulo: 'Clínicas', countKey: 'clinicas' },
             { id: 'roles', icono: '👥', titulo: 'Roles', countKey: 'roles' },
@@ -154,12 +155,14 @@ class NavegacionPersonal extends HTMLElement {
                         min-height: auto;
                         display: block;
                         position: fixed;
-                        bottom: 1.25rem;
-                        left: 50%;
-                        transform: translateX(-50%);
+                        bottom: calc(0.75rem + env(safe-area-inset-bottom));
+                        left: 0.75rem;
+                        right: 0.75rem;
+                        transform: none;
                         z-index: 99;
-                        width: auto;
-                        max-width: 95vw;
+                        width: calc(100vw - 1.5rem);
+                        max-width: none;
+                        box-sizing: border-box;
                         border-radius: 9999px;
                         background: var(--dock-glass, rgba(18, 34, 38, 0.85));
                         box-shadow: var(--dock-shadow, 0 15px 40px rgba(0, 0, 0, 0.4));

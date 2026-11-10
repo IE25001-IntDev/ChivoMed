@@ -1,6 +1,8 @@
 const path = require("node:path");
 const http = require("node:http");
 const https = require("node:https");
+try { process.loadEnvFile(path.join(__dirname, ".env")); }
+catch (error) { if (error.code !== "ENOENT") throw error; }
 
 module.exports = {
   server: {
@@ -36,7 +38,7 @@ module.exports = {
     ignoreInitial: true,
   },
   listen: "127.0.0.1",
-  port: 3000,
+  port: Number(process.env.PORT || 3000),
   open: "local",
   online: false,
   ui: false,

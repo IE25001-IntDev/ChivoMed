@@ -2,6 +2,7 @@
 <html lang="es" data-theme="dark">
 <head>
     <meta charset="UTF-8">
+    <script src="../../js/boundary/theme_init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChivoMed - Estación Médica (Workbench)</title>
     <link rel="stylesheet" href="../../resources/chivomed_theme.css">
@@ -19,8 +20,11 @@
                 radial-gradient(ellipse at 83% 77%, var(--glow-lavender), transparent 45%);
         }
     </style>
+    <style>[hidden]{display:none!important}</style>
+    <noscript><style>body[hidden]{display:block!important}</style></noscript>
 </head>
-<body>
+<body hidden>
+    <session-bar></session-bar>
     <div class="medico-layout">
         <!-- Cabecera de la estación médica -->
         <medico-header></medico-header>

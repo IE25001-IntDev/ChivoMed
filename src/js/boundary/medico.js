@@ -1,3 +1,5 @@
+import { exigirVista } from "./session.js";
+const sesionAutenticada = await exigirVista("DOCTOR");
 /**
  * Orquestador de la Vista Médica (Boundary)
  * Conecta los Web Components presentacionales (<workbench-medico>, <cola-pacientes>, <medico-header>)
@@ -33,9 +35,6 @@ const clinicaService = new ClinicaService();
 const personaService = new PersonaService();
 const procedimientoService = new ProcedimientoService();
 const tipoExamenService = new TipoExamenService();
-
-// Constante de Rol en GalenoSV (verificado en la base de datos)
-const ROL_DOCTOR_ID = '97e502bb-6127-4cf2-aae4-1e5491912864';
 
 // Estado global de la Vista
 const estado = {
@@ -129,81 +128,16 @@ async function inicializar() {
         if (elHeader) elHeader.cargando = true;
         mostrarFeedback('Iniciando estación médica y conectando con GalenoSV...', 'info', 2000);
 
-        // 1. Cargar clínicas
-        const resClinicas = await clinicaService.listar();
-        const clinicas = resClinicas.data || [];
-        estado.clinicaActiva = clinicas[0] || null;
-
-        // 2. Cargar catálogos de procedimientos y tipos de examen
-        const [resProcedimientos, resTiposExamen] = await Promise.all([
-            consultarConManejo(procedimientoService.listar(), 'catálogo de procedimientos'),
-            consultarConManejo(tipoExamenService.listar(), 'tipos de examen'),
+        const { rolActivo, usuario } = sesionAutenticada;
+        estado.clinicaActiva = (await clinicaService.buscarPorId(rolActivo.idClinica)).data;
+        estado.medicoActivo = { idPersonaRol: rolActivo.idPersonaRol, nombreCompleto: `${usuario.nombres} ${usuario.apellidos}`.trim() };
+        estado.doctoresDisponibles = [];
+        const [procedimientos, tipos, contexto] = await Promise.all([
+            procedimientoService.listar(), tipoExamenService.listar(), atencionService.contexto(),
         ]);
-
-        estado.catalogoProcedimientos = resProcedimientos.data || [];
-        estado.catalogoTiposExamen = resTiposExamen.data || [];
-
-        if (elWorkbench) {
-            elWorkbench.catalogoProcedimientos = estado.catalogoProcedimientos;
-            elWorkbench.catalogoTiposExamen = estado.catalogoTiposExamen;
-            elWorkbench.clinica = estado.clinicaActiva;
-        }
-
-        // 3. Cargar doctores de la clínica activa
-        const filtroDoctores = { idRol: ROL_DOCTOR_ID };
-        if (estado.clinicaActiva?.idClinica) {
-            filtroDoctores.idClinica = estado.clinicaActiva.idClinica;
-        }
-
-        const resDoctores = await consultarConManejo(personaRolService.listar(filtroDoctores), 'doctores de la sede');
-        const rolesDoctores = resDoctores.data || [];
-
-        const doctoresConNombres = await Promise.all(rolesDoctores.map(async (docRol) => {
-            let nombreCompleto = `Doctor #${(docRol.idPersonaRol || '').slice(0, 8)}`;
-            if (docRol.idPersona) {
-                try {
-                    const resP = await personaService.buscarPorId(docRol.idPersona);
-                    const p = resP.data;
-                    nombreCompleto = `Dr. ${p.nombres || ''} ${p.apellidos || ''}`.trim();
-                } catch {
-                    // Mantener fallback
-                }
-            }
-            return {
-                idPersonaRol: docRol.idPersonaRol,
-                idPersona: docRol.idPersona,
-                nombreCompleto,
-            };
-        }));
-
-        estado.doctoresDisponibles = doctoresConNombres;
-
-        // 4. Verificar contexto de sesión HTTP
-        try {
-            const contextoSesion = await atencionService.contexto();
-            if (contextoSesion?.data?.idPersonaRol) {
-                const docEncontrado = doctoresConNombres.find(d => d.idPersonaRol === contextoSesion.data.idPersonaRol);
-                estado.medicoActivo = docEncontrado || {
-                    idPersonaRol: contextoSesion.data.idPersonaRol,
-                    nombreCompleto: `Doctor Activo (${(contextoSesion.data.idPersonaRol || '').slice(0, 8)})`,
-                };
-            }
-            if (contextoSesion?.data?.idConsulta) {
-                estado.idConsultaActivaSesion = contextoSesion.data.idConsulta;
-            }
-        } catch {
-            // Sesión HTTP no iniciada aún
-        }
-
-        if (!estado.medicoActivo && doctoresConNombres.length > 0) {
-            const primerDoctor = doctoresConNombres[0];
-            try {
-                await atencionService.cambiarRol(primerDoctor.idPersonaRol);
-                estado.medicoActivo = primerDoctor;
-            } catch (err) {
-                console.warn('No se pudo establecer rol en sesión HTTP:', err);
-            }
-        }
+        estado.catalogoProcedimientos = procedimientos.data;
+        estado.catalogoTiposExamen = tipos.data;
+        estado.idConsultaActivaSesion = contexto.data.idConsulta;
 
         // Actualizar cabecera
         if (elHeader) {
@@ -213,7 +147,7 @@ async function inicializar() {
                 apellidos: '',
             } : null;
             elHeader.clinica = estado.clinicaActiva;
-            elHeader.rolesDisponibles = doctoresConNombres;
+            elHeader.rolesDisponibles = [];
         }
 
         if (elWorkbench) {
@@ -413,39 +347,6 @@ async function cargarOrdenesPaso(idPaso) {
 // =========================================================================
 // ESCUCHADORES DE EVENTOS DE LOS WEB COMPONENTS (Presentación -> Control)
 // =========================================================================
-
-// 1. Cambiar médico activo desde la cabecera
-document.addEventListener('cambiar-doctor', async (e) => {
-    const idPersonaRol = e.detail.idPersonaRol;
-    if (!idPersonaRol) return;
-    try {
-        if (elHeader) elHeader.cargando = true;
-        mostrarFeedback('Cambiando médico activo en la sesión...', 'info', 2000);
-
-        await atencionService.cambiarRol(idPersonaRol);
-
-        const docEncontrado = estado.doctoresDisponibles.find(d => d.idPersonaRol === idPersonaRol);
-        estado.medicoActivo = docEncontrado || { idPersonaRol, nombreCompleto: `Doctor (${(idPersonaRol || '').slice(0, 8)})` };
-
-        if (elHeader) {
-            elHeader.medico = {
-                idPersonaRol: estado.medicoActivo.idPersonaRol,
-                nombres: estado.medicoActivo.nombreCompleto,
-                apellidos: '',
-            };
-        }
-
-        if (elWorkbench) {
-            elWorkbench.medico = estado.medicoActivo;
-        }
-
-        mostrarFeedback(`Médico activo cambiado a: ${estado.medicoActivo.nombreCompleto}`, 'success', 3000);
-    } catch (error) {
-        manejarError(error, 'el cambio de médico activo');
-    } finally {
-        if (elHeader) elHeader.cargando = false;
-    }
-});
 
 // 2. Refrescar datos desde la cabecera
 document.addEventListener('refrescar-datos', async () => {
@@ -648,4 +549,4 @@ document.addEventListener('cerrar-consulta', async (e) => {
 });
 
 // Iniciar al cargar el documento
-window.addEventListener('DOMContentLoaded', inicializar);
+inicializar();
