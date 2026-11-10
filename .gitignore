@@ -7,3 +7,8 @@ test
 # Dependencias y registros locales de Node.js
 node_modules/
 npm-debug.log*
+
+.env
+test-results/
+playwright-report/
+.playwright-cli/
