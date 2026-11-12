@@ -5,6 +5,8 @@
  */
 import { ControladorLogin, MENSAJES, MAX_NUMERO_DOCUMENTO, destinoTrasLogin } from "./controlador_login.js";
 import { hojaDeEstilos } from "./estilos.js";
+import { conexion } from "../pwa/conexion.js";
+import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
 
 const PLANTILLA = `
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
@@ -30,7 +32,8 @@ const PLANTILLA = `
       <p id="mensaje-texto"></p>
       <button class="boton boton-secundario" id="reintentar" type="button" hidden>Volver a cargar</button>
     </div>
-    <button class="boton boton-principal" id="enviar" type="submit">Ingresar</button>
+    <p class="aviso aviso-red" id="sin-red" hidden></p>
+    <button class="boton boton-principal" id="enviar" type="submit" aria-describedby="sin-red">Ingresar</button>
   </form>
   <p class="pie-tarjeta">¿Eres paciente? <a href="#/citas">Busca tus citas</a></p>
 </section>`;
@@ -41,6 +44,7 @@ class VistaLogin extends HTMLElement {
     #alCambiarTipo = () => this.#mostrarIndicaciones();
     #alReintentar = () => this.#controlador.cargarTipos();
     #tiposPintados = null;
+    #cancelarConexion = null;
     #cargaPintada = null;
     /** Contexto del router: { query, sesion, ... }. */
     contexto = null;
@@ -64,6 +68,11 @@ class VistaLogin extends HTMLElement {
         const aviso = this.$("aviso");
         aviso.hidden = this.contexto?.query?.get("sesion") !== "finalizada";
         aviso.textContent = aviso.hidden ? "" : MENSAJES.sesionFinalizada;
+        this.#cancelarConexion = conexion.suscribir(enLinea => {
+            this.#pintar(this.#controlador.estado);
+            // Al volver la red, si los tipos no cargaron, se reintenta sin pedirlo al usuario.
+            if (enLinea && this.#controlador.estado.errorTipos) this.#controlador.cargarTipos();
+        });
         this.#controlador.cargarTipos();
     }
 
@@ -71,6 +80,7 @@ class VistaLogin extends HTMLElement {
         this.$("formulario").removeEventListener("submit", this.#alEnviar);
         this.$("tipo").removeEventListener("change", this.#alCambiarTipo);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
+        this.#cancelarConexion?.();
     }
 
     #pintar(estado) {
@@ -96,8 +106,14 @@ class VistaLogin extends HTMLElement {
         this.$("mensaje-texto").textContent = mensaje ?? "";
         this.$("reintentar").hidden = !estado.errorTipos;
 
+        // Ingresar y recargar necesitan red: sin conexión se deshabilitan con un mensaje.
+        const sinRed = !conexion.enLinea;
+        this.$("sin-red").hidden = !sinRed;
+        this.$("sin-red").textContent = sinRed ? MENSAJE_SIN_RED : "";
+        this.$("reintentar").disabled = sinRed;
+
         const enviar = this.$("enviar");
-        enviar.disabled = estado.enviando || estado.cargandoTipos || !estado.tipos.length;
+        enviar.disabled = estado.enviando || estado.cargandoTipos || !estado.tipos.length || sinRed;
         enviar.textContent = estado.enviando ? "Verificando…" : "Ingresar";
         this.$("formulario").setAttribute("aria-busy", String(estado.enviando));
     }

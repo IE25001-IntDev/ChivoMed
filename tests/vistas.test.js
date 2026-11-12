@@ -16,11 +16,9 @@ before(() => {
     };
 });
 
-const FASE_2 = ['vista-citas', 'vista-login', 'vista-no-encontrada'];
-
 describe('Registro de Web Components', () => {
-    test('cada vista de la fase 2 define el tag que espera la tabla de rutas', async () => {
-        for (const ruta of [...RUTAS, RUTA_NO_ENCONTRADA].filter(r => FASE_2.includes(r.tag))) {
+    test('cada vista define el tag que espera la tabla de rutas', async () => {
+        for (const ruta of [...RUTAS, RUTA_NO_ENCONTRADA]) {
             const modulo = await import(new URL(ruta.modulo, new URL('../src/js/boundary/', import.meta.url)).href);
             assert.equal(registro.get(ruta.tag), modulo.default, ruta.tag);
         }
@@ -32,6 +30,8 @@ describe('Registro de Web Components', () => {
         assert.equal(registro.get('app-shell'), shell.default);
         assert.equal(registro.get('session-bar'), barra.default);
         assert.ok(registro.has('theme-toggle'), 'el shell incluye el selector de tema');
+        assert.ok(registro.has('install-prompt'), 'el shell incluye el botón de instalación');
+        assert.ok(registro.has('estado-conexion'), 'el shell incluye el aviso de conexión');
     });
 
     test('index.html no contiene más elementos en el body que <app-shell>', async () => {

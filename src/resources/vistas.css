@@ -56,3 +56,4 @@ a { color: var(--accent-text); font-weight: 600; }
   .tarjeta { margin-inline: 0; border-radius: 12px; }
   .boton { width: 100%; }
 }
+.aviso-red { margin: 0; background: var(--error-fondo); color: var(--error); font-weight: 600; }

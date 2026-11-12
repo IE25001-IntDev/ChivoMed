@@ -73,3 +73,6 @@ button:disabled { opacity: .6; cursor: not-allowed; }
 @media (prefers-reduced-motion: no-preference) {
   .saltar { transition: top .15s ease; }
 }
+
+.acciones-cabecera { display: flex; align-items: center; gap: var(--espacio-2); }
+.aviso-red { flex-basis: 100%; margin: 0; color: var(--error); font-size: .9rem; }

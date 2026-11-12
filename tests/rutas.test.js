@@ -65,15 +65,10 @@ describe('Tabla de rutas', () => {
         assert.ok(Object.isFrozen(ROLES_EMPLEADO));
     });
 
-    const PENDIENTES_FASE_3 = new Set(['vista-dashboard', 'vista-consulta']);
     const archivo = ruta => fileURLToPath(new URL(ruta.modulo, new URL('../src/js/boundary/', import.meta.url)));
 
-    test('el módulo de cada vista implementada existe en disco', () => {
-        for (const ruta of TODAS.filter(r => !PENDIENTES_FASE_3.has(r.tag))) assert.ok(existsSync(archivo(ruta)), archivo(ruta));
-    });
-
-    test('el módulo de dashboard y consulta existe en disco', { todo: 'se crean en la fase 3' }, () => {
-        for (const ruta of TODAS.filter(r => PENDIENTES_FASE_3.has(r.tag))) assert.ok(existsSync(archivo(ruta)), archivo(ruta));
+    test('el módulo de cada vista existe en disco', () => {
+        for (const ruta of TODAS) assert.ok(existsSync(archivo(ruta)), archivo(ruta));
     });
 });
 

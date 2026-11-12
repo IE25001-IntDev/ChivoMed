@@ -4,13 +4,18 @@
  *  - 'navegar' { ruta } desde las vistas → navegación con historial.
  *  - 'sesion-cerrada' desde <session-bar> → vuelve al login.
  *  - 'sesion-expirada' en document (lo emite auth_service ante un 401) → login, solo en rutas protegidas.
+ * Además registra el service worker y, al cerrar o perder la sesión, borra los cachés con datos.
  */
 import { Router, normalizarHash } from "../router.js";
 import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
 import { obtenerSesion, fijarSesionVista } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
+import { registrarServiceWorker } from "../pwa/registro_sw.js";
+import { limpiarCachesDeDatos } from "../pwa/caches_cliente.js";
 import "./session_bar.js";
 import "./theme_toggle.js";
+import "./install_prompt.js";
+import "./estado_conexion.js";
 
 const PLANTILLA = `
 <a class="saltar" href="#contenido">Saltar al contenido</a>
@@ -18,8 +23,12 @@ const PLANTILLA = `
   <a class="marca" href="#${RUTA_POR_DEFECTO}" aria-label="ChivoMed, búsqueda de citas">
     <span class="marca-icono" aria-hidden="true">+</span><span>Chivo<span class="marca-acento">Med</span></span>
   </a>
-  <theme-toggle></theme-toggle>
+  <div class="acciones-cabecera">
+    <install-prompt></install-prompt>
+    <theme-toggle></theme-toggle>
+  </div>
 </header>
+<estado-conexion></estado-conexion>
 <session-bar hidden></session-bar>
 <main id="contenido" tabindex="-1"></main>
 <p class="solo-lectores" id="anuncio" aria-live="polite"></p>
@@ -33,7 +42,9 @@ class AppShell extends HTMLElement {
     #alCerrarSesion = () => this.#irAlLogin(false);
     // Se difiere: si el 401 vino de la verificación del propio router, este ya redirigió al login.
     #alExpirar = () => setTimeout(() => {
-        if (this.#rutaActual?.roles && normalizarHash(location.hash).ruta !== RUTA_LOGIN) this.#irAlLogin(true);
+        if (!this.#rutaActual?.roles) return;
+        if (normalizarHash(location.hash).ruta !== RUTA_LOGIN) this.#irAlLogin(true);
+        else limpiarCachesDeDatos();
     }, 0);
 
     constructor() {
@@ -68,6 +79,7 @@ class AppShell extends HTMLElement {
         this.addEventListener("sesion-cerrada", this.#alCerrarSesion);
         document.addEventListener("sesion-expirada", this.#alExpirar);
         this.#router.iniciar();
+        registrarServiceWorker();
     }
 
     disconnectedCallback() {
@@ -80,6 +92,7 @@ class AppShell extends HTMLElement {
     #irAlLogin(expirada) {
         this.#rutaActual = null;
         fijarSesionVista(null);
+        limpiarCachesDeDatos();
         this.#router.navegar(expirada ? `${RUTA_LOGIN}?sesion=finalizada` : RUTA_LOGIN);
     }
 
