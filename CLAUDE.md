@@ -1,0 +1,48 @@
+# ChivoMed (frontend)
+
+Frontend de GalenoSV, un sistema de gestión clínica. El backend vive en `../galenasv` (la carpeta se llama `galenasv`, pero el contexto web y los paquetes Java usan `galenosv`).
+
+## Stack
+- Node.js >= 22. JavaScript nativo (ES Modules) y Web Components con Shadow DOM. No hay React, Vue, Angular ni bundler: el código fuente se sirve directamente.
+- Servidor de desarrollo: `npm start` (BrowserSync con proxy inverso, puerto 3000). Alternativa: `node scripts/dev_server.js`.
+- Backend: Java 21, Jakarta EE 11, Open Liberty en el puerto 9080, API en `/galenosv/api`. Base de datos: PostgreSQL en Docker.
+- Variables en `.env`: `API_URL` (por defecto `http://localhost:9080/galenosv/api`) y `PORT` (por defecto `3000`). Nunca imprimir ni commitear valores sensibles.
+- Pruebas: `npm test` (node --test tests/*.test.js) y Playwright para e2e en `tests/browser/` (confirmar el nombre del script en package.json).
+
+## Reglas de trabajo
+- Solo se editan archivos dentro de ChivoMed. `../galenasv` es SOLO LECTURA.
+- Antes de consumir un endpoint, leer en `../galenasv` el Resource, el DTO y la entity correspondientes, y la documentación en `../galenasv/docs/api-rest.md` y `../galenasv/docs/autenticacion.md`. Si la documentación y el código no coinciden, manda el código y avisarme.
+- Nunca inventar endpoints, campos ni tipos. Si el frontend necesita algo que el backend no expone, decírmelo en vez de asumirlo; el cambio en el backend lo hago yo.
+- No ejecutar docker ni tocar la base de datos.
+- Proponer un plan antes de cambios que afecten más de 3 archivos.
+- Correr `npm test` antes de dar una tarea por terminada e informar el resultado real, sin suponerlo.
+- Rama de trabajo actual: `integracion-vistas`, compartida con otros compañeros. No hacer force push, no reescribir historial y no tocar archivos ajenos a la tarea.
+- Nunca poner datos reales de pacientes en código, mocks, pruebas ni commits.
+
+## Arquitectura
+Patrón BCE (Boundary-Control-Entity), igual que el backend:
+- `src/js/boundary/`: Web Components y controladores de vista.
+- `src/js/control/`: servicios HTTP que extienden `DefaultService`.
+- `src/js/entities/`: modelos que extienden `DefaultEntity`.
+- Páginas por rol en `src/paginas/` (`personal/`, `medico/`, `pacientes/`). Entradas: `src/index.html` (login) y `src/inicio.html` (verificación de sesión y selección de rol).
+
+## Contrato con el backend
+- Autenticación por sesión HTTP (cookie `JSESSIONID`, HttpOnly). Toda petición que no sea GET/HEAD/OPTIONS debe enviar la cabecera `X-CSRF-Token`; el token se obtiene de `GET /api/auth/me`.
+- El backend NO implementa CORS. Todo pasa por el proxy del puerto 3000 para que sea same-origin. No llamar al puerto 9080 directamente desde el navegador.
+- Los DTOs son planos: las relaciones viajan como UUID (`idPersona`, `idClinica`, ...), nunca como objetos anidados. Las colecciones hijas se piden con `GET /api/{recurso}/{id}/{subcoleccion}`.
+- Roles: `ADMINISTRACION`, `DOCTOR`, `PACIENTE`. El backend aplica permisos por rol activo y aísla datos por clínica; un 403 es comportamiento esperado, no un bug del frontend.
+- Evitar cascadas de peticiones N+1. `PatientPortalService.ordenesDelPaciente` ya tiene ese problema y no debe replicarse en código nuevo.
+
+## Convenciones
+- Archivos JS en `snake_case` (`patient_portal_service.js`). Web Components en kebab-case (`panel-catalogo-simple`).
+
+
+
+## Documentos de referencia
+- Antes de cualquier tarea, leer docs/rubrica.md y docs/plan.md.
+- Todo trabajo debe cumplir la rúbrica. Si algo del código actual contradice la rúbrica, avisarme.
+
+
+
+## Login (HU2)
+- El login es con tipo de documento y número de documento, sin contraseña. Contrato: POST /api/auth/login con { idTipoDocumento, numeroDocumento }. Solo DOCTOR y ADMINISTRACION.
