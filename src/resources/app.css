@@ -1,0 +1,44 @@
+/* Estilos globales del documento: tokens de tema y fondo. Cada componente trae los suyos en su Shadow DOM. */
+@import url("./theme.css");
+
+:root {
+  --fuente: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --tarjeta: #ffffff;
+  --campo: #ffffff;
+  --campo-borde: #74938b;
+  --error: #a32937;
+  --error-fondo: #fbe9eb;
+  --sombra: 0 8px 30px rgba(22, 58, 58, .12);
+  --radio: 14px;
+  --espacio-1: .25rem;
+  --espacio-2: .5rem;
+  --espacio-3: .75rem;
+  --espacio-4: 1rem;
+  --espacio-6: 1.5rem;
+  --espacio-8: 2rem;
+}
+:root[data-theme="dark"] {
+  --tarjeta: var(--surface-solid);
+  --campo: #192f34;
+  --campo-borde: #75968e;
+  --error: #ffb4b9;
+  --error-fondo: #3d2328;
+  --sombra: 0 8px 30px rgba(0, 0, 0, .22);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at 81% 14%, var(--glow-mint), transparent 45%),
+    radial-gradient(ellipse at 9% 36%, var(--glow-blue), transparent 45%),
+    var(--background);
+  background-attachment: fixed;
+  font-family: var(--fuente);
+  line-height: 1.5;
+}
+::selection { background: var(--selection); }

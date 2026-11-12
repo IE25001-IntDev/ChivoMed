@@ -37,13 +37,39 @@ export class AuthError extends Error {
     }
 }
 
-async function solicitar(ruta, { method = "GET", datos, csrfToken } = {}) {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_NUMERO_DOCUMENTO = 50;
+
+const MENSAJES = Object.freeze({
+    login: {
+        400: "Revisa el tipo y el número de documento.",
+        401: "No reconocemos ese documento como personal activo de una clínica.",
+        403: "Este acceso es solo para personal médico y administrativo.",
+    },
+    sesion: {
+        400: "No pudimos verificar tu sesión. Inténtalo de nuevo.",
+        401: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
+        403: "No fue posible autorizar tu acceso. Comunícate con tu clínica.",
+    },
+    publico: {
+        400: "No pudimos cargar los tipos de documento.",
+        401: "No pudimos cargar los tipos de documento.",
+        403: "No pudimos cargar los tipos de documento.",
+    },
+});
+
+/**
+ * @param {string} ruta relativa a la API, p. ej. "auth/me" o "publico/tipos-documento"
+ * @param {{ method?: string, datos?: unknown, csrfToken?: string, tipo?: "login"|"sesion"|"publico" }} opciones
+ *   `tipo` elige los mensajes; solo las rutas de sesión avisan "sesion-expirada" ante un 401.
+ */
+async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesion" } = {}) {
     const headers = { Accept: "application/json" };
     if (datos !== undefined) headers["Content-Type"] = "application/json";
     if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
     let respuesta;
     try {
-        respuesta = await fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/auth/${ruta}`, {
+        respuesta = await fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/${ruta}`, {
             method, headers,
             body: datos === undefined ? undefined : JSON.stringify(datos),
             credentials: API_CONFIG.credentials,
@@ -57,33 +83,55 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken } = {}) {
             : "No pudimos conectar con el servicio. Inténtalo de nuevo.");
     }
     if (!respuesta.ok) {
-        if (respuesta.status === 401 && ruta !== "login" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));
+        if (respuesta.status === 401 && tipo === "sesion" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));
         const mensajes = {
-            400: "Revisa tu usuario o correo y contraseña.",
-            401: ruta === "login" ? "Usuario o contraseña incorrectos." : "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
-            403: "No fue posible autorizar tu acceso. Comunícate con tu clínica.",
+            ...MENSAJES[tipo],
             404: "El servicio de acceso todavía no está disponible.",
             429: "Hay demasiados intentos. Espera un momento antes de volver a intentarlo.",
         };
-        throw new AuthError(mensajes[respuesta.status] ?? "El servicio no está disponible. Inténtalo más tarde.", respuesta.status);
+        const general = tipo === "publico" ? MENSAJES.publico[400] : "El servicio no está disponible. Inténtalo más tarde.";
+        throw new AuthError(mensajes[respuesta.status] ?? general, respuesta.status);
     }
     return respuesta;
+}
+
+async function leerJson(respuesta, mensaje) {
+    try {
+        if (!respuesta.headers.get("Content-Type")?.includes("application/json")) throw new Error();
+        return await respuesta.json();
+    } catch {
+        throw new AuthError(mensaje);
+    }
+}
+
+/**
+ * Tipos de documento activos para el login, sin sesión (GET /publico/tipos-documento).
+ * Devuelve objetos con los campos de TipoDocumentoDto, ordenados por nombre.
+ */
+export async function listarTiposDocumento() {
+    const mensaje = "No pudimos cargar los tipos de documento.";
+    const datos = await leerJson(await solicitar("publico/tipos-documento", { tipo: "publico" }), mensaje);
+    if (!Array.isArray(datos)) throw new AuthError(mensaje);
+    const texto = valor => typeof valor === "string" && valor.trim().length > 0;
+    const opcional = valor => (typeof valor === "string" && valor.trim() ? valor : null);
+    return datos
+        .filter(tipo => tipo && typeof tipo.idTipoDocumento === "string" && UUID.test(tipo.idTipoDocumento)
+            && texto(tipo.nombre) && tipo.activo !== false)
+        .map(tipo => Object.freeze({
+            idTipoDocumento: tipo.idTipoDocumento,
+            nombre: tipo.nombre.trim(),
+            indicaciones: opcional(tipo.indicaciones),
+            expresionRegular: opcional(tipo.expresionRegular),
+        }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
 // Contrato de /auth/me; la identidad y el rol siempre los decide el backend.
 // { usuario: { idUsuario, idPersona, nombres, apellidos },
 //   rolActivo: { idPersonaRol, codigo, idClinica, nombreClinica }, csrfToken }
 export async function obtenerSesion() {
-    const respuesta = await solicitar("me");
-    let sesion;
-    try {
-        if (!respuesta.headers.get("Content-Type")?.includes("application/json")) throw new Error();
-        sesion = await respuesta.json();
-    } catch {
-        throw new AuthError("No pudimos verificar tu sesión. Inténtalo de nuevo.");
-    }
-    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const identificador = valor => typeof valor === "string" && uuid.test(valor);
+    const sesion = await leerJson(await solicitar("auth/me"), "No pudimos verificar tu sesión. Inténtalo de nuevo.");
+    const identificador = valor => typeof valor === "string" && UUID.test(valor);
     const texto = valor => typeof valor === "string" && valor.trim().length > 0;
     const { usuario, rolActivo, csrfToken } = sesion ?? {};
     if (!identificador(usuario?.idUsuario) || !identificador(usuario?.idPersona)
@@ -98,8 +146,17 @@ export async function obtenerSesion() {
     return sesion;
 }
 
-export async function iniciarSesion(identificador, password) {
-    await solicitar("login", { method: "POST", datos: { identificador, password } });
+/**
+ * Login del personal por documento, sin contraseña (contrato acordado, pendiente en el backend):
+ * POST /auth/login con { idTipoDocumento, numeroDocumento } → 204 y cookie de sesión; luego GET /auth/me.
+ */
+export async function iniciarSesion(idTipoDocumento, numeroDocumento) {
+    const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
+    if (typeof idTipoDocumento !== "string" || !UUID.test(idTipoDocumento)
+        || !numero || numero.length > MAX_NUMERO_DOCUMENTO || /[\r\n]/.test(numero)) {
+        throw new AuthError(MENSAJES.login[400], 400);
+    }
+    await solicitar("auth/login", { method: "POST", tipo: "login", datos: { idTipoDocumento, numeroDocumento: numero } });
     return obtenerSesion();
 }
 
@@ -107,6 +164,6 @@ export async function cerrarSesion(csrfToken) {
     if (typeof csrfToken !== "string" || !csrfToken.trim() || /[\r\n]/.test(csrfToken)) {
         throw new AuthError("No pudimos verificar tu sesión. Recarga la página.");
     }
-    await solicitar("logout", { method: "POST", csrfToken });
+    await solicitar("auth/logout", { method: "POST", csrfToken });
     sesionActual = null;
 }

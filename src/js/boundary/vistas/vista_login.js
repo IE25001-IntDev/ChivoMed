@@ -1,0 +1,140 @@
+/**
+ * <vista-login> (HU2): acceso del personal con tipo y número de documento.
+ * La lógica vive en ControladorLogin; aquí solo se pinta el estado y se emiten eventos.
+ * Emite 'navegar' { ruta } (bubbles, composed) cuando el personal puede entrar.
+ */
+import { ControladorLogin, MENSAJES, MAX_NUMERO_DOCUMENTO, destinoTrasLogin } from "./controlador_login.js";
+import { hojaDeEstilos } from "./estilos.js";
+
+const PLANTILLA = `
+<section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
+  <h1 id="titulo" tabindex="-1">Acceso del personal</h1>
+  <p class="subtitulo">Ingresa con tu documento de identidad. Solo para personal médico y administrativo.</p>
+  <p class="aviso" id="aviso" role="status" hidden></p>
+  <form id="formulario" novalidate>
+    <div class="campo">
+      <label for="tipo">Tipo de documento</label>
+      <select id="tipo" name="tipo" required aria-describedby="tipo-error">
+        <option value="">Cargando tipos…</option>
+      </select>
+      <p class="error-campo" id="tipo-error" hidden></p>
+    </div>
+    <div class="campo">
+      <label for="numero">Número de documento</label>
+      <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
+             maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones numero-error" />
+      <p class="indicaciones" id="numero-indicaciones" hidden></p>
+      <p class="error-campo" id="numero-error" hidden></p>
+    </div>
+    <div class="mensaje-error" id="mensaje" role="alert" hidden>
+      <p id="mensaje-texto"></p>
+      <button class="boton boton-secundario" id="reintentar" type="button" hidden>Volver a cargar</button>
+    </div>
+    <button class="boton boton-principal" id="enviar" type="submit">Ingresar</button>
+  </form>
+  <p class="pie-tarjeta">¿Eres paciente? <a href="#/citas">Busca tus citas</a></p>
+</section>`;
+
+class VistaLogin extends HTMLElement {
+    #controlador = new ControladorLogin({ alCambiar: estado => this.#pintar(estado) });
+    #alEnviar = event => this.#enviar(event);
+    #alCambiarTipo = () => this.#mostrarIndicaciones();
+    #alReintentar = () => this.#controlador.cargarTipos();
+    #tiposPintados = null;
+    #cargaPintada = null;
+    /** Contexto del router: { query, sesion, ... }. */
+    contexto = null;
+
+    constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
+    }
+
+    connectedCallback() {
+        const raiz = this.shadowRoot;
+        if (!raiz.childElementCount) {
+            const plantilla = document.createElement("template");
+            plantilla.innerHTML = PLANTILLA;
+            raiz.append(hojaDeEstilos("vistas.css"), plantilla.content.cloneNode(true));
+        }
+        this.$ = id => raiz.getElementById(id);
+        this.$("formulario").addEventListener("submit", this.#alEnviar);
+        this.$("tipo").addEventListener("change", this.#alCambiarTipo);
+        this.$("reintentar").addEventListener("click", this.#alReintentar);
+        const aviso = this.$("aviso");
+        aviso.hidden = this.contexto?.query?.get("sesion") !== "finalizada";
+        aviso.textContent = aviso.hidden ? "" : MENSAJES.sesionFinalizada;
+        this.#controlador.cargarTipos();
+    }
+
+    disconnectedCallback() {
+        this.$("formulario").removeEventListener("submit", this.#alEnviar);
+        this.$("tipo").removeEventListener("change", this.#alCambiarTipo);
+        this.$("reintentar").removeEventListener("click", this.#alReintentar);
+    }
+
+    #pintar(estado) {
+        const select = this.$("tipo");
+        // Se reconstruye solo si cambió la lista o el estado de carga, para no perder la selección al validar.
+        if (this.#tiposPintados !== estado.tipos || this.#cargaPintada !== estado.cargandoTipos) {
+            const seleccionado = select.value;
+            const inicial = estado.cargandoTipos ? "Cargando tipos…"
+                : estado.tipos.length ? "Selecciona un tipo" : "Sin tipos disponibles";
+            select.replaceChildren(new Option(inicial, ""), ...estado.tipos.map(t => new Option(t.nombre, t.idTipoDocumento)));
+            select.value = estado.tipos.some(t => t.idTipoDocumento === seleccionado) ? seleccionado : "";
+            this.#tiposPintados = estado.tipos;
+            this.#cargaPintada = estado.cargandoTipos;
+        }
+        select.disabled = estado.cargandoTipos || !estado.tipos.length;
+        this.#mostrarIndicaciones();
+
+        this.#errorCampo("tipo", estado.errores.tipo);
+        this.#errorCampo("numero", estado.errores.numero);
+
+        const mensaje = estado.errorTipos ?? estado.mensaje;
+        this.$("mensaje").hidden = !mensaje;
+        this.$("mensaje-texto").textContent = mensaje ?? "";
+        this.$("reintentar").hidden = !estado.errorTipos;
+
+        const enviar = this.$("enviar");
+        enviar.disabled = estado.enviando || estado.cargandoTipos || !estado.tipos.length;
+        enviar.textContent = estado.enviando ? "Verificando…" : "Ingresar";
+        this.$("formulario").setAttribute("aria-busy", String(estado.enviando));
+    }
+
+    #errorCampo(campo, error) {
+        const control = this.$(campo);
+        const texto = this.$(`${campo}-error`);
+        texto.hidden = !error;
+        texto.textContent = error ?? "";
+        if (error) control.setAttribute("aria-invalid", "true");
+        else control.removeAttribute("aria-invalid");
+    }
+
+    #mostrarIndicaciones() {
+        const tipo = this.#controlador.tipo(this.$("tipo").value);
+        const indicaciones = this.$("numero-indicaciones");
+        indicaciones.hidden = !tipo?.indicaciones;
+        indicaciones.textContent = tipo?.indicaciones ?? "";
+    }
+
+    async #enviar(event) {
+        event.preventDefault();
+        const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
+        const sesion = await this.#controlador.enviar(datos);
+        if (!this.isConnected) return;
+        if (sesion) {
+            this.dispatchEvent(new CustomEvent("navegar", {
+                bubbles: true, composed: true, detail: { ruta: destinoTrasLogin(this.contexto?.query) },
+            }));
+            return;
+        }
+        const { errores, mensaje } = this.#controlador.estado;
+        if (errores.tipo) this.$("tipo").focus();
+        else if (errores.numero) this.$("numero").focus();
+        else if (mensaje) this.$("numero").focus();
+    }
+}
+
+customElements.define("vista-login", VistaLogin);
+export default VistaLogin;
