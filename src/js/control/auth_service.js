@@ -6,19 +6,9 @@ export const ROLES = Object.freeze({
     PACIENTE: "Paciente",
 });
 
-export const DESTINOS = Object.freeze({
-    ADMINISTRACION: "paginas/personal/administracion.html",
-    DOCTOR: "paginas/medico/atencion.html",
-    PACIENTE: "paginas/pacientes/homepage-user.html",
-});
 let sesionActual;
 let sesionVista;
 export function fijarSesionVista(sesion) { sesionVista = sesion; }
-export const urlAplicacion = ruta => new URL(`../../${ruta}`, import.meta.url).href;
-export function destinoSesion(sesion) {
-    if (!Object.hasOwn(DESTINOS, sesion?.rolActivo?.codigo)) throw new AuthError("Perfil no autorizado.", 403);
-    return urlAplicacion(DESTINOS[sesion.rolActivo.codigo]);
-}
 export async function verificarSesionActual() {
     const anterior = sesionVista ?? sesionActual;
     const actual = await obtenerSesion();
