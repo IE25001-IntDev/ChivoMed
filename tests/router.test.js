@@ -17,6 +17,7 @@ function crearRutas(cargas = []) {
     ];
 }
 const NO_ENCONTRADA = { patron: null, tag: 'vista-no-encontrada' };
+const SIN_CONEXION = { patron: null, tag: 'vista-sin-conexion' };
 
 /** Ventana falsa: hashchange asíncrono y solo cuando el hash cambia, como en el navegador. */
 function crearVentana(hashInicial = '') {
@@ -41,8 +42,9 @@ function crearVentana(hashInicial = '') {
 
 const sesion = codigo => ({ usuario: { idUsuario: UUID }, rolActivo: { codigo, idPersonaRol: UUID, idClinica: UUID } });
 const error = status => Object.assign(new Error(`HTTP ${status}`), { status });
+const sinRed = () => Object.assign(new Error('No pudimos conectar con el servicio.'), { status: 0, code: 'conexion.error' });
 
-function preparar({ hash = '', autenticar = async () => { throw error(401); } } = {}) {
+function preparar({ hash = '', autenticar = async () => { throw error(401); }, sesionSinRed = () => null, sinConexion = SIN_CONEXION } = {}) {
     const ventana = crearVentana(hash);
     const montajes = [];
     const errores = [];
@@ -58,6 +60,9 @@ function preparar({ hash = '', autenticar = async () => { throw error(401); } } 
         autenticar: (...args) => { llamadasAuth++; return autenticar(...args); },
         montar: (tag, contexto) => montajes.push({ tag, contexto }),
         mostrarError: (err, contexto) => errores.push({ err, contexto }),
+        esErrorDeRed: err => err?.code === 'conexion.error',
+        sesionSinRed,
+        sinConexion,
     });
     return { router, ventana, montajes, errores, cargas, auth: () => llamadasAuth };
 }
@@ -253,5 +258,69 @@ describe('Router', () => {
         await router.iniciar();
         assert.deepEqual(cargas, ['vista-citas']);
         assert.equal(montajes.length, 1);
+    });
+});
+
+describe('Router sin conexión', () => {
+    test('sin red y con una sesión de empleado en memoria monta la ruta protegida en solo lectura', async () => {
+        const guardada = sesion('DOCTOR');
+        const { router, ventana, montajes, errores } = preparar({
+            hash: '#/dashboard', autenticar: async () => { throw sinRed(); }, sesionSinRed: () => guardada,
+        });
+        await router.iniciar();
+        assert.deepEqual(montajes.map(m => m.tag), ['vista-dashboard']);
+        assert.equal(montajes[0].contexto.sesion, guardada);
+        assert.equal(montajes[0].contexto.soloLectura, true);
+        assert.deepEqual(ventana.reemplazos, [], 'no manda al login');
+        assert.equal(errores.length, 0);
+    });
+
+    test('sin red y sin sesión en memoria muestra la vista Sin conexión en vez del login', async () => {
+        const { router, ventana, montajes, errores } = preparar({ hash: `#/consulta/${UUID}?paso=2`, autenticar: async () => { throw sinRed(); } });
+        await router.iniciar();
+        assert.deepEqual(montajes.map(m => m.tag), ['vista-sin-conexion']);
+        assert.equal(montajes[0].contexto.ruta, SIN_CONEXION);
+        assert.equal(montajes[0].contexto.rutaPedida.tag, 'vista-consulta');
+        assert.equal(montajes[0].contexto.path, `/consulta/${UUID}`, 'conserva la ruta pedida para reintentar');
+        assert.equal(montajes[0].contexto.sesion, null);
+        assert.deepEqual(ventana.reemplazos, []);
+        assert.equal(errores.length, 0);
+    });
+
+    test('una sesión en memoria que no es de empleado no sirve de respaldo', async () => {
+        const { router, montajes } = preparar({
+            hash: '#/dashboard', autenticar: async () => { throw sinRed(); }, sesionSinRed: () => sesion('PACIENTE'),
+        });
+        await router.iniciar();
+        assert.deepEqual(montajes.map(m => m.tag), ['vista-sin-conexion']);
+    });
+
+    test('con red, la sesión en memoria no se usa: un 401 sigue llevando al login', async () => {
+        const { router, ventana } = preparar({ hash: '#/dashboard', sesionSinRed: () => sesion('DOCTOR') });
+        await router.iniciar();
+        await asentar(router);
+        assert.match(ventana.reemplazos[0], /^#\/login\?sesion=finalizada/);
+    });
+
+    test('un error que no es de red (503) se informa aunque haya sesión en memoria', async () => {
+        const { router, montajes, errores } = preparar({
+            hash: '#/dashboard', autenticar: async () => { throw error(503); }, sesionSinRed: () => sesion('DOCTOR'),
+        });
+        await router.iniciar();
+        assert.equal(montajes.length, 0);
+        assert.equal(errores[0].err.status, 503);
+    });
+
+    test('sin vista de Sin conexión configurada, el error de red se informa como antes', async () => {
+        const { router, montajes, errores } = preparar({ hash: '#/dashboard', autenticar: async () => { throw sinRed(); }, sinConexion: null });
+        await router.iniciar();
+        assert.equal(montajes.length, 0);
+        assert.equal(errores[0].err.code, 'conexion.error');
+    });
+
+    test('con sesión verificada en línea el contexto no es de solo lectura', async () => {
+        const { router, montajes } = preparar({ hash: '#/dashboard', autenticar: async () => sesion('DOCTOR') });
+        await router.iniciar();
+        assert.equal(montajes[0].contexto.soloLectura, false);
     });
 });

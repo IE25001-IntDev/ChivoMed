@@ -69,9 +69,12 @@ export class Router {
      * @param {() => Promise<object>} opciones.autenticar resuelve la sesión o rechaza con { status }
      * @param {(tag: string, contexto: object) => void} opciones.montar
      * @param {(error: Error, contexto: object) => void} [opciones.mostrarError]
+     * @param {(error: Error) => boolean} [opciones.esErrorDeRed] true si `autenticar` falló por falta de red (no por 401)
+     * @param {() => object|null} [opciones.sesionSinRed] última sesión de empleado verificada que se guardó en memoria
+     * @param {object} [opciones.sinConexion] definición montada en una ruta protegida sin red y sin sesión en memoria
      */
     constructor(opciones) {
-        this.#opciones = { mostrarError: () => {}, ...opciones };
+        this.#opciones = { mostrarError: () => {}, esErrorDeRed: () => false, sesionSinRed: () => null, sinConexion: null, ...opciones };
         this.pendiente = Promise.resolve();
     }
 
@@ -113,7 +116,7 @@ export class Router {
         if (path === "/") return this.#redirigir(o.porDefecto);
 
         const ruta = resultado.ruta ?? o.noEncontrada;
-        const contexto = { ruta, path, params, query, sesion: null };
+        const contexto = { ruta, path, params, query, sesion: null, soloLectura: false };
 
         if (ruta.roles || ruta.soloInvitados) {
             try {
@@ -125,7 +128,18 @@ export class Router {
                         const volver = query.size ? `${path}?${query}` : path;
                         return this.#redirigir(`${o.login}?sesion=finalizada&volver=${encodeURIComponent(volver)}`);
                     }
-                    return o.mostrarError(error, contexto);
+                    if (!o.esErrorDeRed(error)) return o.mostrarError(error, contexto);
+                    // Sin red: con una sesión de empleado en memoria se entra en solo lectura;
+                    // sin ella, se explica que falta la red en vez de mandar al login.
+                    const respaldo = o.sesionSinRed();
+                    if (respaldo && ruta.roles.includes(respaldo.rolActivo?.codigo)) {
+                        contexto.sesion = respaldo;
+                        contexto.soloLectura = true;
+                    } else if (o.sinConexion) {
+                        return this.#cargarYMontar(o.sinConexion, { ...contexto, ruta: o.sinConexion, rutaPedida: ruta }, vigente);
+                    } else {
+                        return o.mostrarError(error, contexto);
+                    }
                 }
                 // Solo invitados: sin sesión (o sin poder verificarla) se muestra el login.
             }
@@ -139,12 +153,16 @@ export class Router {
             }
         }
 
+        return this.#cargarYMontar(ruta, contexto, vigente);
+    }
+
+    async #cargarYMontar(ruta, contexto, vigente) {
         try {
             await ruta.cargar?.();
         } catch (error) {
-            if (vigente()) o.mostrarError(error, contexto);
+            if (vigente()) this.#opciones.mostrarError(error, contexto);
             return;
         }
-        if (vigente()) o.montar(ruta.tag, contexto);
+        if (vigente()) this.#opciones.montar(ruta.tag, contexto);
     }
 }

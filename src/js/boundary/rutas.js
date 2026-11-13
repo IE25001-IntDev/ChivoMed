@@ -29,6 +29,11 @@ export const RUTA_NO_ENCONTRADA = Object.freeze({
     patron: null, tag: "vista-no-encontrada", titulo: "Página no encontrada", ...vista("vista_no_encontrada.js"),
 });
 
+/** Ruta protegida pedida sin red y sin una sesión de empleado en memoria. */
+export const RUTA_SIN_CONEXION = Object.freeze({
+    patron: null, tag: "vista-sin-conexion", titulo: "Sin conexión", ...vista("vista_sin_conexion.js"),
+});
+
 /** Ruta inicial tras autenticarse; null si el rol no tiene vistas de empleado. */
 export function inicioPorRol(sesion) {
     const codigo = sesion?.rolActivo?.codigo;

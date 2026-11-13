@@ -31,11 +31,15 @@ export async function verificarSesionActual() {
 }
 
 export class AuthError extends Error {
-    constructor(message, status = 0) {
+    /** `code` "conexion.error" marca que no hubo respuesta (sin red o tiempo agotado), como en DefaultError. */
+    constructor(message, status = 0, code = null) {
         super(message);
         this.status = status;
+        this.code = code;
     }
 }
+
+export const CODIGO_SIN_RED = "conexion.error";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_NUMERO_DOCUMENTO = 50;
@@ -80,7 +84,7 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesio
     } catch (error) {
         throw new AuthError(error.name === "TimeoutError" || error.name === "AbortError"
             ? "La solicitud tardó demasiado. Inténtalo de nuevo."
-            : "No pudimos conectar con el servicio. Inténtalo de nuevo.");
+            : "No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
     }
     if (!respuesta.ok) {
         if (respuesta.status === 401 && tipo === "sesion" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));

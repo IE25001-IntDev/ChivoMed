@@ -6,16 +6,19 @@
  *  - 'sesion-expirada' en document (lo emite auth_service ante un 401) → login, solo en rutas protegidas.
  *  - 'sesion-actualizada' { sesion } desde una vista (cambio de rol) → actualiza la sesión de la
  *    vista (la que compara verificarSesionActual antes de escribir) y la barra de sesión.
+ * Sin red, el router monta las rutas de empleado en solo lectura con la última sesión verificada
+ * (memoria_vistas) o, si no hay, <vista-sin-conexion>; al volver la red se vuelve a verificar.
  * Además registra el service worker y, al cerrar o perder la sesión, borra los cachés con datos
  * y la memoria de las vistas.
  */
 import { Router, normalizarHash } from "../router.js";
-import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
-import { obtenerSesion, fijarSesionVista } from "../../control/auth_service.js";
+import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
+import { obtenerSesion, fijarSesionVista, CODIGO_SIN_RED } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { registrarServiceWorker } from "../pwa/registro_sw.js";
 import { limpiarCachesDeDatos } from "../pwa/caches_cliente.js";
 import { memoria } from "../vistas/memoria_vistas.js";
+import { conexion } from "../pwa/conexion.js";
 import "./session_bar.js";
 import "./theme_toggle.js";
 import "./install_prompt.js";
@@ -42,6 +45,9 @@ class AppShell extends HTMLElement {
     #router = null;
     #rutaActual = null;
     #primerMontaje = true;
+    #montadaSinRed = false;
+    #cancelarConexion = null;
+    #alCambiarRed = enLinea => { if (enLinea && this.#montadaSinRed) this.#router.pendiente = this.#router.procesar(); };
     #alNavegar = event => { event.stopPropagation(); this.#router.navegar(event.detail.ruta); };
     #alCerrarSesion = () => this.#irAlLogin(false);
     #alActualizarSesion = event => {
@@ -86,11 +92,15 @@ class AppShell extends HTMLElement {
             autenticar: obtenerSesion,
             montar: (tag, contexto) => this.#montar(tag, contexto),
             mostrarError: (error, contexto) => this.#mostrarError(error, contexto),
+            esErrorDeRed: error => error?.code === CODIGO_SIN_RED,
+            sesionSinRed: () => memoria.sesion,
+            sinConexion: RUTA_SIN_CONEXION,
         });
         this.addEventListener("navegar", this.#alNavegar);
         this.addEventListener("sesion-cerrada", this.#alCerrarSesion);
         this.addEventListener("sesion-actualizada", this.#alActualizarSesion);
         document.addEventListener("sesion-expirada", this.#alExpirar);
+        this.#cancelarConexion = conexion.suscribir(this.#alCambiarRed);
         this.#router.iniciar();
         registrarServiceWorker();
     }
@@ -101,6 +111,7 @@ class AppShell extends HTMLElement {
         this.removeEventListener("sesion-cerrada", this.#alCerrarSesion);
         this.removeEventListener("sesion-actualizada", this.#alActualizarSesion);
         document.removeEventListener("sesion-expirada", this.#alExpirar);
+        this.#cancelarConexion?.();
     }
 
     #irAlLogin(expirada) {
@@ -116,6 +127,9 @@ class AppShell extends HTMLElement {
         const vista = document.createElement(tag);
         vista.contexto = contexto;
         this.#rutaActual = contexto.ruta;
+        this.#montadaSinRed = Boolean(contexto.soloLectura || contexto.ruta === RUTA_SIN_CONEXION);
+        // Solo una sesión verificada con el servidor sirve de respaldo para entrar sin red.
+        if (contexto.ruta.roles && contexto.sesion && !contexto.soloLectura) memoria.recordarSesion(contexto.sesion);
 
         this.#mostrarSesion(contexto);
         raiz.getElementById("contenido").replaceChildren(vista);
@@ -133,6 +147,7 @@ class AppShell extends HTMLElement {
 
     #mostrarError(error, contexto) {
         this.#rutaActual = contexto.ruta;
+        this.#montadaSinRed = false;
         const raiz = this.shadowRoot;
         this.#mostrarSesion(contexto);
         const caja = document.createElement("section");

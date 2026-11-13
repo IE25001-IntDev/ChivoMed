@@ -164,6 +164,13 @@ test("informa errores de conexión y tiempo de espera sin revelar detalles", asy
     }
 });
 
+test("sin respuesta del servidor el error lleva el código de red; una respuesta HTTP no", async () => {
+    globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+    await assert.rejects(obtenerSesion(), error => error.status === 0 && error.code === "conexion.error");
+    globalThis.fetch = async () => new Response(null, { status: 503 });
+    await assert.rejects(obtenerSesion(), error => error.status === 503 && error.code === null);
+});
+
 test("el logout envía el token CSRF y conserva el error si falla el servidor", async () => {
     globalThis.fetch = async (url, opciones) => {
         assert.equal(url, "/galenosv/api/auth/logout");

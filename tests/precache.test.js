@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import '../src/js/boundary/pwa/sw_logica.js';
-import { RUTAS, RUTA_NO_ENCONTRADA } from '../src/js/boundary/rutas.js';
+import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION } from '../src/js/boundary/rutas.js';
 
 const SW = globalThis.ChivoMedSW;
 const SRC = fileURLToPath(new URL('../src/', import.meta.url));
@@ -39,7 +39,7 @@ function referencias(archivo) {
 /** Cierre de todo lo que la SPA puede cargar: index.html, el manifest y el módulo de cada ruta. */
 function cierre() {
     const entradas = ['index.html', 'manifest.webmanifest',
-        ...[...RUTAS, RUTA_NO_ENCONTRADA].map(r => relativo(path.resolve(BOUNDARY, r.modulo)))];
+        ...[...RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION].map(r => relativo(path.resolve(BOUNDARY, r.modulo)))];
     const vistos = new Set();
     const pendientes = [...entradas];
     while (pendientes.length) {
@@ -54,7 +54,7 @@ function cierre() {
 
 describe('Lista de precache', () => {
     test('incluye el módulo de cada ruta de rutas.js y la vista de no encontrada', () => {
-        for (const ruta of [...RUTAS, RUTA_NO_ENCONTRADA]) {
+        for (const ruta of [...RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION]) {
             const archivo = relativo(path.resolve(BOUNDARY, ruta.modulo));
             assert.ok(precache.has(archivo), `${ruta.tag}: falta ${archivo}`);
         }

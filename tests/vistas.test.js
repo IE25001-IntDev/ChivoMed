@@ -1,6 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { RUTAS, RUTA_NO_ENCONTRADA } from '../src/js/boundary/rutas.js';
+import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION } from '../src/js/boundary/rutas.js';
 
 // Node no tiene DOM: dobles mínimos de HTMLElement y customElements para comprobar que cada módulo
 // registra su Web Component sin tocar el documento al importarse.
@@ -18,7 +18,7 @@ before(() => {
 
 describe('Registro de Web Components', () => {
     test('cada vista define el tag que espera la tabla de rutas', async () => {
-        for (const ruta of [...RUTAS, RUTA_NO_ENCONTRADA]) {
+        for (const ruta of [...RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION]) {
             const modulo = await import(new URL(ruta.modulo, new URL('../src/js/boundary/', import.meta.url)).href);
             assert.equal(registro.get(ruta.tag), modulo.default, ruta.tag);
         }
