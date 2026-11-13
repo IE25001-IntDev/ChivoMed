@@ -7,15 +7,16 @@ import { cerrarSesion, ROLES } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { conexion } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <nav class="barra-sesion" aria-label="Tu sesión">
   <p class="identidad"><span id="nombre"></span> <span class="separador" aria-hidden="true">·</span>
     <span id="rol"></span> <span class="separador" aria-hidden="true">·</span> <span id="clinica"></span></p>
   <button class="boton boton-secundario" id="salir" type="button" aria-describedby="sin-red">Cerrar sesión</button>
   <p class="aviso-red" id="sin-red" hidden></p>
   <p class="error-campo" id="error" role="alert" hidden></p>
-</nav>`;
+</nav>`);
 
 class SessionBar extends HTMLElement {
     #sesion = null;
@@ -37,9 +38,7 @@ class SessionBar extends HTMLElement {
 
     connectedCallback() {
         if (!this.shadowRoot.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            this.shadowRoot.append(hojaDeEstilos("app_shell.css"), plantilla.content.cloneNode(true));
+            this.shadowRoot.append(hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
         }
         this.shadowRoot.getElementById("salir").addEventListener("click", this.#alSalir);
         this.#cancelarConexion = conexion.suscribir(() => this.#pintarRed());

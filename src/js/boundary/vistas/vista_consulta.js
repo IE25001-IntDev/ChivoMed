@@ -3,12 +3,13 @@
  * todos los módulos de rutas.js; la fase 3 lo reemplaza por la vista completa.
  */
 import { hojaDeEstilos } from "./estilos.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Consulta</h1>
   <p class="subtitulo">Aquí darás seguimiento a la consulta seleccionada. Esta vista se completa en la fase 3.</p>
-</section>`;
+</section>`);
 
 class VistaConsulta extends HTMLElement {
     contexto = null;
@@ -20,9 +21,7 @@ class VistaConsulta extends HTMLElement {
 
     connectedCallback() {
         if (this.shadowRoot.childElementCount) return;
-        const plantilla = document.createElement("template");
-        plantilla.innerHTML = PLANTILLA;
-        this.shadowRoot.append(hojaDeEstilos("vistas.css"), plantilla.content.cloneNode(true));
+        this.shadowRoot.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
     }
 }
 

@@ -13,8 +13,9 @@ import { ControladorDashboard, mensajeMemoria, MENSAJES } from "./controlador_da
 import { ROLES } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Dashboard</h1>
   <p class="subtitulo" id="activo" aria-live="polite"></p>
@@ -38,7 +39,7 @@ const PLANTILLA = `
   <slot name="consultas">
     <p class="subtitulo" id="consultas-pendiente">Pronto verás aquí las consultas que debes atender hoy.</p>
   </slot>
-</section>`;
+</section>`);
 
 class VistaDashboard extends HTMLElement {
     #controlador = null;
@@ -65,9 +66,7 @@ class VistaDashboard extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            raiz.append(hojaDeEstilos("vistas.css"), plantilla.content.cloneNode(true));
+            raiz.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
         }
         this.$ = id => raiz.getElementById(id);
         this.$("selector").addEventListener("submit", this.#alEnviar);

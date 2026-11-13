@@ -5,13 +5,14 @@
  */
 import { ControladorInstalacion, MODOS } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <button class="instalar" id="instalar" type="button" hidden>
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
   <span>Instalar app</span>
 </button>
-<p class="solo-lectores" id="estado" role="status" aria-live="polite"></p>`;
+<p class="solo-lectores" id="estado" role="status" aria-live="polite"></p>`);
 
 class InstallPrompt extends HTMLElement {
     #controlador = null;
@@ -24,9 +25,7 @@ class InstallPrompt extends HTMLElement {
 
     connectedCallback() {
         if (!this.shadowRoot.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            this.shadowRoot.append(hojaDeEstilos("pwa.css"), plantilla.content.cloneNode(true));
+            this.shadowRoot.append(hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
         }
         this.#controlador = new ControladorInstalacion({ ventana: window, alCambiar: estado => this.#pintar(estado) });
         this.shadowRoot.getElementById("instalar").addEventListener("click", this.#alPulsar);

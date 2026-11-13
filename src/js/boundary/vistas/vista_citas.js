@@ -3,13 +3,14 @@
  * el asistente de búsqueda se implementa en la fase 3.
  */
 import { hojaDeEstilos } from "./estilos.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Búsqueda de citas</h1>
   <p class="subtitulo">Muy pronto podrás buscar tus citas con tu documento, la clínica y un rango de fechas.</p>
   <p class="pie-tarjeta">¿Trabajas en una clínica? <a href="#/login">Acceso del personal</a></p>
-</section>`;
+</section>`);
 
 class VistaCitas extends HTMLElement {
     contexto = null;
@@ -21,9 +22,7 @@ class VistaCitas extends HTMLElement {
 
     connectedCallback() {
         if (this.shadowRoot.childElementCount) return;
-        const plantilla = document.createElement("template");
-        plantilla.innerHTML = PLANTILLA;
-        this.shadowRoot.append(hojaDeEstilos("vistas.css"), plantilla.content.cloneNode(true));
+        this.shadowRoot.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
     }
 }
 

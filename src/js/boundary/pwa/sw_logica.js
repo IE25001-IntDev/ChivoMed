@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.3";
+    const VERSION = "2026-11-13.4";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -44,6 +44,7 @@
         "./js/boundary/theme_init.js",
         "./js/boundary/router.js",
         "./js/boundary/rutas.js",
+        "./js/boundary/plantilla.js",
         "./js/boundary/components/app_shell.js",
         "./js/boundary/components/session_bar.js",
         "./js/boundary/components/theme_toggle.js",

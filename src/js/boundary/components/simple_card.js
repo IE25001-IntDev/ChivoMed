@@ -1,4 +1,8 @@
 import { componentStyles } from './component_styles.js';
+import { plantilla } from '../plantilla.js';
+
+/** Tarjeta genérica: el contenido llega por los slots titulo, contenido y pie. */
+const PLANTILLA = plantilla(`<article class="patient-card"><header><slot name="titulo"></slot></header><div class="card-body"><slot name="contenido"></slot></div><footer><slot name="pie"></slot></footer></article>`);
 class TarjetaSimple extends HTMLElement {
     constructor() {
         super();
@@ -32,9 +36,7 @@ class TarjetaSimple extends HTMLElement {
         this.addEventListener('pointerleave', this.reset);
         this.motion.addEventListener('change', this.reset);
         if (this.root.childElementCount) return;
-        const template = document.createElement('template');
-        template.innerHTML = `<article class="patient-card"><header><slot name="titulo"></slot></header><div class="card-body"><slot name="contenido"></slot></div><footer><slot name="pie"></slot></footer></article>`;
-        this.root.append(componentStyles(), template.content.cloneNode(true));
+        this.root.append(componentStyles(), PLANTILLA.clonar());
     }
     disconnectedCallback() {
         this.removeEventListener('pointermove', this.move);

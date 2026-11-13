@@ -5,11 +5,12 @@
  */
 import { conexion } from "../pwa/conexion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <div class="estado-red" id="estado" role="status" aria-live="polite" aria-atomic="true">
   <span class="punto" aria-hidden="true"></span><span id="texto"></span>
-</div>`;
+</div>`);
 
 const AVISO_RESTABLECIDA_MS = 4000;
 
@@ -24,9 +25,7 @@ class EstadoConexion extends HTMLElement {
 
     connectedCallback() {
         if (!this.shadowRoot.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            this.shadowRoot.append(hojaDeEstilos("pwa.css"), plantilla.content.cloneNode(true));
+            this.shadowRoot.append(hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
         }
         this.#cancelar = conexion.suscribir(enLinea => this.#pintar(enLinea, true));
         this.#pintar(conexion.enLinea, false);

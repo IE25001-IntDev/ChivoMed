@@ -7,8 +7,9 @@ import { ControladorLogin, MENSAJES, MAX_NUMERO_DOCUMENTO, destinoTrasLogin } fr
 import { hojaDeEstilos } from "./estilos.js";
 import { conexion } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Acceso del personal</h1>
   <p class="subtitulo">Ingresa con tu documento de identidad. Solo para personal médico y administrativo.</p>
@@ -36,7 +37,7 @@ const PLANTILLA = `
     <button class="boton boton-principal" id="enviar" type="submit" aria-describedby="sin-red">Ingresar</button>
   </form>
   <p class="pie-tarjeta">¿Eres paciente? <a href="#/citas">Busca tus citas</a></p>
-</section>`;
+</section>`);
 
 class VistaLogin extends HTMLElement {
     #controlador = new ControladorLogin({ alCambiar: estado => this.#pintar(estado) });
@@ -57,9 +58,7 @@ class VistaLogin extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            raiz.append(hojaDeEstilos("vistas.css"), plantilla.content.cloneNode(true));
+            raiz.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
         }
         this.$ = id => raiz.getElementById(id);
         this.$("formulario").addEventListener("submit", this.#alEnviar);

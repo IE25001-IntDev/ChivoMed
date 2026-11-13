@@ -1,4 +1,11 @@
 import { componentStyles } from './component_styles.js';
+import { plantilla } from '../plantilla.js';
+
+const PLANTILLA = plantilla(`<button class="theme-button" type="button" aria-label="Modo oscuro" aria-pressed="false">
+    <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></svg>
+    <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg>
+    <span class="theme-label"></span>
+</button>`);
 
 class ThemeToggle extends HTMLElement {
     constructor() {
@@ -22,13 +29,7 @@ class ThemeToggle extends HTMLElement {
 
     connectedCallback() {
         if (!this.root.childElementCount) {
-            const template = document.createElement('template');
-            template.innerHTML = `<button class="theme-button" type="button" aria-label="Modo oscuro" aria-pressed="false">
-                <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></svg>
-                <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg>
-                <span class="theme-label"></span>
-            </button>`;
-            this.root.append(componentStyles(), template.content.cloneNode(true));
+            this.root.append(componentStyles(), PLANTILLA.clonar());
         }
         this.root.querySelector('button').addEventListener('click', this.toggle);
         this.media.addEventListener('change', this.systemChange);

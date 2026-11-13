@@ -23,8 +23,9 @@ import "./session_bar.js";
 import "./theme_toggle.js";
 import "./install_prompt.js";
 import "./estado_conexion.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <a class="saltar" href="#contenido">Saltar al contenido</a>
 <header class="cabecera">
   <a class="marca" href="#${RUTA_POR_DEFECTO}" aria-label="ChivoMed, búsqueda de citas">
@@ -39,7 +40,7 @@ const PLANTILLA = `
 <session-bar hidden></session-bar>
 <main id="contenido" tabindex="-1"></main>
 <p class="solo-lectores" id="anuncio" aria-live="polite"></p>
-<footer class="pie"><p>ChivoMed · GalenoSV</p></footer>`;
+<footer class="pie"><p>ChivoMed · GalenoSV</p></footer>`);
 
 class AppShell extends HTMLElement {
     #router = null;
@@ -73,9 +74,7 @@ class AppShell extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            raiz.append(hojaDeEstilos("app_shell.css"), plantilla.content.cloneNode(true));
+            raiz.append(hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
             // El enlace de salto no debe cambiar el hash: el router lo interpretaría como ruta.
             raiz.querySelector(".saltar").addEventListener("click", event => {
                 event.preventDefault();

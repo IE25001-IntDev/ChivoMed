@@ -5,13 +5,14 @@
  * deshabilita sin red: navigator.onLine puede equivocarse, y reintentar sin red solo vuelve a esta vista.
  */
 import { hojaDeEstilos } from "./estilos.js";
+import { plantilla } from "../plantilla.js";
 
-const PLANTILLA = `
+const PLANTILLA = plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Sin conexión</h1>
   <p class="subtitulo">Inicia sesión cuando vuelva la red. Al reconectarte, esta página se actualiza sola.</p>
   <button class="boton boton-principal" id="reintentar" type="button">Volver a intentar</button>
-</section>`;
+</section>`);
 
 class VistaSinConexion extends HTMLElement {
     #alReintentar = () => this.#reintentar();
@@ -26,9 +27,7 @@ class VistaSinConexion extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            const plantilla = document.createElement("template");
-            plantilla.innerHTML = PLANTILLA;
-            raiz.append(hojaDeEstilos("vistas.css"), plantilla.content.cloneNode(true));
+            raiz.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
         }
         raiz.getElementById("reintentar").addEventListener("click", this.#alReintentar);
     }
