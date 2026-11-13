@@ -101,8 +101,11 @@ function preparar({ asignaciones = async () => ASIGNACIONES, cambiarRol = async 
             return sesionCon(ASIGNACIONES.find(a => a.idPersonaRol === ultimoCambio));
         },
         conexion, memoria, reloj,
-        alCambiar: estado => estados.push(estado),
-        alCambiarSesion: sesion => sesionesNuevas.push(sesion),
+    });
+    // Igual que la vista: se suscribe al estado; el controlador no conoce a sus suscriptores.
+    controlador.suscribir((cambios, estado) => {
+        estados.push({ ...estado });
+        if (cambios.has('sesionCambiada')) sesionesNuevas.push(estado.sesionCambiada);
     });
     return { controlador, llamadas, estados, sesionesNuevas, conexion, memoria };
 }
@@ -288,6 +291,24 @@ describe('ControladorDashboard: cambio de rol', () => {
         await controlador.cambiar(DOC_SUR.idPersonaRol);
         assert.equal(controlador.estado.error, MENSAJES.sinPermiso);
         assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
+    });
+
+    test('iniciar() no publica sesionCambiada; solo un cambio confirmado lo hace', async () => {
+        const { controlador, sesionesNuevas } = preparar();
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controlador.estado.sesionCambiada, null);
+        assert.deepEqual(sesionesNuevas, []);
+        await controlador.cambiar(DOC_SUR.idPersonaRol);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controlador.estado.sesionCambiada, controlador.estado.sesion);
+        assert.equal(sesionesNuevas.length, 1);
+    });
+
+    test('el controlador no acepta callbacks de la vista: todo pasa por el estado', () => {
+        const { controlador } = preparar();
+        assert.equal(typeof controlador.suscribir, 'function');
+        assert.throws(() => { controlador.estado.inventada = 1; }, TypeError);
     });
 
     test('si el PUT funciona pero /auth/me falla, pide recargar y no avisa una sesión nueva', async () => {

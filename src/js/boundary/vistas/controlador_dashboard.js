@@ -3,6 +3,9 @@
  * Carga las asignaciones del empleado, las agrupa por clínica, marca la activa, cambia el rol
  * (PUT /atencion/rol-activo) y refresca la sesión con /auth/me. Guarda en memoria lo último
  * cargado para seguir mostrándolo sin red. Todo llega por inyección para probarse con node --test.
+ *
+ * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
+ * Un cambio de rol confirmado se publica en `estado.sesionCambiada`.
  */
 import AtencionService from "../../control/atencion_service.js";
 import { obtenerSesion as obtenerSesionHttp, ROLES } from "../../control/auth_service.js";
@@ -10,6 +13,7 @@ import { ROLES_EMPLEADO } from "../rutas.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { crearEstado } from "../../control/estado_reactivo.js";
 
 export const CODIGO_CERRAR_ANTES = "rolCambio.cerrarAntesCambiar";
 const CLAVE_MEMORIA = "dashboard.asignaciones";
@@ -109,8 +113,6 @@ export class ControladorDashboard {
     #conexion;
     #memoria;
     #reloj;
-    #alCambiar;
-    #alCambiarSesion;
     #secuencia = 0;
     #cancelarConexion = null;
     #asignaciones = [];
@@ -123,20 +125,18 @@ export class ControladorDashboard {
      * @param {{ enLinea: boolean, suscribir: Function }} [opciones.conexion]
      * @param {MemoriaVistas} [opciones.memoria]
      * @param {() => Date} [opciones.reloj]
-     * @param {(estado: object) => void} [opciones.alCambiar]
-     * @param {(sesion: object) => void} [opciones.alCambiarSesion] tras un cambio de rol confirmado
      */
     constructor({ servicio, obtenerSesion = obtenerSesionHttp, conexion = conexionCompartida,
-        memoria = memoriaCompartida, reloj = () => new Date(), alCambiar = () => {}, alCambiarSesion = () => {} } = {}) {
+        memoria = memoriaCompartida, reloj = () => new Date() } = {}) {
         this.#servicio = servicio ?? new AtencionService();
         this.#obtenerSesion = obtenerSesion;
         this.#conexion = conexion;
         this.#memoria = memoria;
         this.#reloj = reloj;
-        this.#alCambiar = alCambiar;
-        this.#alCambiarSesion = alCambiarSesion;
-        this.estado = Object.freeze({
+        const { estado, suscribir } = crearEstado({
             sesion: null,
+            /** Sesión nueva tras un cambio de rol confirmado; nunca se escribe al iniciar. */
+            sesionCambiada: null,
             soloLectura: false,
             enLinea: conexion.enLinea,
             cargando: false,
@@ -149,11 +149,14 @@ export class ControladorDashboard {
             desdeMemoria: false,
             actualizadoEn: null,
         });
+        /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
+        this.estado = estado;
+        /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
+        this.suscribir = suscribir;
     }
 
     #actualizar(cambios) {
-        this.estado = Object.freeze({ ...this.estado, ...cambios });
-        this.#alCambiar(this.estado);
+        Object.assign(this.estado, cambios);
     }
 
     #clave() {
@@ -174,7 +177,7 @@ export class ControladorDashboard {
     iniciar(sesion, { soloLectura = false } = {}) {
         this.#cancelarConexion?.();
         this.#cancelarConexion = this.#conexion.suscribir?.(enLinea => this.#alCambiarRed(enLinea)) ?? null;
-        this.estado = Object.freeze({ ...this.estado, sesion, soloLectura, enLinea: this.#conexion.enLinea });
+        this.#actualizar({ sesion, soloLectura, enLinea: this.#conexion.enLinea });
         const guardado = this.#memoria.leer(this.#clave());
         if (guardado) {
             this.#asignaciones = guardado.asignaciones;
@@ -182,8 +185,6 @@ export class ControladorDashboard {
             // En línea se muestran mientras llega la respuesta; solo se avisa "guardados" sin red.
             this.#actualizar({ ...this.#derivados(), vacio: !guardado.asignaciones.length,
                 desdeMemoria: !this.#conexion.enLinea, actualizadoEn: guardado.en });
-        } else {
-            this.#alCambiar(this.estado);
         }
         return this.cargar();
     }
@@ -253,9 +254,8 @@ export class ControladorDashboard {
             this.#actualizar({ cambiando: null, error: MENSAJES.sesionNoActualizada });
             return false;
         }
-        this.estado = Object.freeze({ ...this.estado, sesion });
-        this.#actualizar({ ...this.#derivados(), cambiando: null });
-        this.#alCambiarSesion(sesion);
+        this.#actualizar({ sesion });
+        this.#actualizar({ ...this.#derivados(), cambiando: null, sesionCambiada: sesion });
         return true;
     }
 }
