@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-12.1";
+    const VERSION = "2026-11-13.1";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -52,6 +52,8 @@
         "./js/boundary/components/estado_conexion.js",
         "./js/boundary/vistas/estilos.js",
         "./js/boundary/vistas/controlador_login.js",
+        "./js/boundary/vistas/controlador_dashboard.js",
+        "./js/boundary/vistas/memoria_vistas.js",
         "./js/boundary/vistas/vista_citas.js",
         "./js/boundary/vistas/vista_login.js",
         "./js/boundary/vistas/vista_dashboard.js",
@@ -65,6 +67,12 @@
         "./js/boundary/pwa/conexion.js",
         "./js/control/auth_service.js",
         "./js/control/api_config.js",
+        "./js/control/atencion_service.js",
+        "./js/control/default_service.js",
+        "./js/entities/atencion.js",
+        "./js/entities/default_entity.js",
+        "./js/entities/default_error.js",
+        "./js/entities/default_response.js",
     ]);
 
     const ESTRATEGIAS = Object.freeze({

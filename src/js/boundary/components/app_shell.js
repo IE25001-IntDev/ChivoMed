@@ -4,7 +4,10 @@
  *  - 'navegar' { ruta } desde las vistas → navegación con historial.
  *  - 'sesion-cerrada' desde <session-bar> → vuelve al login.
  *  - 'sesion-expirada' en document (lo emite auth_service ante un 401) → login, solo en rutas protegidas.
- * Además registra el service worker y, al cerrar o perder la sesión, borra los cachés con datos.
+ *  - 'sesion-actualizada' { sesion } desde una vista (cambio de rol) → actualiza la sesión de la
+ *    vista (la que compara verificarSesionActual antes de escribir) y la barra de sesión.
+ * Además registra el service worker y, al cerrar o perder la sesión, borra los cachés con datos
+ * y la memoria de las vistas.
  */
 import { Router, normalizarHash } from "../router.js";
 import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
@@ -12,6 +15,7 @@ import { obtenerSesion, fijarSesionVista } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { registrarServiceWorker } from "../pwa/registro_sw.js";
 import { limpiarCachesDeDatos } from "../pwa/caches_cliente.js";
+import { memoria } from "../vistas/memoria_vistas.js";
 import "./session_bar.js";
 import "./theme_toggle.js";
 import "./install_prompt.js";
@@ -40,6 +44,14 @@ class AppShell extends HTMLElement {
     #primerMontaje = true;
     #alNavegar = event => { event.stopPropagation(); this.#router.navegar(event.detail.ruta); };
     #alCerrarSesion = () => this.#irAlLogin(false);
+    #alActualizarSesion = event => {
+        event.stopPropagation();
+        const { sesion } = event.detail ?? {};
+        if (!sesion || !this.#rutaActual?.roles) return;
+        fijarSesionVista(sesion);
+        memoria.recordarSesion(sesion);
+        this.shadowRoot.querySelector("session-bar").sesion = sesion;
+    };
     // Se difiere: si el 401 vino de la verificación del propio router, este ya redirigió al login.
     #alExpirar = () => setTimeout(() => {
         if (!this.#rutaActual?.roles) return;
@@ -77,6 +89,7 @@ class AppShell extends HTMLElement {
         });
         this.addEventListener("navegar", this.#alNavegar);
         this.addEventListener("sesion-cerrada", this.#alCerrarSesion);
+        this.addEventListener("sesion-actualizada", this.#alActualizarSesion);
         document.addEventListener("sesion-expirada", this.#alExpirar);
         this.#router.iniciar();
         registrarServiceWorker();
@@ -86,12 +99,14 @@ class AppShell extends HTMLElement {
         this.#router?.detener();
         this.removeEventListener("navegar", this.#alNavegar);
         this.removeEventListener("sesion-cerrada", this.#alCerrarSesion);
+        this.removeEventListener("sesion-actualizada", this.#alActualizarSesion);
         document.removeEventListener("sesion-expirada", this.#alExpirar);
     }
 
     #irAlLogin(expirada) {
         this.#rutaActual = null;
         fijarSesionVista(null);
+        memoria.limpiar();
         limpiarCachesDeDatos();
         this.#router.navegar(expirada ? `${RUTA_LOGIN}?sesion=finalizada` : RUTA_LOGIN);
     }
