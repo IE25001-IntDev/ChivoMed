@@ -1,6 +1,9 @@
 /**
  * <vista-login> (HU2): acceso del personal con tipo y número de documento.
  * La lógica vive en ControladorLogin; aquí solo se pinta el estado y se emiten eventos.
+ * La vista se suscribe al estado reactivo del controlador al conectarse y cancela al
+ * desconectarse; el controlador nunca llama a la vista.
+ * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  * Emite 'navegar' { ruta } (bubbles, composed) cuando el personal puede entrar.
  */
 import { ControladorLogin, MENSAJES, MAX_NUMERO_DOCUMENTO, destinoTrasLogin } from "./controlador_login.js";
@@ -40,7 +43,8 @@ const PLANTILLA = plantilla(`
 </section>`);
 
 class VistaLogin extends HTMLElement {
-    #controlador = new ControladorLogin({ alCambiar: estado => this.#pintar(estado) });
+    #controlador = null;
+    #cancelar = null;
     #alEnviar = event => this.#enviar(event);
     #alCambiarTipo = () => this.#mostrarIndicaciones();
     #alReintentar = () => this.#controlador.cargarTipos();
@@ -49,6 +53,14 @@ class VistaLogin extends HTMLElement {
     #cargaPintada = null;
     /** Contexto del router: { query, sesion, ... }. */
     contexto = null;
+
+    /** Controlador inyectado; solo se puede asignar antes de conectar la vista. */
+    set controlador(valor) {
+        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
+        this.#controlador = valor;
+    }
+
+    get controlador() { return this.#controlador; }
 
     constructor() {
         super();
@@ -72,7 +84,11 @@ class VistaLogin extends HTMLElement {
             // Al volver la red, si los tipos no cargaron, se reintenta sin pedirlo al usuario.
             if (enLinea && this.#controlador.estado.errorTipos) this.#controlador.cargarTipos();
         });
+        this.#controlador ??= new ControladorLogin();
+        this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
+        // cargarTipos() escribe "cargando" de forma síncrona; se pinta enseguida para que se vea ya.
         this.#controlador.cargarTipos();
+        this.#pintar(this.#controlador.estado);
     }
 
     disconnectedCallback() {
@@ -80,6 +96,8 @@ class VistaLogin extends HTMLElement {
         this.$("tipo").removeEventListener("change", this.#alCambiarTipo);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
         this.#cancelarConexion?.();
+        this.#cancelar?.();
+        this.#cancelar = null;
     }
 
     #pintar(estado) {
@@ -89,7 +107,13 @@ class VistaLogin extends HTMLElement {
             const seleccionado = select.value;
             const inicial = estado.cargandoTipos ? "Cargando tipos…"
                 : estado.tipos.length ? "Selecciona un tipo" : "Sin tipos disponibles";
-            select.replaceChildren(new Option(inicial, ""), ...estado.tipos.map(t => new Option(t.nombre, t.idTipoDocumento)));
+            const opcion = (texto, valor) => {
+                const o = document.createElement("option");
+                o.value = valor;
+                o.textContent = texto;
+                return o;
+            };
+            select.replaceChildren(opcion(inicial, ""), ...estado.tipos.map(t => opcion(t.nombre, t.idTipoDocumento)));
             select.value = estado.tipos.some(t => t.idTipoDocumento === seleccionado) ? seleccionado : "";
             this.#tiposPintados = estado.tipos;
             this.#cargaPintada = estado.cargandoTipos;

@@ -22,7 +22,9 @@ function servicioDoble({ tipos = [DUI, PASAPORTE], login = async () => sesion('D
 async function preparar(opciones) {
     const servicio = servicioDoble(opciones);
     const estados = [];
-    const controlador = new ControladorLogin({ servicio, alCambiar: estado => estados.push(estado) });
+    const controlador = new ControladorLogin({ servicio });
+    // Cada notificación guarda una copia: el estado reactivo es uno solo y cambia en el lugar.
+    controlador.suscribir((_cambios, estado) => estados.push({ ...estado }));
     await controlador.cargarTipos();
     return { controlador, servicio, estados };
 }
@@ -30,7 +32,10 @@ async function preparar(opciones) {
 describe('ControladorLogin: tipos de documento', () => {
     test('carga los tipos y avisa a la vista mientras carga y al terminar', async () => {
         const { controlador, estados } = await preparar();
+        await new Promise(resolve => setTimeout(resolve, 0));
         assert.equal(estados[0].cargandoTipos, true);
+        assert.equal(estados.at(-1).cargandoTipos, false);
+        assert.ok(Object.isFrozen(controlador.estado.tipos));
         assert.equal(controlador.estado.cargandoTipos, false);
         assert.deepEqual(controlador.estado.tipos, [DUI, PASAPORTE]);
         assert.equal(controlador.tipo(UUID(1)), DUI);
@@ -49,6 +54,7 @@ describe('ControladorLogin: validación', () => {
         const { controlador, servicio } = await preparar();
         assert.equal(await controlador.enviar({ idTipoDocumento: '', numeroDocumento: '   ' }), null);
         assert.deepEqual(controlador.estado.errores, { tipo: MENSAJES.tipoRequerido, numero: MENSAJES.numeroRequerido });
+        assert.ok(Object.isFrozen(controlador.estado.errores));
         assert.equal(servicio.llamadas.login.length, 0);
     });
 
@@ -135,6 +141,7 @@ describe('ControladorLogin: envío', () => {
         liberar();
         assert.ok(await primero);
         assert.equal(servicio.llamadas.login.length, 1);
+        await new Promise(resolve => setTimeout(resolve, 0));
         assert.ok(estados.some(e => e.enviando) && !controlador.estado.enviando);
     });
 
@@ -159,4 +166,21 @@ describe('destinoTrasLogin', () => {
         test(`ignora volver=${malo}`, () => assert.equal(destinoTrasLogin(query(malo)), '/dashboard'));
     }
     test('tolera un contexto sin query', () => assert.equal(destinoTrasLogin(undefined), '/dashboard'));
+});
+
+describe('ControladorLogin: estado reactivo', () => {
+    test('no acepta el callback alCambiar ni claves nuevas: solo suscribir()', () => {
+        const controlador = new ControladorLogin({ servicio: servicioDoble(), alCambiar: () => { throw new Error('no se llama'); } });
+        assert.equal(typeof controlador.suscribir, 'function');
+        assert.throws(() => { controlador.estado.otra = 1; }, TypeError);
+    });
+
+    test('agrupa los cambios de un envío inválido en una sola notificación', async () => {
+        const controlador = new ControladorLogin({ servicio: servicioDoble() });
+        const lotes = [];
+        controlador.suscribir(cambios => lotes.push([...cambios].sort()));
+        await controlador.enviar({ idTipoDocumento: '', numeroDocumento: '' });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.deepEqual(lotes, [['errores']]);
+    });
 });

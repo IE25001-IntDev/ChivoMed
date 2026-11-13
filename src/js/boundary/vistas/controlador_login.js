@@ -1,11 +1,14 @@
 /**
  * Lógica de la vista de login (HU2) sin DOM: estado, validación y envío.
  * Recibe el servicio por inyección para probarse con dobles en node --test.
+ *
+ * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  */
 import { listarTiposDocumento, iniciarSesion, cerrarSesion } from "../../control/auth_service.js";
 import { ROLES_EMPLEADO, RUTAS, RUTA_INICIO_EMPLEADO } from "../rutas.js";
 import { rutaDeRetorno } from "../router.js";
 import { crearValidadorFormato } from "../../control/formato_documento.js";
+import { crearEstado } from "../../control/estado_reactivo.js";
 
 export const MAX_NUMERO_DOCUMENTO = 50;
 
@@ -22,31 +25,33 @@ export function destinoTrasLogin(query) {
     return rutaDeRetorno(query?.get?.("volver") ?? null, RUTAS) ?? RUTA_INICIO_EMPLEADO;
 }
 
+const SIN_ERRORES = Object.freeze({ tipo: null, numero: null });
+
 export class ControladorLogin {
     #servicio;
-    #alCambiar;
 
     /**
      * @param {object} [opciones]
      * @param {{ listarTiposDocumento: Function, iniciarSesion: Function, cerrarSesion: Function }} [opciones.servicio]
-     * @param {(estado: object) => void} [opciones.alCambiar]
      */
-    constructor({ servicio = { listarTiposDocumento, iniciarSesion, cerrarSesion }, alCambiar = () => {} } = {}) {
+    constructor({ servicio = { listarTiposDocumento, iniciarSesion, cerrarSesion } } = {}) {
         this.#servicio = servicio;
-        this.#alCambiar = alCambiar;
-        this.estado = {
+        const { estado, suscribir } = crearEstado({
             cargandoTipos: false,
-            tipos: [],
+            tipos: Object.freeze([]),
             errorTipos: null,
             enviando: false,
-            errores: { tipo: null, numero: null },
+            errores: SIN_ERRORES,
             mensaje: null,
-        };
+        });
+        /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
+        this.estado = estado;
+        /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
+        this.suscribir = suscribir;
     }
 
     #actualizar(cambios) {
-        this.estado = { ...this.estado, ...cambios };
-        this.#alCambiar(this.estado);
+        Object.assign(this.estado, cambios);
     }
 
     tipo(idTipoDocumento) {
@@ -57,9 +62,9 @@ export class ControladorLogin {
         this.#actualizar({ cargandoTipos: true, errorTipos: null });
         try {
             const tipos = await this.#servicio.listarTiposDocumento();
-            this.#actualizar({ cargandoTipos: false, tipos });
+            this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([...tipos]) });
         } catch (error) {
-            this.#actualizar({ cargandoTipos: false, tipos: [], errorTipos: error.message });
+            this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([]), errorTipos: error.message });
         }
     }
 
@@ -79,7 +84,7 @@ export class ControladorLogin {
                     : `El número no tiene el formato de ${tipo.nombre}.`;
             }
         }
-        return errores;
+        return Object.freeze(errores);
     }
 
     /** Devuelve la sesión si el personal puede entrar; null si hubo errores (quedan en el estado). */
