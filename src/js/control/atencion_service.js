@@ -11,6 +11,15 @@ class AtencionService extends DefaultService {
         return this.solicitar("GET", this.recurso, opciones);
     }
 
+    /**
+     * Asignaciones de empleado activas de la cuenta en todas sus clínicas (GET /atencion/asignaciones).
+     * DTO plano: [{ idPersonaRol, codigoRol, nombreRol, idClinica, nombreClinica, activa }].
+     */
+    asignaciones(opciones = {}) {
+        return this.solicitar("GET", `${this.recurso}/asignaciones`, { ...opciones, Entidad: null });
+    }
+
+    /** PUT /atencion/rol-activo → { idPersonaRol, idConsulta }. Con consulta en curso: 409 rolCambio.cerrarAntesCambiar. */
     cambiarRol(idPersonaRol, opciones = {}) {
         return this.solicitar("PUT", `${this.recurso}/rol-activo`, {
             ...opciones, data: { idPersonaRol },
