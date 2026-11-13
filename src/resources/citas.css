@@ -1,0 +1,75 @@
+/* Búsqueda pública de citas (HU1): asistente, <indicador-pasos> y <tarjeta-cita>. Tokens de app.css. */
+
+.solo-lectores {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Indicador de pasos: fila en escritorio, columna compacta en teléfono. */
+.indicador-pasos { margin: 0 0 var(--espacio-6); }
+.lista-pasos {
+  display: grid; gap: var(--espacio-2); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.paso { display: flex; min-width: 0; }
+.boton-paso, .paso.futuro {
+  display: flex; flex: 1; gap: var(--espacio-2); align-items: center; min-width: 0; min-height: 44px;
+  padding: var(--espacio-2); border-radius: 10px; font: inherit; text-align: start;
+}
+.boton-paso {
+  border: 1px solid var(--border-strong); background: var(--tarjeta); color: inherit; cursor: pointer;
+}
+.boton-paso:hover { border-color: var(--accent); }
+.paso.futuro { border: 1px dashed var(--border-strong); color: var(--muted); }
+.paso.actual .boton-paso { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); cursor: default; }
+.numero-paso {
+  display: inline-grid; flex: none; place-items: center; width: 1.75rem; height: 1.75rem;
+  border-radius: 999px; background: var(--mint-soft); color: var(--accent-text); font-weight: 700;
+}
+.paso.actual .numero-paso { background: var(--accent); color: var(--on-accent); }
+.nombre-paso { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .9rem; }
+
+@media (max-width: 720px) {
+  .lista-pasos { grid-template-columns: repeat(5, auto); justify-content: start; }
+  .nombre-paso { display: none; }
+  .paso.actual .nombre-paso { display: inline; white-space: normal; }
+}
+
+/* Pasos del asistente */
+.paso-asistente { display: grid; gap: var(--espacio-4); }
+.paso-asistente > h2 { margin: 0; }
+.paso-asistente > h2:focus { outline: none; }
+.acciones-paso { display: flex; flex-wrap: wrap; gap: var(--espacio-2); align-items: center; }
+.acciones-paso .boton-secundario { justify-self: auto; }
+.rango-fechas { display: grid; gap: var(--espacio-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); }
+.opciones-clinica { display: grid; gap: var(--espacio-2); margin: 0; padding: 0; border: 0; }
+.opciones-clinica legend { margin-bottom: var(--espacio-2); padding: 0; font-weight: 600; }
+.opcion-clinica {
+  display: flex; gap: var(--espacio-2); align-items: center; min-height: 44px; padding: var(--espacio-3);
+  border: 1px solid var(--border-strong); border-radius: 10px; cursor: pointer;
+}
+.opcion-clinica:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.opcion-clinica input { width: 1.25rem; min-height: 0; height: 1.25rem; margin: 0; accent-color: var(--accent); }
+.resumen-busqueda { margin: 0; color: var(--muted); font-weight: 600; }
+
+/* Cuadrícula de citas: una columna en teléfono, varias en escritorio. */
+.cuadricula-citas {
+  display: grid; gap: var(--espacio-4); align-items: stretch;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+:host(tarjeta-cita) { display: block; height: 100%; }
+:host([hidden]) { display: none !important; }
+.tarjeta-cita {
+  display: grid; gap: var(--espacio-3); align-content: start; height: 100%; padding: var(--espacio-4);
+  border: 1px solid var(--border-strong); border-radius: 12px; background: var(--tarjeta);
+}
+.tarjeta-cita h3 { margin: 0; font-size: 1.1rem; line-height: 1.3; }
+.tarjeta-cita h4 { margin: 0; font-size: .95rem; }
+.datos-cita { margin: 0; }
+.datos-cita dt { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.datos-cita dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.procedimientos-cita { margin: 0; padding-inline-start: 1.25rem; }
+.meta { margin: 0; color: var(--muted); font-size: .9rem; }
+.pie-cita { display: grid; gap: var(--espacio-2); align-self: end; }
+.estado-ticket { margin: 0; font-size: .9rem; }
+.estado-ticket:empty { display: none; }
