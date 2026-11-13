@@ -280,6 +280,21 @@ describe('<lista-consultas>', () => {
         assert.equal(navegaciones[0].bubbles && navegaciones[0].composed, true);
     });
 
+    test('con el rol ADMINISTRACION todas las tarjetas dicen que solo el rol Doctor atiende', async () => {
+        const { lista, tarjetas, navegaciones } = montarLista();
+        const admin = sesionCon();
+        admin.rolActivo.codigo = 'ADMINISTRACION';
+        lista.contexto = { sesion: admin, soloLectura: false };
+        conectar(lista);
+        await asentar();
+        assert.equal(tarjetas().length, 2);
+        for (const t of tarjetas()) assert.equal(t.motivo, MENSAJES.soloDoctor);
+        const [primera] = tarjetas();
+        conectar(primera);
+        assert.equal(primera.shadowRoot.getElementById('atender').disabled, true);
+        assert.equal(navegaciones.length, 0);
+    });
+
     test('sin red, "Atender" se deshabilita en las tarjetas sin reconstruirlas', async () => {
         const { lista, tarjetas, conexion } = montarLista();
         conectar(lista);

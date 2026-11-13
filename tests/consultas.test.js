@@ -150,6 +150,22 @@ describe('motivoNoAtender', () => {
         assert.equal(motivoNoAtender(abierta, { enLinea: false }), MENSAJES.sinRedAtender);
         assert.equal(motivoNoAtender(abierta, { soloLectura: true }), MENSAJES.sinRedAtender);
     });
+    test('con el rol DOCTOR se aplican las demás reglas', () => {
+        assert.equal(motivoNoAtender(abierta, { rol: 'DOCTOR' }), null);
+        assert.equal(motivoNoAtender(abierta, { rol: 'DOCTOR', enLinea: false }), MENSAJES.sinRedAtender);
+    });
+    test('un rol que no es DOCTOR no atiende, y ese motivo va antes que todos los demás', () => {
+        const [cerrada] = normalizarConsultas([consulta(1, { fechaFin: '2026-11-13T10:00:00-06:00' })]);
+        const [ajena] = normalizarConsultas([consulta(1, { pendienteParaMi: false })]);
+        assert.equal(MENSAJES.soloDoctor, 'Solo el rol Doctor puede atender consultas.');
+        for (const rol of ['ADMINISTRACION', null, '']) {
+            assert.equal(motivoNoAtender(abierta, { rol }), MENSAJES.soloDoctor, `rol ${rol}`);
+            assert.equal(motivoNoAtender(cerrada, { rol }), MENSAJES.soloDoctor);
+            assert.equal(motivoNoAtender(ajena, { rol }), MENSAJES.soloDoctor);
+            assert.equal(motivoNoAtender(abierta, { rol, enLinea: false, soloLectura: true }), MENSAJES.soloDoctor);
+            assert.equal(motivoNoAtender(null, { rol }), MENSAJES.soloDoctor);
+        }
+    });
 });
 
 describe('textos', () => {
@@ -339,6 +355,16 @@ describe('ControladorConsultas: atender', () => {
         controlador.atender(UUID(1));
         assert.notEqual(controlador.estado.navegarA, primera, 'otro objeto: la vista vuelve a navegar');
         assert.equal(controlador.atender(UUID(99)), false);
+    });
+
+    test('con el rol ADMINISTRACION no publica la ruta aunque la consulta sea pendiente para él', async () => {
+        const { controlador } = preparar();
+        const admin = sesionCon();
+        admin.rolActivo.codigo = 'ADMINISTRACION';
+        await controlador.iniciar(admin);
+        assert.deepEqual(controlador.contextoAtender(), { enLinea: true, soloLectura: false, rol: 'ADMINISTRACION' });
+        assert.equal(controlador.atender(UUID(1)), false);
+        assert.equal(controlador.estado.navegarA, null);
     });
 
     test('sin red no se puede atender', async () => {

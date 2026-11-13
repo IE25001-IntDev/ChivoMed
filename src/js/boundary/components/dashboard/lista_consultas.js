@@ -137,8 +137,8 @@ class ListaConsultas extends HTMLElement {
         }
     }
 
-    #motivo(consulta, estado) {
-        return motivoNoAtender(consulta, { enLinea: estado.enLinea, soloLectura: estado.soloLectura });
+    #motivo(consulta) {
+        return motivoNoAtender(consulta, this.#controlador.contextoAtender());
     }
 
     #pintarTarjetas(estado) {
@@ -147,7 +147,7 @@ class ListaConsultas extends HTMLElement {
             const tarjeta = document.createElement("tarjeta-consulta-dashboard");
             tarjeta.consulta = consulta;
             tarjeta.valores = estado.valores;
-            tarjeta.motivo = this.#motivo(consulta, estado);
+            tarjeta.motivo = this.#motivo(consulta);
             tarjeta.addEventListener("ver-registro", e => { e.stopPropagation(); this.#controlador.alternarRegistro(e.detail.idPaso); });
             tarjeta.addEventListener("reintentar-registro", e => { e.stopPropagation(); this.#controlador.cargarRegistro(e.detail.idPaso); });
             tarjeta.addEventListener("atender", e => { e.stopPropagation(); this.#controlador.atender(e.detail.idConsulta); });
@@ -160,7 +160,7 @@ class ListaConsultas extends HTMLElement {
     #pintarMotivos(estado) {
         for (const consulta of estado.consultas) {
             const tarjeta = this.#tarjetas.get(consulta.idConsulta);
-            if (tarjeta) tarjeta.motivo = this.#motivo(consulta, estado);
+            if (tarjeta) tarjeta.motivo = this.#motivo(consulta);
         }
     }
 

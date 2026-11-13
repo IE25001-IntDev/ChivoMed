@@ -36,6 +36,7 @@ export const MENSAJES = Object.freeze({
     cerrada: "Esta consulta ya está cerrada.",
     sinPendiente: "No tienes pasos pendientes en esta consulta.",
     sinRedAtender: "Sin conexión: para atender una consulta necesitas red.",
+    soloDoctor: "Solo el rol Doctor puede atender consultas.",
     sinConsultas: "No hay consultas en estas fechas.",
 });
 
@@ -124,8 +125,15 @@ export function arbolDePasos(pasos) {
     return congelar(raiz.map(congelarNodo));
 }
 
-/** null si la consulta se puede atender; si no, el motivo para mostrar junto al botón. */
-export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false } = {}) {
+/** Único rol al que el backend le permite atender una consulta (HU4). */
+export const ROL_ATIENDE = "DOCTOR";
+
+/**
+ * null si la consulta se puede atender; si no, el motivo para mostrar junto al botón.
+ * `rol` es el código del rol activo; si se indica y no es DOCTOR, ese motivo va antes que todos.
+ */
+export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false, rol } = {}) {
+    if (rol !== undefined && rol !== ROL_ATIENDE) return MENSAJES.soloDoctor;
     if (!consulta) return MENSAJES.sinPendiente;
     if (consulta.fechaFin) return MENSAJES.cerrada;
     if (!consulta.pendienteParaMi) {
@@ -373,10 +381,16 @@ export class ControladorConsultas {
         }
     }
 
+    /** Lo que decide motivoNoAtender, tomado del estado: red, solo lectura y código del rol activo. */
+    contextoAtender() {
+        const { enLinea, soloLectura, sesion } = this.estado;
+        return { enLinea, soloLectura, rol: sesion?.rolActivo?.codigo ?? null };
+    }
+
     /** Publica la ruta de la consulta solo si se puede atender. Devuelve true si la publicó. */
     atender(idConsulta) {
         const consulta = this.estado.consultas.find(c => c.idConsulta === idConsulta);
-        if (!consulta || motivoNoAtender(consulta, { enLinea: this.estado.enLinea, soloLectura: this.estado.soloLectura })) return false;
+        if (!consulta || motivoNoAtender(consulta, this.contextoAtender())) return false;
         this.estado.navegarA = congelar({ ruta: `/consulta/${consulta.idConsulta}` });
         return true;
     }
