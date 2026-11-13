@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.9";
+    const VERSION = "2026-11-13.10";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -43,6 +43,7 @@
         "./resources/pwa.css",
         "./resources/consultas.css",
         "./resources/consulta.css",
+        "./resources/citas.css",
         "./js/boundary/theme_init.js",
         "./js/boundary/router.js",
         "./js/boundary/rutas.js",
@@ -57,10 +58,13 @@
         "./js/boundary/components/consulta/panel_cierre_consulta.js",
         "./js/boundary/components/consulta/panel_examenes_paso.js",
         "./js/boundary/components/consulta/panel_paso_actual.js",
+        "./js/boundary/components/citas/indicador_pasos.js",
+        "./js/boundary/components/citas/tarjeta_cita.js",
         "./js/boundary/components/dashboard/lista_consultas.js",
         "./js/boundary/components/dashboard/tarjeta_consulta_dashboard.js",
         "./js/boundary/vistas/estilos.js",
         "./js/boundary/vistas/controlador_login.js",
+        "./js/boundary/vistas/controlador_citas.js",
         "./js/boundary/vistas/controlador_consulta.js",
         "./js/boundary/vistas/controlador_dashboard.js",
         "./js/boundary/vistas/controlador_consultas.js",
@@ -80,6 +84,7 @@
         "./js/control/auth_service.js",
         "./js/control/api_config.js",
         "./js/control/atencion_service.js",
+        "./js/control/citas_publicas_service.js",
         "./js/control/default_service.js",
         "./js/control/estado_reactivo.js",
         "./js/control/formato_documento.js",

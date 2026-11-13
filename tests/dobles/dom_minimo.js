@@ -4,7 +4,7 @@
  * (id, className, hidden, disabled, checked, type, name, value), texto, eventos (EventTarget),
  * <template> con innerHTML y content.cloneNode, Shadow DOM abierto, getElementById,
  * querySelector(All) con selectores simples compuestos (tag, #id, .clase, [attr="v"], :checked)
- * foco y creación de Web Components registrados con document.createElement. Los eventos no
+ * foco, click() y remove(), y creación de Web Components registrados con document.createElement. Los eventos no
  * burbujean por el árbol, y agregar un elemento no llama a connectedCallback (usar conectar()).
  * No hay layout, estilos, CSS ni parseo de HTML general: la plantilla debe estar bien formada.
  *
@@ -122,6 +122,11 @@ class Elemento extends Contenedor {
         const raiz = raizDe(this);
         if (raiz instanceof RaizSombra) raiz.activeElement = this;
     }
+
+    /** Como el navegador: emite 'click' (sin burbujear; ver la nota de arriba). */
+    click() { this.dispatchEvent(new Event("click")); }
+
+    remove() { this.parentNode?.childNodes.splice(this.parentNode.childNodes.indexOf(this), 1); this.parentNode = null; }
 
     cloneNode(profundo = false) {
         const copia = crearElemento(this.localName);
