@@ -63,6 +63,26 @@ const MENSAJES = Object.freeze({
 });
 
 /**
+ * Mensajes por `code` del cuerpo de error del backend; tienen prioridad sobre los del status.
+ * auth.origen: el backend solo acepta escrituras desde los orígenes de CHIVOMED_ORIGINS
+ * (por defecto el puerto 3000 de localhost/127.0.0.1).
+ */
+export const MENSAJES_POR_CODIGO = Object.freeze({
+    "auth.origen": "El servidor no acepta este origen; abre la app en http://localhost:3000",
+});
+
+/** `code` del cuerpo JSON de error, o null si no hay uno legible. No expone el resto del cuerpo. */
+async function codigoDeError(respuesta) {
+    try {
+        if (!respuesta.headers.get("Content-Type")?.includes("application/json")) return null;
+        const { code } = await respuesta.json();
+        return typeof code === "string" && code ? code : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * @param {string} ruta relativa a la API, p. ej. "auth/me" o "publico/tipos-documento"
  * @param {{ method?: string, datos?: unknown, csrfToken?: string, tipo?: "login"|"sesion"|"publico" }} opciones
  *   `tipo` elige los mensajes; solo las rutas de sesión avisan "sesion-expirada" ante un 401.
@@ -94,7 +114,9 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesio
             429: "Hay demasiados intentos. Espera un momento antes de volver a intentarlo.",
         };
         const general = tipo === "publico" ? MENSAJES.publico[400] : "El servicio no está disponible. Inténtalo más tarde.";
-        throw new AuthError(mensajes[respuesta.status] ?? general, respuesta.status);
+        const codigo = await codigoDeError(respuesta);
+        const porCodigo = codigo && Object.hasOwn(MENSAJES_POR_CODIGO, codigo) ? MENSAJES_POR_CODIGO[codigo] : null;
+        throw new AuthError(porCodigo ?? mensajes[respuesta.status] ?? general, respuesta.status, codigo);
     }
     return respuesta;
 }

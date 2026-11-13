@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { iniciarSesion, obtenerSesion, cerrarSesion, listarTiposDocumento } from "../src/js/control/auth_service.js";
+import { iniciarSesion, obtenerSesion, cerrarSesion, listarTiposDocumento, MENSAJES_POR_CODIGO } from "../src/js/control/auth_service.js";
 
 const TIPO = "10000000-0000-4000-8000-0000000000aa";
 
@@ -75,6 +75,23 @@ test("un login rechazado no consulta /me, no expone el error interno ni avisa se
     });
     assert.equal(peticiones, 1);
     assert.equal(expiraciones.valor, 0);
+});
+
+test("un 403 auth.origen del login explica el origen; los demás 403 conservan su mensaje", async () => {
+    const error403 = code => async () => Response.json({ status: 403, code, message: "Detalle interno" }, { status: 403 });
+    globalThis.fetch = error403("auth.origen");
+    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
+        status: 403, code: "auth.origen", message: MENSAJES_POR_CODIGO["auth.origen"],
+    });
+    assert.match(MENSAJES_POR_CODIGO["auth.origen"], /http:\/\/localhost:3000/);
+    for (const code of ["auth.csrf", "constructor", null]) {
+        globalThis.fetch = error403(code);
+        await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
+            status: 403, message: "Este acceso es solo para personal médico y administrativo.",
+        });
+    }
+    globalThis.fetch = async () => new Response("<html>403</html>", { status: 403, headers: { "Content-Type": "text/html" } });
+    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), error => error.code === null && /solo para personal/.test(error.message));
 });
 
 test("un 401 de /auth/me sí avisa sesión expirada", async () => {
