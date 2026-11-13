@@ -41,6 +41,7 @@ export const MENSAJES = Object.freeze({
     conexion: "No pudimos conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
     generico: "No pudimos completar la operación. Inténtalo de nuevo.",
     detalle: "No pudimos cargar el paso actual. Inténtalo de nuevo.",
+    cargandoPaso: "Cargando el paso actual…",
     reabierto: "Paso reabierto: se cargó lo que se había registrado. Al avanzar se guardará lo que esté en este campo.",
     sinPendientes: "No quedan pasos pendientes en esta consulta.",
     retrocesoConOrdenes: "Este paso ya tiene órdenes de examen; no se puede retroceder.",
@@ -436,8 +437,16 @@ export class ControladorConsulta {
         const paso = this.pasoActual;
         if (!paso) return MENSAJES.sinPendientes;
         const { detalle } = this.estado;
-        if (detalle.idPaso !== paso.idConsultaProcedimientoPaso || detalle.cargando || detalle.error) return MENSAJES.detalle;
+        if (detalle.error) return detalle.error;
+        if (detalle.idPaso !== paso.idConsultaProcedimientoPaso || detalle.cargando) return MENSAJES.cargandoPaso;
         return null;
+    }
+
+    /** Vuelve a cargar todo (botón "Volver a intentar" de un error de carga). */
+    reintentar() {
+        if (!this.estado.idConsulta) return Promise.resolve();
+        Object.assign(this.estado, { error: null, enCurso: null, errorAccion: null });
+        return this.#cargar({ retomar: true });
     }
 
     /** null si se puede pedir el retroceso; si no, su motivo. Solo se ofrece si el paso no es el primero. */

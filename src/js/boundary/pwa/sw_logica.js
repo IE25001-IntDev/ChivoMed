@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.5";
+    const VERSION = "2026-11-13.6";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -42,6 +42,7 @@
         "./resources/components.css",
         "./resources/pwa.css",
         "./resources/consultas.css",
+        "./resources/consulta.css",
         "./js/boundary/theme_init.js",
         "./js/boundary/router.js",
         "./js/boundary/rutas.js",
@@ -53,10 +54,14 @@
         "./js/boundary/components/component_styles.js",
         "./js/boundary/components/install_prompt.js",
         "./js/boundary/components/estado_conexion.js",
+        "./js/boundary/components/consulta/panel_cierre_consulta.js",
+        "./js/boundary/components/consulta/panel_examenes_paso.js",
+        "./js/boundary/components/consulta/panel_paso_actual.js",
         "./js/boundary/components/dashboard/lista_consultas.js",
         "./js/boundary/components/dashboard/tarjeta_consulta_dashboard.js",
         "./js/boundary/vistas/estilos.js",
         "./js/boundary/vistas/controlador_login.js",
+        "./js/boundary/vistas/controlador_consulta.js",
         "./js/boundary/vistas/controlador_dashboard.js",
         "./js/boundary/vistas/controlador_consultas.js",
         "./js/boundary/vistas/memoria_vistas.js",
@@ -77,10 +82,27 @@
         "./js/control/atencion_service.js",
         "./js/control/default_service.js",
         "./js/control/estado_reactivo.js",
+        "./js/control/consulta_procedimiento_paso_service.js",
+        "./js/control/consulta_procedimiento_service.js",
+        "./js/control/consulta_service.js",
+        "./js/control/examen_resultado_service.js",
+        "./js/control/orden_examen_service.js",
+        "./js/control/procedimiento_paso_examen_service.js",
+        "./js/control/procedimiento_paso_secuencia_service.js",
+        "./js/control/procedimiento_paso_service.js",
         "./js/entities/atencion.js",
         "./js/entities/default_entity.js",
         "./js/entities/default_error.js",
         "./js/entities/default_response.js",
+        "./js/entities/consulta.js",
+        "./js/entities/consulta_procedimiento.js",
+        "./js/entities/consulta_procedimiento_paso.js",
+        "./js/entities/examen.js",
+        "./js/entities/examen_resultado.js",
+        "./js/entities/orden_examen.js",
+        "./js/entities/procedimiento_paso.js",
+        "./js/entities/procedimiento_paso_examen.js",
+        "./js/entities/procedimiento_paso_secuencia.js",
     ]);
 
     const ESTRATEGIAS = Object.freeze({
