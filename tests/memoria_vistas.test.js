@@ -21,6 +21,14 @@ describe('MemoriaVistas', () => {
         assert.equal(m.leer(null), null);
     });
 
+    test('la primera sesión (al iniciar sesión) borra lo guardado sin sesión, como la búsqueda pública', () => {
+        const m = new MemoriaVistas();
+        m.guardar('publico:citas', { numeroDocumento: '12345678-9' });
+        m.recordarSesion(sesion(1));
+        assert.equal(m.leer('publico:citas'), null);
+        assert.equal(m.sesion.usuario.idUsuario, UUID(1));
+    });
+
     test('recordar la sesión del mismo usuario conserva los datos', () => {
         const m = new MemoriaVistas();
         m.recordarSesion(sesion(1));
@@ -69,13 +77,13 @@ describe('MemoriaVistas: reactiva', () => {
     test('guardar, recordarSesion y limpiar notifican a los suscriptores', async () => {
         const m = new MemoriaVistas();
         const { lotes } = espiar(m);
-        m.guardar('a', 1);
-        await tick();
         m.recordarSesion(sesion(1));
+        await tick();
+        m.guardar('a', 1);
         await tick();
         m.limpiar();
         await tick();
-        assert.deepEqual(lotes, [['datos'], ['sesion'], ['datos', 'sesion']]);
+        assert.deepEqual(lotes, [['sesion'], ['datos'], ['datos', 'sesion']]);
     });
 
     test('guardar el mismo valor, limpiar lo vacío o una clave nula no notifican', async () => {

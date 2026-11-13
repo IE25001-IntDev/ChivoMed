@@ -4,8 +4,8 @@
  * recargar y se borran al cerrar o perder la sesión. Sirven para seguir mostrando datos sin red.
  *
  * También guarda la última sesión de empleado verificada con /auth/me, que el router usa como
- * respaldo de solo lectura cuando no hay red. Si se recuerda la sesión de otro usuario, se borra
- * todo lo anterior: los datos de una cuenta nunca se muestran a otra.
+ * respaldo de solo lectura cuando no hay red. Si se recuerda la primera sesión o la de otro usuario,
+ * se borra todo lo anterior: los datos de una cuenta (o los públicos) nunca se muestran a otra.
  *
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
@@ -46,7 +46,9 @@ export class MemoriaVistas {
     recordarSesion(sesion) {
         const id = sesion?.usuario?.idUsuario;
         if (typeof id !== "string" || !id) return;
-        if (this.#estado.sesion && this.#estado.sesion.usuario.idUsuario !== id) this.#estado.datos = VACIO;
+        // Al iniciar sesión (no había) o cambiar de usuario se borra todo: lo guardado sin sesión
+        // (la búsqueda pública de citas, con su número de documento) nunca pasa a una sesión.
+        if (this.#estado.sesion?.usuario.idUsuario !== id) this.#estado.datos = VACIO;
         this.#estado.sesion = sesion;
     }
 
