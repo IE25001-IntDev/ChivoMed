@@ -1,7 +1,7 @@
 /* Shadow DOM de <app-shell> y <session-bar>. */
 :host(app-shell) { display: flex; flex-direction: column; min-height: 100vh; }
 :host(session-bar) { display: block; }
-:host([hidden]) { display: none; }
+:host([hidden]) { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; } /* El box-sizing global no entra al Shadow DOM. */
 
 .saltar {

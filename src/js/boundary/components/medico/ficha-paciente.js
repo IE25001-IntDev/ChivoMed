@@ -62,6 +62,7 @@ class FichaPaciente extends HTMLElement {
         if (!this._consulta) {
             this.shadowRoot.innerHTML = `
                 <style>
+                    :host([hidden]) { display: none !important; }
                     :host {
                         display: block;
                         background: var(--glass, rgba(29, 51, 56, 0.7));
@@ -93,6 +94,7 @@ class FichaPaciente extends HTMLElement {
 
         this.shadowRoot.innerHTML = `
             <style>
+                :host([hidden]) { display: none !important; }
                 :host {
                     display: block;
                     background: var(--glass, rgba(29, 51, 56, 0.7));

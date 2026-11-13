@@ -91,6 +91,7 @@ class WorkbenchMedico extends HTMLElement {
         if (!this._consulta) {
             this.shadowRoot.innerHTML = `
                 <style>
+                    :host([hidden]) { display: none !important; }
                     :host {
                         display: flex;
                         flex-direction: column;
@@ -132,6 +133,7 @@ class WorkbenchMedico extends HTMLElement {
 
         this.shadowRoot.innerHTML = `
             <style>
+                :host([hidden]) { display: none !important; }
                 :host {
                     display: flex;
                     flex-direction: column;

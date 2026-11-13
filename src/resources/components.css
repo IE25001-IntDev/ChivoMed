@@ -1,4 +1,5 @@
 /* Loaded by the document before upgrade and inside each Shadow DOM. */
+:host([hidden]) { display: none !important; }
 :host {
   display: block;
   font-family: inherit;

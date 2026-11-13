@@ -79,6 +79,7 @@ class PanelProtocolos extends HTMLElement {
 
         this.shadowRoot.innerHTML = `
             <style>
+                :host([hidden]) { display: none !important; }
                 :host {
                     display: flex;
                     flex-direction: column;

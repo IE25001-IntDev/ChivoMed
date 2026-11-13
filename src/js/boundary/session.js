@@ -34,7 +34,7 @@ class SessionBar extends HTMLElement {
         try {
             const sesion = await obtenerSesion();
             const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
-            root.innerHTML = `<style>:host{display:block}nav{display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.7rem 1rem;background:var(--surface-solid,#edf5f2);color:var(--text,#183f35);font:inherit}a,button{color:inherit;font:inherit}button{cursor:pointer;min-height:44px;padding:.5rem 1rem;border:1px solid currentColor;border-radius:.6rem;background:transparent}p{margin:0}</style><nav aria-label="Tu sesión"><span></span><a>Mi cuenta</a><button type="button">Cerrar sesión</button><p role="status"></p></nav>`;
+            root.innerHTML = `<style>:host([hidden]) { display: none !important; }:host{display:block}nav{display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.7rem 1rem;background:var(--surface-solid,#edf5f2);color:var(--text,#183f35);font:inherit}a,button{color:inherit;font:inherit}button{cursor:pointer;min-height:44px;padding:.5rem 1rem;border:1px solid currentColor;border-radius:.6rem;background:transparent}p{margin:0}</style><nav aria-label="Tu sesión"><span></span><a>Mi cuenta</a><button type="button">Cerrar sesión</button><p role="status"></p></nav>`;
             root.querySelector("span").textContent = `${sesion.usuario.nombres} · ${ROLES[sesion.rolActivo.codigo]} · ${sesion.rolActivo.nombreClinica}`;
             root.querySelector("a").href = urlAplicacion("inicio.html");
             root.querySelector("button").onclick = async event => {
