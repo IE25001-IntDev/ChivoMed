@@ -1,5 +1,7 @@
 /* Shadow DOM de las vistas: tarjetas, formularios y botones. Los tokens vienen de app.css. */
 :host { display: block; }
+/* Sin esto, :host { display: block } gana a la regla [hidden] del navegador y un host oculto se ve. */
+:host([hidden]) { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; } /* El box-sizing global no entra al Shadow DOM. */
 
 .tarjeta {
