@@ -29,6 +29,7 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend:
 ## Contrato con el backend
 - Autenticación por sesión HTTP (cookie `JSESSIONID`, HttpOnly). Toda petición que no sea GET/HEAD/OPTIONS debe enviar la cabecera `X-CSRF-Token`; el token se obtiene de `GET /api/auth/me`.
 - El backend NO implementa CORS. Todo pasa por el proxy del puerto 3000 para que sea same-origin. No llamar al puerto 9080 directamente desde el navegador.
+- El frontend debe correr en el puerto 3000 (`http://localhost:3000` o `http://127.0.0.1:3000`). El backend rechaza toda petición que no sea GET/HEAD/OPTIONS cuyo `Origin` no esté en `CHIVOMED_ORIGINS` (por defecto, esos dos), con 403 `auth.origen`; en otro puerto ni el login funciona. No cambiar `PORT` en `.env` ni levantar el servidor en otro puerto para probar contra el backend real.
 - Los DTOs son planos: las relaciones viajan como UUID (`idPersona`, `idClinica`, ...), nunca como objetos anidados. Las colecciones hijas se piden con `GET /api/{recurso}/{id}/{subcoleccion}`.
 - Roles: `ADMINISTRACION`, `DOCTOR`, `PACIENTE`. El backend aplica permisos por rol activo y aísla datos por clínica; un 403 es comportamiento esperado, no un bug del frontend.
 - Evitar cascadas de peticiones N+1. `PatientPortalService.ordenesDelPaciente` ya tiene ese problema y no debe replicarse en código nuevo.
