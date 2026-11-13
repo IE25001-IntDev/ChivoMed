@@ -12,7 +12,9 @@ class DefaultService {
         this.credentials = opciones.credentials ?? API_CONFIG.credentials;
         this.headers = new Headers(opciones.headers);
         this.fetchImpl = opciones.fetchImpl ?? globalThis.fetch.bind(globalThis);
-        this.autenticar = opciones.autenticar ?? (typeof window === "undefined" ? null : verificarSesionActual);
+        // `autenticar: null` es explícito (rutas públicas, sin CSRF ni auth/me): no se reemplaza por el valor por defecto.
+        this.autenticar = Object.hasOwn(opciones, "autenticar") ? opciones.autenticar
+            : (typeof window === "undefined" ? null : verificarSesionActual);
         this.metodos = new Set(opciones.metodos ?? ["POST", "PUT", "PATCH", "DELETE"]);
     }
 
@@ -23,8 +25,12 @@ class DefaultService {
         return `${this.recurso}/${encodeURIComponent(id)}`;
     }
 
+    /**
+     * `respuesta: "blob"` lee un cuerpo exitoso como Blob (p. ej. un PDF) en `data`; los errores se
+     * siguen leyendo como JSON.
+     */
     async solicitar(metodo, ruta, { data, filtros = {}, Entidad = this.Entidad,
-        headers: adicionales, ...opciones } = {}) {
+        headers: adicionales, respuesta: modo = "json", ...opciones } = {}) {
         const query = new URLSearchParams();
         for (const [campo, valor] of Object.entries(filtros)) {
             if (valor !== undefined && valor !== null) query.set(campo, valor);
@@ -48,12 +54,14 @@ class DefaultService {
         const body = data === undefined ? undefined : JSON.stringify(data);
         let respuesta;
         let texto;
+        let blob = null;
         try {
             respuesta = await this.fetchImpl(url, {
                 credentials: this.credentials, cache: "no-store", redirect: "error",
                 signal: AbortSignal.timeout(10000), ...opciones, method: metodo, headers, body,
             });
-            texto = await respuesta.text();
+            if (modo === "blob" && respuesta.ok) blob = await respuesta.blob();
+            else texto = await respuesta.text();
         } catch (cause) {
             const cancelada = cause.name === "AbortError" || opciones.signal?.aborted;
             throw new DefaultError({ status: 0,
@@ -62,6 +70,9 @@ class DefaultService {
                 path: url, cause });
         }
         const cabeceras = Object.fromEntries(respuesta.headers.entries());
+        if (blob) {
+            return new DefaultResponse({ status: respuesta.status, message: respuesta.statusText, data: blob, headers: cabeceras });
+        }
         let datos = null;
         if (texto) {
             try {

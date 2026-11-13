@@ -388,4 +388,46 @@ describe('DefaultService (Suite de Pruebas Unitarias P2-2)', () => {
         await subservicio.listar();
         assert.equal(peticionCapturada.url, 'http://api.local/personas/uuid-persona-1/documentos');
     });
+
+    test('respuesta "blob": data es un Blob y se conservan las cabeceras', async () => {
+        const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+        const servicio = new DefaultService('publico', null, {
+            baseUrl: 'http://api.local', autenticar: null,
+            fetchImpl: async () => new Response(pdf, { status: 200, headers: {
+                'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="x.pdf"' } }),
+        });
+        const res = await servicio.solicitar('POST', 'publico/x', { data: { a: 1 }, respuesta: 'blob' });
+        assert.ok(res.data instanceof Blob);
+        assert.deepEqual([...new Uint8Array(await res.data.arrayBuffer())], [...pdf]);
+        assert.equal(res.headers['content-type'], 'application/pdf');
+        assert.equal(res.headers['content-disposition'], 'attachment; filename="x.pdf"');
+    });
+
+    test('respuesta "blob": un error se sigue leyendo como JSON', async () => {
+        const servicio = new DefaultService('publico', null, {
+            baseUrl: 'http://api.local', autenticar: null,
+            fetchImpl: async () => new Response(JSON.stringify({ code: 'cita.noExiste', message: 'No encontramos esa cita.' }),
+                { status: 404, headers: { 'Content-Type': 'application/json' } }),
+        });
+        await assert.rejects(servicio.solicitar('POST', 'publico/x', { data: {}, respuesta: 'blob' }),
+            e => e instanceof DefaultError && e.status === 404 && e.code === 'cita.noExiste');
+    });
+
+    test('autenticar: null desactiva CSRF y auth/me en escrituras', async () => {
+        let headers = null;
+        // En el navegador el valor por defecto es verificarSesionActual: null debe ganarle.
+        globalThis.window = {};
+        let servicio;
+        try {
+            servicio = new DefaultService('publico', null, {
+                baseUrl: 'http://api.local', autenticar: null,
+                fetchImpl: async (_url, opts) => { headers = opts.headers; return new Response('[]', { status: 200 }); },
+            });
+        } finally {
+            delete globalThis.window;
+        }
+        assert.equal(servicio.autenticar, null);
+        await servicio.solicitar('POST', 'publico/x', { data: {} });
+        assert.equal(headers.has('X-CSRF-Token'), false);
+    });
 });
