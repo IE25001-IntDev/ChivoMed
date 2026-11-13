@@ -21,10 +21,10 @@ Frontend de GalenoSV, un sistema de gestión clínica. El backend vive en `../ga
 
 ## Arquitectura
 Patrón BCE (Boundary-Control-Entity), igual que el backend:
-- `src/js/boundary/`: Web Components y controladores de vista.
-- `src/js/control/`: servicios HTTP que extienden `DefaultService`.
+- `src/js/boundary/`: router (`router.js`, `rutas.js`), vistas y sus controladores sin DOM (`vistas/`), Web Components (`components/`, con `citas/`, `dashboard/` y `consulta/`) y la PWA (`pwa/`).
+- `src/js/control/`: servicios HTTP que extienden `DefaultService`, más `auth_service.js` y `estado_reactivo.js`.
 - `src/js/entities/`: modelos que extienden `DefaultEntity`.
-- Páginas por rol en `src/paginas/` (`personal/`, `medico/`, `pacientes/`). Entradas: `src/index.html` (login) y `src/inicio.html` (verificación de sesión y selección de rol).
+- SPA con una sola entrada: `src/index.html` solo contiene `<app-shell>`, que monta la vista de cada ruta por hash (`#/citas`, `#/login`, `#/dashboard`, `#/consulta/:id`). `src/sw.js` es el service worker; la lista `PRECACHE` de `pwa/sw_logica.js` debe ser exactamente lo que la SPA carga (`tests/precache.test.js`).
 
 ## Contrato con el backend
 - Autenticación por sesión HTTP (cookie `JSESSIONID`, HttpOnly). Toda petición que no sea GET/HEAD/OPTIONS debe enviar la cabecera `X-CSRF-Token`; el token se obtiene de `GET /api/auth/me`.
@@ -32,10 +32,10 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend:
 - El frontend debe correr en el puerto 3000 (`http://localhost:3000` o `http://127.0.0.1:3000`). El backend rechaza toda petición que no sea GET/HEAD/OPTIONS cuyo `Origin` no esté en `CHIVOMED_ORIGINS` (por defecto, esos dos), con 403 `auth.origen`; en otro puerto ni el login funciona. No cambiar `PORT` en `.env` ni levantar el servidor en otro puerto para probar contra el backend real.
 - Los DTOs son planos: las relaciones viajan como UUID (`idPersona`, `idClinica`, ...), nunca como objetos anidados. Las colecciones hijas se piden con `GET /api/{recurso}/{id}/{subcoleccion}`.
 - Roles: `ADMINISTRACION`, `DOCTOR`, `PACIENTE`. El backend aplica permisos por rol activo y aísla datos por clínica; un 403 es comportamiento esperado, no un bug del frontend.
-- Evitar cascadas de peticiones N+1. `PatientPortalService.ordenesDelPaciente` ya tiene ese problema y no debe replicarse en código nuevo.
+- Evitar cascadas de peticiones N+1: usar los endpoints agregados del backend en vez de pedir cada elemento por separado.
 
 ## Convenciones
-- Archivos JS en `snake_case` (`patient_portal_service.js`). Web Components en kebab-case (`panel-catalogo-simple`).
+- Archivos JS en `snake_case` (`citas_publicas_service.js`). Web Components en kebab-case (`tarjeta-cita`).
 
 **Estado reactivo y plantillas** (norma desde 2026-11-13)
 - Cada vista tiene un controlador sin DOM cuyo estado es un `crearEstado(...)` de `src/js/control/estado_reactivo.js`. El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
