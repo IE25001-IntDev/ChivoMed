@@ -66,7 +66,7 @@ h2 { margin: var(--espacio-6) 0 var(--espacio-3); font-size: 1.2rem; line-height
 .mensaje-error:focus, .aviso-motivo:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
 .grupos-clinica { display: grid; gap: var(--espacio-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
 .grupo-clinica {
-  display: grid; gap: var(--espacio-2); margin: 0; padding: var(--espacio-3) var(--espacio-4) var(--espacio-4);
+  display: grid; align-content: start; gap: var(--espacio-2); margin: 0; padding: var(--espacio-3) var(--espacio-4) var(--espacio-4);
   border: 1px solid var(--border-strong); border-radius: 12px;
 }
 .grupo-clinica legend { padding: 0 var(--espacio-1); font-weight: 700; }
