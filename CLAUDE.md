@@ -16,7 +16,7 @@ Frontend de GalenoSV, un sistema de gestión clínica. El backend vive en `../ga
 - No ejecutar docker ni tocar la base de datos.
 - Proponer un plan antes de cambios que afecten más de 3 archivos.
 - Correr `npm test` antes de dar una tarea por terminada e informar el resultado real, sin suponerlo.
-- Rama de trabajo actual: `integracion-vistas`, compartida con otros compañeros. No hacer force push, no reescribir historial y no tocar archivos ajenos a la tarea.
+- Rama de trabajo actual: `spa`, compartida con otros compañeros. No hacer force push, no reescribir historial y no tocar archivos ajenos a la tarea.
 - Nunca poner datos reales de pacientes en código, mocks, pruebas ni commits.
 
 ## Arquitectura
