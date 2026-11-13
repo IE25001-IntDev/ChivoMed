@@ -29,10 +29,10 @@
 .paso.actual .numero-paso { background: var(--accent); color: var(--on-accent); }
 .nombre-paso { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .9rem; }
 
+/* En pantallas angostas solo los números: el <h2> del paso ya dice su nombre y el botón conserva su aria-label. */
 @media (max-width: 720px) {
-  .lista-pasos { grid-template-columns: repeat(5, auto); justify-content: start; }
   .nombre-paso { display: none; }
-  .paso.actual .nombre-paso { display: inline; white-space: normal; }
+  .boton-paso, .paso.futuro { justify-content: center; }
 }
 
 /* Pasos del asistente */
