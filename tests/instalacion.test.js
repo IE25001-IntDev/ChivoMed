@@ -240,4 +240,23 @@ describe('<install-prompt>', () => {
         conectar(el);
         assert.throws(() => { el.controlador = controlador; });
     });
+
+    test('sin controlador inyectado crea el suyo con la ventana real y escucha su aviso', async () => {
+        const ventana = crearVentana();
+        globalThis.window = ventana;
+        try {
+            const el = new InstallPrompt();
+            assert.equal(el.controlador, null, 'antes de conectar no hay controlador');
+            conectar(el);
+            assert.ok(el.controlador instanceof ControladorInstalacion);
+            const $ = id => el.shadowRoot.getElementById(id);
+            assert.equal($('instalar').hidden, true);
+            ventana.dispatchEvent(crearAviso());
+            await asentar();
+            assert.equal($('instalar').hidden, false);
+            desconectar(el);
+        } finally {
+            delete globalThis.window;
+        }
+    });
 });
