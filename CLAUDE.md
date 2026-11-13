@@ -4,10 +4,10 @@ Frontend de GalenoSV, un sistema de gestión clínica. El backend vive en `../ga
 
 ## Stack
 - Node.js >= 22. JavaScript nativo (ES Modules) y Web Components con Shadow DOM. No hay React, Vue, Angular ni bundler: el código fuente se sirve directamente.
-- Servidor de desarrollo: `npm start` (BrowserSync con proxy inverso, puerto 3000). Alternativa: `node scripts/dev_server.js`.
+- Servidor de desarrollo: `npm start`, que ejecuta `node scripts/dev_server.js` (servidor propio en Node, sin dependencias): sirve `src/` y hace de proxy inverso de `/galenosv/api` hacia `API_URL`, en el puerto 3000.
 - Backend: Java 21, Jakarta EE 11, Open Liberty en el puerto 9080, API en `/galenosv/api`. Base de datos: PostgreSQL en Docker.
 - Variables en `.env`: `API_URL` (por defecto `http://localhost:9080/galenosv/api`) y `PORT` (por defecto `3000`). Nunca imprimir ni commitear valores sensibles.
-- Pruebas: `npm test` (node --test tests/*.test.js) y Playwright para e2e en `tests/browser/` (confirmar el nombre del script en package.json).
+- Pruebas: `npm test` (`node --test tests/*.test.js`). No hay e2e en el repositorio: la prueba contra el backend real se hace a mano en el puerto 3000.
 
 ## Reglas de trabajo
 - Solo se editan archivos dentro de ChivoMed. `../galenasv` es SOLO LECTURA.
