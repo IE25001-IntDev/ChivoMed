@@ -22,6 +22,11 @@
 .estado-red[data-estado="sin-red"] { background: var(--error-fondo); color: var(--error); }
 .estado-red[data-estado="en-linea"] { background: var(--mint-soft); color: var(--accent-text); }
 .punto { flex: none; width: .6rem; height: .6rem; border-radius: 50%; background: currentColor; }
+/* Sin aviso: fuera de la vista, pero sin display:none, para que el lector de pantalla siga escuchando la región. */
+.estado-red[data-aviso="oculto"] {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
 .solo-lectores {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;

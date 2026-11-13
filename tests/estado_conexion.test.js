@@ -1,5 +1,6 @@
 import { test, describe, before, after, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 import { crearVentana, instalarVentana } from './dobles/ventana_doble.js';
 
@@ -43,7 +44,7 @@ describe('<estado-conexion>', () => {
 
     test('en línea al cargar no avisa nada', () => {
         const { estado, texto } = montar();
-        assert.equal(estado.hidden, true);
+        assert.equal(estado.getAttribute('data-aviso'), 'oculto');
         assert.equal(texto(), '');
         assert.equal(estado.getAttribute('data-estado'), 'en-linea');
     });
@@ -51,7 +52,7 @@ describe('<estado-conexion>', () => {
     test('sin red al cargar avisa de inmediato', () => {
         ventana.cambiarRed(false);
         const { estado, texto } = montar();
-        assert.equal(estado.hidden, false);
+        assert.equal(estado.getAttribute('data-aviso'), 'visible');
         assert.equal(texto(), SIN_RED);
         assert.equal(estado.getAttribute('data-estado'), 'sin-red');
     });
@@ -59,7 +60,7 @@ describe('<estado-conexion>', () => {
     test('al perder la red avisa que las acciones que la necesitan están deshabilitadas', () => {
         const { estado, texto } = montar();
         ventana.cambiarRed(false);
-        assert.equal(estado.hidden, false);
+        assert.equal(estado.getAttribute('data-aviso'), 'visible');
         assert.equal(texto(), SIN_RED);
         assert.equal(estado.getAttribute('data-estado'), 'sin-red');
     });
@@ -68,13 +69,13 @@ describe('<estado-conexion>', () => {
         const { estado, texto } = montar();
         ventana.cambiarRed(false);
         ventana.cambiarRed(true);
-        assert.equal(estado.hidden, false);
+        assert.equal(estado.getAttribute('data-aviso'), 'visible');
         assert.equal(texto(), RESTABLECIDA);
         assert.equal(estado.getAttribute('data-estado'), 'en-linea');
         mock.timers.tick(3999);
         assert.equal(texto(), RESTABLECIDA);
         mock.timers.tick(1);
-        assert.equal(estado.hidden, true);
+        assert.equal(estado.getAttribute('data-aviso'), 'oculto');
         assert.equal(texto(), '');
     });
 
@@ -85,7 +86,7 @@ describe('<estado-conexion>', () => {
         mock.timers.tick(1000);
         ventana.cambiarRed(false);
         mock.timers.tick(5000);
-        assert.equal(estado.hidden, false);
+        assert.equal(estado.getAttribute('data-aviso'), 'visible');
         assert.equal(texto(), SIN_RED);
     });
 
@@ -105,5 +106,35 @@ describe('<estado-conexion>', () => {
         desconectar(aviso);
         conectar(aviso);
         assert.equal(aviso.shadowRoot.querySelectorAll('[role="status"]').length, 1);
+    });
+
+    test('la región nunca se oculta al lector de pantalla: en cada cambio solo cambia el texto', () => {
+        const { aviso, estado, texto } = montar();
+        const vistos = [];
+        const revisar = () => {
+            assert.equal(aviso.shadowRoot.getElementById('estado'), estado, 'es siempre el mismo elemento');
+            assert.equal(estado.hidden, false);
+            assert.equal(estado.hasAttribute('aria-hidden'), false);
+            vistos.push(texto());
+        };
+        revisar();
+        ventana.cambiarRed(false);
+        revisar();
+        ventana.cambiarRed(true);
+        revisar();
+        mock.timers.tick(4000);
+        revisar();
+        assert.deepEqual(vistos, ['', SIN_RED, RESTABLECIDA, '']);
+    });
+});
+
+describe('pwa.css: aviso de conexión', () => {
+    test('sin aviso, la franja se recorta a la vista sin display:none ni visibility:hidden', async () => {
+        const css = await readFile(new URL('../src/resources/pwa.css', import.meta.url), 'utf8');
+        const regla = /\.estado-red\[data-aviso="oculto"\]\s*\{([^}]*)\}/.exec(css);
+        assert.ok(regla, 'existe la regla para data-aviso="oculto"');
+        assert.match(regla[1], /clip:\s*rect\(0 0 0 0\)/);
+        assert.doesNotMatch(regla[1], /display:\s*none|visibility:\s*hidden/);
+        assert.doesNotMatch(css, /\.estado-red[^{]*\{[^}]*display:\s*none/, 'ninguna regla de la franja la quita del árbol de accesibilidad');
     });
 });

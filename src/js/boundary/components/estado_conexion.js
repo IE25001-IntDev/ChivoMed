@@ -1,6 +1,9 @@
 /**
  * <estado-conexion>: avisa si la app está en línea o sin conexión.
- * La región aria-live existe siempre para que los lectores de pantalla anuncien cada cambio.
+ * La región aria-live (role="status") está siempre en el árbol de accesibilidad: nunca lleva `hidden`
+ * ni display:none, porque muchos lectores no anuncian una región que aparece a la vez que su texto.
+ * Solo cambia el texto; sin aviso, la franja se oculta a la vista (data-aviso="oculto", recortada como
+ * .solo-lectores en pwa.css) y queda vacía.
  * Las vistas deshabilitan sus acciones de red suscribiéndose a `conexion` (pwa/conexion.js).
  */
 import { conexion } from "../pwa/conexion.js";
@@ -8,7 +11,7 @@ import { hojaDeEstilos } from "../vistas/estilos.js";
 import { plantilla } from "../plantilla.js";
 
 const PLANTILLA = plantilla(`
-<div class="estado-red" id="estado" role="status" aria-live="polite" aria-atomic="true">
+<div class="estado-red" id="estado" role="status" aria-live="polite" aria-atomic="true" data-aviso="oculto">
   <span class="punto" aria-hidden="true"></span><span id="texto"></span>
 </div>`);
 
@@ -38,20 +41,22 @@ class EstadoConexion extends HTMLElement {
 
     #pintar(enLinea, cambio) {
         const estado = this.shadowRoot.getElementById("estado");
-        const texto = this.shadowRoot.getElementById("texto");
         clearTimeout(this.#temporizador);
         estado.dataset.estado = enLinea ? "en-linea" : "sin-red";
         if (!enLinea) {
-            estado.hidden = false;
-            texto.textContent = "Sin conexión. Puedes seguir navegando; las acciones que necesitan internet están deshabilitadas.";
+            this.#avisar("Sin conexión. Puedes seguir navegando; las acciones que necesitan internet están deshabilitadas.");
         } else if (cambio) {
-            estado.hidden = false;
-            texto.textContent = "Conexión restablecida.";
-            this.#temporizador = setTimeout(() => { estado.hidden = true; texto.textContent = ""; }, AVISO_RESTABLECIDA_MS);
+            this.#avisar("Conexión restablecida.");
+            this.#temporizador = setTimeout(() => this.#avisar(""), AVISO_RESTABLECIDA_MS);
         } else {
-            estado.hidden = true;
-            texto.textContent = "";
+            this.#avisar("");
         }
+    }
+
+    /** Cambia solo el texto de la región; vacía, se oculta a la vista pero sigue en el árbol de accesibilidad. */
+    #avisar(mensaje) {
+        this.shadowRoot.getElementById("texto").textContent = mensaje;
+        this.shadowRoot.getElementById("estado").dataset.aviso = mensaje ? "visible" : "oculto";
     }
 }
 
