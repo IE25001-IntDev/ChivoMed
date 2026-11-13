@@ -45,6 +45,38 @@ describe('AtencionService', () => {
         assert.deepEqual(JSON.parse(peticiones[0].opciones.body), { idPersonaRol: UUID(3) });
     });
 
+    test('dashboard() pide GET /atencion/dashboard con desde y hasta', async () => {
+        const { peticiones, fetchImpl } = fetchDoble(Response.json([]));
+        const respuesta = await new AtencionService({ ...base, fetchImpl }).dashboard({ desde: '2026-11-01', hasta: '2026-11-13' });
+        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/dashboard?desde=2026-11-01&hasta=2026-11-13');
+        assert.equal(peticiones[0].opciones.method, 'GET');
+        assert.deepEqual(respuesta.data, []);
+    });
+
+    test('dashboard() sin fechas no envía parámetros (el backend usa hoy)', async () => {
+        const { peticiones, fetchImpl } = fetchDoble(Response.json([]));
+        await new AtencionService({ ...base, fetchImpl }).dashboard();
+        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/dashboard');
+    });
+
+    test('valorPaso() pide el valor del paso con el id codificado y devuelve el DTO plano', async () => {
+        const dto = { idConsultaProcedimientoPaso: UUID(7), nombre: 'Paso', estado: 'COMPLETADO', fechaFin: null, valor: 'texto' };
+        const { peticiones, fetchImpl } = fetchDoble(Response.json(dto));
+        const servicio = new AtencionService({ ...base, fetchImpl });
+        const respuesta = await servicio.valorPaso(UUID(7));
+        assert.equal(peticiones[0].url, `http://api.prueba/galenosv/api/atencion/dashboard/pasos/${UUID(7)}/valor`);
+        assert.deepEqual(respuesta.data, dto);
+        await servicio.valorPaso('a/b');
+        assert.match(peticiones[1].url, /pasos\/a%2Fb\/valor$/);
+        assert.throws(() => servicio.valorPaso(''), TypeError);
+    });
+
+    test('el 400 de rango del dashboard llega con su code', async () => {
+        const { fetchImpl } = fetchDoble(Response.json({ code: 'dashboard.rangoExcedido', message: 'x' }, { status: 400 }));
+        await assert.rejects(new AtencionService({ ...base, fetchImpl }).dashboard({ desde: '2026-01-01', hasta: '2026-12-31' }),
+            error => error.status === 400 && error.code === 'dashboard.rangoExcedido');
+    });
+
     test('el 409 de una consulta en curso llega como DefaultError con su code y mensaje', async () => {
         const cuerpo = { code: 'rolCambio.cerrarAntesCambiar', message: 'Cierre la consulta antes de cambiar de médico o rol.' };
         const { fetchImpl } = fetchDoble(Response.json(cuerpo, { status: 409 }));
