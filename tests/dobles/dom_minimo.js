@@ -4,8 +4,10 @@
  * (id, className, hidden, disabled, checked, type, name, value), texto, eventos (EventTarget),
  * <template> con innerHTML y content.cloneNode, Shadow DOM abierto, getElementById,
  * querySelector(All) con selectores simples compuestos (tag, #id, .clase, [attr="v"], :checked)
- * foco, click() y remove(), y creación de Web Components registrados con document.createElement. Los eventos no
- * burbujean por el árbol, y agregar un elemento no llama a connectedCallback (usar conectar()).
+ * dataset (refleja los atributos data-*), foco, click() y remove(), y creación de Web Components registrados con
+ * document.createElement. Los eventos no burbujean por el árbol, y agregar un elemento no llama a connectedCallback
+ * (usar conectar()). El documento tiene documentElement (<html> con dataset), un <meta name="theme-color">,
+ * querySelector y title.
  * No hay layout, estilos, CSS ni parseo de HTML general: la plantilla debe estar bien formada.
  *
  * instalarDom() pone en globalThis: document, HTMLElement, customElements (los que falten).
@@ -109,6 +111,15 @@ class Elemento extends Contenedor {
     get value() { return this.getAttribute("value") ?? ""; }
     set value(v) { this.setAttribute("value", v); }
 
+    /** Como el navegador: dataset.nombreLargo ↔ atributo data-nombre-largo. */
+    get dataset() {
+        const atributo = clave => `data-${clave.replace(/[A-Z]/g, letra => `-${letra.toLowerCase()}`)}`;
+        return new Proxy({}, {
+            get: (_, clave) => (typeof clave === "string" ? this.getAttribute(atributo(clave)) ?? undefined : undefined),
+            set: (_, clave, valor) => { this.setAttribute(atributo(clave), valor); return true; },
+        });
+    }
+
     /** Como en el navegador, marcar un radio desmarca los demás del mismo grupo en su raíz. */
     get checked() { return this._checked; }
     set checked(v) {
@@ -165,8 +176,8 @@ function compilar(selector) {
 function parsear(html) {
     const raiz = new Fragmento();
     const pila = [raiz];
-    const token = /<\/([a-z][a-z0-9-]*)\s*>|<([a-z][a-z0-9-]*)((?:\s+[a-z-]+(?:="[^"]*")?)*)\s*\/?>|([^<]+)/gi;
-    for (const [, cierre, apertura, atributos, texto] of html.matchAll(token)) {
+    const token = /<\/([a-z][a-z0-9-]*)\s*>|<([a-z][a-z0-9-]*)((?:\s+[a-z-]+(?:="[^"]*")?)*)\s*(\/?)>|([^<]+)/gi;
+    for (const [, cierre, apertura, atributos, autocierre, texto] of html.matchAll(token)) {
         const actual = pila.at(-1);
         if (texto !== undefined) {
             if (texto.trim()) actual.append(new NodoTexto(texto.replace(/\s+/g, " ")));
@@ -176,7 +187,8 @@ function parsear(html) {
             const elemento = crearElemento(apertura);
             for (const [, k, v] of (atributos ?? "").matchAll(/([a-z-]+)(?:="([^"]*)")?/gi)) elemento.setAttribute(k, v ?? "");
             actual.append(elemento);
-            if (!VACIOS.has(elemento.localName)) pila.push(elemento);
+            // <path .../> en un SVG se cierra solo; sin esto, sus hermanos quedarían anidados dentro.
+            if (!VACIOS.has(elemento.localName) && !autocierre) pila.push(elemento);
         }
     }
     return raiz.childNodes.slice();
@@ -226,6 +238,12 @@ export function instalarDom() {
     if (!globalThis.document) {
         const documento = new EventTarget();
         documento.createElement = crearElemento;
+        documento.documentElement = new Elemento("html");
+        const meta = new Elemento("meta");
+        meta.setAttribute("name", "theme-color");
+        documento.documentElement.append(meta);
+        documento.querySelector = selector => documento.documentElement.querySelector(selector);
+        documento.title = "";
         globalThis.document = documento;
     }
     return registro;
