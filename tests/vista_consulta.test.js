@@ -2,6 +2,7 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 import { MENSAJES } from '../src/js/boundary/vistas/controlador_consulta.js';
+import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import {
     UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, preparar,
 } from './dobles/consulta.js';
@@ -148,10 +149,32 @@ describe('<vista-consulta>', () => {
         assert.equal(vista.paneles.paso.hidden, true);
     });
 
-    test('sin red: muestra lo guardado con su aviso; sin datos, pide conexión', async () => {
+    test('sin red y sin datos guardados: pide conexión y no deja reintentar', async () => {
         const sinDatos = await montar({ enLinea: false });
+        assert.equal(sinDatos.$('error').hidden, false);
         assert.equal(sinDatos.$('error-texto').textContent, MENSAJES.sinRedCarga);
         assert.equal(sinDatos.$('reintentar').disabled, true);
+        assert.equal(sinDatos.$('distribucion').hidden, true);
+    });
+
+    test('sin red con datos guardados: muestra la consulta y el borrador en solo lectura, con la hora', async () => {
+        const memoria = new MemoriaVistas();
+        const antes = await montar({ memoria });
+        antes.vista.paneles.paso.dispatchEvent(new CustomEvent('cambiar-borrador', { detail: { valor: 'Borrador guardado' } }));
+        await asentar();
+        desconectar(antes.vista);
+
+        const { vista, $, p, nombres } = await montar({ memoria, enLinea: false });
+        assert.deepEqual(nombres(), []);
+        assert.equal($('error').hidden, true);
+        assert.equal($('estado').hidden, false);
+        assert.match($('estado').textContent, /^Sin conexión\. Mostrando la consulta guardada a las 09:30/);
+        assert.equal($('paciente').textContent, 'Paciente De Prueba');
+        assert.equal($('bloqueo').textContent, MENSAJES.sinRed);
+        assert.equal(vista.paneles.paso.hidden, false);
+        assert.equal(p('paso', 'valor').value, 'Borrador guardado');
+        assert.equal(p('paso', 'avanzar').disabled, true);
+        assert.equal(p('paso', 'motivo').textContent, MENSAJES.sinRed);
     });
 
     test('repinta por claves: escribir no reconstruye el recorrido', async () => {
