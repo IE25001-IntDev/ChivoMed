@@ -1,6 +1,10 @@
-import { test, describe } from 'node:test';
+import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { ControladorInstalacion, MODOS } from '../src/js/boundary/pwa/controlador_instalacion.js';
+import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
+
+/** Deja correr los microtasks: la notificación del estado reactivo llega después del cambio. */
+const asentar = () => new Promise(resolve => setTimeout(resolve, 0));
 
 /** Doble de window: EventTarget con matchMedia (display-mode) y navigator. */
 function crearVentana({ standalone = false, iosStandalone = undefined } = {}) {
@@ -25,7 +29,8 @@ function crearAviso(outcome = 'accepted', { fallaPrompt = false } = {}) {
 function preparar(opciones) {
     const ventana = crearVentana(opciones);
     const estados = [];
-    const controlador = new ControladorInstalacion({ ventana, alCambiar: e => estados.push(e.modo) });
+    const controlador = new ControladorInstalacion({ ventana });
+    controlador.suscribir((_cambios, estado) => estados.push(estado.modo));
     controlador.iniciar();
     return { ventana, controlador, estados };
 }
@@ -48,12 +53,15 @@ describe('ControladorInstalacion', () => {
         const { ventana, controlador, estados } = preparar();
         const aviso = crearAviso('accepted');
         ventana.dispatchEvent(aviso);
+        await asentar(); // En el navegador el aviso y el clic llegan en tareas distintas.
         assert.equal(await controlador.instalar(), 'accepted');
         assert.equal(aviso.llamadasPrompt, 1);
         assert.equal(controlador.estado.modo, MODOS.INSTALANDO);
+        await asentar();
         ventana.dispatchEvent(new Event('appinstalled'));
         assert.equal(controlador.estado.modo, MODOS.INSTALADA);
         assert.match(controlador.estado.mensaje, /instalada/);
+        await asentar();
         assert.deepEqual(estados, [MODOS.DISPONIBLE, MODOS.INSTALANDO, MODOS.INSTALANDO, MODOS.INSTALADA]);
     });
 
@@ -137,5 +145,99 @@ describe('ControladorInstalacion', () => {
         controlador.iniciar();
         controlador.detener();
         assert.equal(controlador.yaInstalada(), false);
+    });
+});
+
+describe('ControladorInstalacion: estado reactivo', () => {
+    test('no usa callback: expone suscribir() y sus claves son fijas', () => {
+        const controlador = new ControladorInstalacion({ ventana: crearVentana(), alCambiar: () => { throw new Error('no se llama'); } });
+        controlador.iniciar();
+        assert.equal(typeof controlador.suscribir, 'function');
+        assert.throws(() => { controlador.estado.otra = 1; }, TypeError);
+    });
+
+    test('cancelar la suscripción deja de avisar', async () => {
+        const { ventana, controlador } = preparar();
+        const avisos = [];
+        const cancelar = controlador.suscribir(cambios => avisos.push([...cambios]));
+        cancelar();
+        ventana.dispatchEvent(crearAviso());
+        await asentar();
+        assert.deepEqual(avisos, []);
+        assert.equal(controlador.estado.modo, MODOS.DISPONIBLE);
+    });
+});
+
+describe('<install-prompt>', () => {
+    let InstallPrompt;
+    before(async () => {
+        instalarDom();
+        ({ default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js'));
+    });
+
+    function montar(opciones) {
+        const ventana = crearVentana(opciones);
+        const controlador = new ControladorInstalacion({ ventana });
+        const espia = { cancelados: 0, detenido: 0 };
+        const suscribir = controlador.suscribir;
+        controlador.suscribir = fn => { const c = suscribir(fn); return () => { espia.cancelados++; c(); }; };
+        const detener = controlador.detener.bind(controlador);
+        controlador.detener = () => { espia.detenido++; detener(); };
+        const el = new InstallPrompt();
+        el.controlador = controlador;
+        const $ = id => el.shadowRoot.getElementById(id);
+        return { el, ventana, controlador, espia, $ };
+    }
+
+    test('sin aviso del navegador el botón está oculto; con el aviso aparece', async () => {
+        const { el, ventana, $ } = montar();
+        conectar(el);
+        assert.equal($('instalar').hidden, true);
+        ventana.dispatchEvent(crearAviso());
+        await asentar();
+        assert.equal($('instalar').hidden, false);
+        assert.equal($('instalar').disabled, false);
+    });
+
+    test('ya instalada: oculto desde el primer pintado', () => {
+        const { el, $ } = montar({ standalone: true });
+        conectar(el);
+        assert.equal($('instalar').hidden, true);
+    });
+
+    test('al pulsar: deshabilitado mientras instala, y appinstalled lo oculta y lo anuncia', async () => {
+        const { el, ventana, $ } = montar();
+        conectar(el);
+        const aviso = crearAviso('accepted');
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        $('instalar').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal(aviso.llamadasPrompt, 1);
+        assert.equal($('instalar').disabled, true);
+        assert.equal($('estado').textContent, 'Instalando ChivoMed…');
+        ventana.dispatchEvent(new Event('appinstalled'));
+        await asentar();
+        assert.equal($('instalar').hidden, true);
+        assert.equal($('estado').textContent, 'ChivoMed quedó instalada en este dispositivo.');
+    });
+
+    test('al desconectarse cancela la suscripción, detiene el controlador y suelta el clic', async () => {
+        const { el, ventana, espia, $ } = montar();
+        conectar(el);
+        desconectar(el);
+        assert.equal(espia.cancelados, 1);
+        assert.equal(espia.detenido, 1);
+        const aviso = crearAviso();
+        ventana.dispatchEvent(aviso);
+        $('instalar').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal(aviso.llamadasPrompt, 0);
+    });
+
+    test('el controlador solo se asigna antes de conectar', () => {
+        const { el, controlador } = montar();
+        conectar(el);
+        assert.throws(() => { el.controlador = controlador; });
     });
 });

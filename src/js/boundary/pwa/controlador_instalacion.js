@@ -1,7 +1,11 @@
 /**
  * Lógica de <install-prompt> sin DOM: beforeinstallprompt, appinstalled y app ya instalada.
  * Recibe la ventana por inyección para probarse con dobles en node --test.
+ *
+ * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  */
+import { crearEstado } from "../../control/estado_reactivo.js";
+
 export const MODOS = Object.freeze({
     NO_DISPONIBLE: "no-disponible",
     DISPONIBLE: "disponible",
@@ -11,7 +15,6 @@ export const MODOS = Object.freeze({
 
 export class ControladorInstalacion {
     #ventana;
-    #alCambiar;
     #evento = null;
     #consulta = null;
     #alOfrecer = evento => this.#ofrecer(evento);
@@ -21,12 +24,14 @@ export class ControladorInstalacion {
     /**
      * @param {object} opciones
      * @param {EventTarget & { matchMedia?: Function, navigator?: object }} opciones.ventana
-     * @param {(estado: object) => void} [opciones.alCambiar]
      */
-    constructor({ ventana, alCambiar = () => {} }) {
+    constructor({ ventana }) {
         this.#ventana = ventana;
-        this.#alCambiar = alCambiar;
-        this.estado = { modo: MODOS.NO_DISPONIBLE, mensaje: null };
+        const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null });
+        /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
+        this.estado = estado;
+        /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
+        this.suscribir = suscribir;
     }
 
     /** true si la app ya corre instalada (ventana independiente) o en iOS desde la pantalla de inicio. */
@@ -92,7 +97,6 @@ export class ControladorInstalacion {
     }
 
     #actualizar(cambios) {
-        this.estado = { ...this.estado, ...cambios };
-        this.#alCambiar(this.estado);
+        Object.assign(this.estado, cambios);
     }
 }
