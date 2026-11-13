@@ -6,10 +6,21 @@
  * También guarda la última sesión de empleado verificada con /auth/me, que el router usa como
  * respaldo de solo lectura cuando no hay red. Si se recuerda la sesión de otro usuario, se borra
  * todo lo anterior: los datos de una cuenta nunca se muestran a otra.
+ *
+ * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
+ * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
  */
+import { crearEstado } from "../../control/estado_reactivo.js";
+
+const VACIO = Object.freeze(Object.create(null));
+
 export class MemoriaVistas {
-    #datos = new Map();
-    #sesion = null;
+    #estado;
+    #suscribir;
+
+    constructor() {
+        ({ estado: this.#estado, suscribir: this.#suscribir } = crearEstado({ sesion: null, datos: VACIO }));
+    }
 
     /** Clave de datos atada al usuario de la sesión; null si la sesión no trae usuario. */
     static clave(sesion, nombre) {
@@ -17,26 +28,32 @@ export class MemoriaVistas {
         return typeof id === "string" && id ? `${id}:${nombre}` : null;
     }
 
+    /** Avisa con (cambios, { sesion, datos }) en cada cambio. Devuelve la función para cancelar. */
+    suscribir(fn) {
+        return this.#suscribir(fn);
+    }
+
     guardar(clave, valor) {
-        if (clave) this.#datos.set(clave, valor);
+        const datos = this.#estado.datos;
+        if (!clave || (Object.hasOwn(datos, clave) && Object.is(datos[clave], valor))) return;
+        this.#estado.datos = Object.freeze(Object.assign(Object.create(null), datos, { [clave]: valor }));
     }
 
     leer(clave) {
-        return clave && this.#datos.has(clave) ? this.#datos.get(clave) : null;
+        return clave && Object.hasOwn(this.#estado.datos, clave) ? this.#estado.datos[clave] : null;
     }
 
     recordarSesion(sesion) {
         const id = sesion?.usuario?.idUsuario;
         if (typeof id !== "string" || !id) return;
-        if (this.#sesion && this.#sesion.usuario.idUsuario !== id) this.#datos.clear();
-        this.#sesion = sesion;
+        if (this.#estado.sesion && this.#estado.sesion.usuario.idUsuario !== id) this.#estado.datos = VACIO;
+        this.#estado.sesion = sesion;
     }
 
-    get sesion() { return this.#sesion; }
+    get sesion() { return this.#estado.sesion; }
 
     limpiar() {
-        this.#datos.clear();
-        this.#sesion = null;
+        Object.assign(this.#estado, { datos: VACIO, sesion: null });
     }
 }
 

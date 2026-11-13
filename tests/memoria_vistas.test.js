@@ -57,3 +57,68 @@ describe('MemoriaVistas', () => {
 
     test('existe una instancia compartida', () => assert.ok(memoria instanceof MemoriaVistas));
 });
+
+describe('MemoriaVistas: reactiva', () => {
+    const tick = () => new Promise(resolve => queueMicrotask(resolve));
+    function espiar(m) {
+        const lotes = [];
+        const cancelar = m.suscribir(cambios => lotes.push([...cambios].sort()));
+        return { lotes, cancelar };
+    }
+
+    test('guardar, recordarSesion y limpiar notifican a los suscriptores', async () => {
+        const m = new MemoriaVistas();
+        const { lotes } = espiar(m);
+        m.guardar('a', 1);
+        await tick();
+        m.recordarSesion(sesion(1));
+        await tick();
+        m.limpiar();
+        await tick();
+        assert.deepEqual(lotes, [['datos'], ['sesion'], ['datos', 'sesion']]);
+    });
+
+    test('guardar el mismo valor, limpiar lo vacío o una clave nula no notifican', async () => {
+        const m = new MemoriaVistas();
+        const valor = { x: 1 };
+        m.guardar('a', valor);
+        await tick();
+        const { lotes } = espiar(m);
+        m.guardar('a', valor);
+        m.guardar(null, 2);
+        await tick();
+        assert.deepEqual(lotes, []);
+        const vacia = new MemoriaVistas();
+        const espia = espiar(vacia);
+        vacia.limpiar();
+        await tick();
+        assert.deepEqual(espia.lotes, []);
+    });
+
+    test('cambiar de usuario borra los datos y avisa ambos cambios en un solo lote', async () => {
+        const m = new MemoriaVistas();
+        m.recordarSesion(sesion(1));
+        m.guardar('a', 1);
+        await tick();
+        const { lotes } = espiar(m);
+        m.recordarSesion(sesion(2));
+        await tick();
+        assert.deepEqual(lotes, [['datos', 'sesion']]);
+    });
+
+    test('cancelar la suscripción detiene los avisos', async () => {
+        const m = new MemoriaVistas();
+        const { lotes, cancelar } = espiar(m);
+        cancelar();
+        m.guardar('a', 1);
+        await tick();
+        assert.deepEqual(lotes, []);
+    });
+
+    test('una clave con nombre especial no toca el prototipo', () => {
+        const m = new MemoriaVistas();
+        m.guardar('__proto__', 1);
+        assert.equal(m.leer('__proto__'), 1);
+        assert.equal(m.leer('toString'), null);
+    });
+});
