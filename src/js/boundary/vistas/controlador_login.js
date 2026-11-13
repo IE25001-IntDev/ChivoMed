@@ -5,6 +5,7 @@
 import { listarTiposDocumento, iniciarSesion, cerrarSesion } from "../../control/auth_service.js";
 import { ROLES_EMPLEADO, RUTAS, RUTA_INICIO_EMPLEADO } from "../rutas.js";
 import { rutaDeRetorno } from "../router.js";
+import { crearValidadorFormato } from "../../control/formato_documento.js";
 
 export const MAX_NUMERO_DOCUMENTO = 50;
 
@@ -15,17 +16,6 @@ export const MENSAJES = Object.freeze({
     soloPersonal: "Este acceso es solo para personal médico y administrativo.",
     sesionFinalizada: "Inicia sesión con tu documento para continuar.",
 });
-
-/** Convierte la expresión del catálogo en una prueba de valor completo; null si no hay o es inválida. */
-export function crearValidadorFormato(expresionRegular) {
-    if (typeof expresionRegular !== "string" || !expresionRegular.trim()) return null;
-    try {
-        const patron = new RegExp(`^(?:${expresionRegular})$`);
-        return valor => patron.test(valor);
-    } catch {
-        return null; // El backend vuelve a validar; una expresión mal escrita no bloquea el acceso.
-    }
-}
 
 /** Ruta a la que se entra después del login: el `volver` válido o el dashboard. */
 export function destinoTrasLogin(query) {

@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.8";
+    const VERSION = "2026-11-13.9";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -82,6 +82,7 @@
         "./js/control/atencion_service.js",
         "./js/control/default_service.js",
         "./js/control/estado_reactivo.js",
+        "./js/control/formato_documento.js",
         "./js/control/consulta_procedimiento_paso_service.js",
         "./js/control/consulta_procedimiento_service.js",
         "./js/control/consulta_service.js",

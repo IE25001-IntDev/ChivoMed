@@ -1,8 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-    ControladorLogin, MENSAJES, crearValidadorFormato, destinoTrasLogin,
-} from '../src/js/boundary/vistas/controlador_login.js';
+import { ControladorLogin, MENSAJES, destinoTrasLogin } from '../src/js/boundary/vistas/controlador_login.js';
+import { crearValidadorFormato } from '../src/js/control/formato_documento.js';
 
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const DUI = { idTipoDocumento: UUID(1), nombre: 'DUI', indicaciones: 'Ocho dígitos, guion y dígito verificador.', expresionRegular: '\\d{8}-\\d' };
