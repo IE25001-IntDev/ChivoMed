@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.4";
+    const VERSION = "2026-11-13.5";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -41,19 +41,24 @@
         "./resources/vistas.css",
         "./resources/components.css",
         "./resources/pwa.css",
+        "./resources/consultas.css",
         "./js/boundary/theme_init.js",
         "./js/boundary/router.js",
         "./js/boundary/rutas.js",
         "./js/boundary/plantilla.js",
+        "./js/boundary/fechas_sv.js",
         "./js/boundary/components/app_shell.js",
         "./js/boundary/components/session_bar.js",
         "./js/boundary/components/theme_toggle.js",
         "./js/boundary/components/component_styles.js",
         "./js/boundary/components/install_prompt.js",
         "./js/boundary/components/estado_conexion.js",
+        "./js/boundary/components/dashboard/lista_consultas.js",
+        "./js/boundary/components/dashboard/tarjeta_consulta_dashboard.js",
         "./js/boundary/vistas/estilos.js",
         "./js/boundary/vistas/controlador_login.js",
         "./js/boundary/vistas/controlador_dashboard.js",
+        "./js/boundary/vistas/controlador_consultas.js",
         "./js/boundary/vistas/memoria_vistas.js",
         "./js/boundary/vistas/vista_citas.js",
         "./js/boundary/vistas/vista_login.js",

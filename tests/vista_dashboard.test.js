@@ -132,12 +132,17 @@ describe('<vista-dashboard>: suscripción y pintado', () => {
         assert.equal($('usar').textContent, 'Usar este rol');
     });
 
-    test('el slot "consultas" existe con el texto por defecto para la parte 2', () => {
+    test('agrega <lista-consultas slot="consultas"> con la sesión del contexto, una sola vez', () => {
         const { vista } = montar();
         conectar(vista);
-        const slot = vista.shadowRoot.querySelector('slot[name="consultas"]');
-        assert.ok(slot);
-        assert.match(slot.textContent, /Pronto verás aquí las consultas/);
+        assert.ok(vista.shadowRoot.querySelector('slot[name="consultas"]'));
+        const [lista] = vista.children;
+        assert.equal(lista.localName, 'lista-consultas');
+        assert.equal(lista.slot, 'consultas');
+        assert.equal(lista.contexto.sesion.rolActivo.idPersonaRol, DOC_NORTE.idPersonaRol);
+        desconectar(vista);
+        conectar(vista);
+        assert.equal(vista.children.length, 1);
     });
 });
 
@@ -158,6 +163,7 @@ describe('<vista-dashboard>: cambio de rol', () => {
         assert.equal(eventos[0].composed, true);
         assert.equal(eventos[0].detail.sesion.rolActivo.idPersonaRol, DOC_SUR.idPersonaRol);
         assert.equal($('activo').textContent, 'Estás atendiendo como Doctor en Clínica Prueba Sur.');
+        assert.equal(vista.children[0].contexto.sesion.rolActivo.idPersonaRol, DOC_SUR.idPersonaRol, 'la lista recibe la sesión nueva');
     });
 
     test('con consulta en curso (409) muestra el motivo, lo enfoca y vuelve la selección al rol actual', async () => {

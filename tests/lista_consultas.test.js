@@ -155,3 +155,169 @@ describe('<tarjeta-consulta-dashboard>', () => {
         assert.ok(sinProc.q('p.vacio').some(p => p.textContent === 'Sin procedimientos registrados.'));
     });
 });
+
+// ---------------------------------------------------------------------------------------------
+// <lista-consultas>
+// ---------------------------------------------------------------------------------------------
+import { ControladorConsultas, MENSAJES } from '../src/js/boundary/vistas/controlador_consultas.js';
+import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { desconectar } from './dobles/dom_minimo.js';
+
+const sesionCon = (idPersonaRol = UUID(900)) => ({ usuario: { idUsuario: UUID(800) }, rolActivo: { idPersonaRol, codigo: 'DOCTOR' }, csrfToken: 'csrf-prueba' });
+
+function montarLista({ dashboard = async () => [consultaCruda(1), consultaCruda(2, { pendienteParaMi: false })], enLinea = true } = {}) {
+    const llamadas = { dashboard: [], valorPaso: [] };
+    const conexion = { enLinea, suscriptores: new Set(), suscribir(fn) { this.suscriptores.add(fn); return () => this.suscriptores.delete(fn); },
+        emitir(v) { this.enLinea = v; for (const fn of [...this.suscriptores]) fn(v); } };
+    const controlador = new ControladorConsultas({
+        servicio: {
+            dashboard: async f => { llamadas.dashboard.push(f); return { data: await dashboard(f) }; },
+            valorPaso: async id => { llamadas.valorPaso.push(id); return { data: { valor: 'Registro de prueba' } }; },
+        },
+        conexion, memoria: new MemoriaVistas(), reloj: () => new Date('2026-11-13T15:30:00Z'),
+    });
+    const espia = { repintados: 0 };
+    const suscribir = controlador.suscribir;
+    controlador.suscribir = fn => suscribir((c, e) => { espia.repintados++; fn(c, e); });
+    const Clase = customElements.get('lista-consultas');
+    const lista = new Clase();
+    lista.contexto = { sesion: sesionCon(), soloLectura: false };
+    lista.controlador = controlador;
+    const navegaciones = [];
+    lista.addEventListener('navegar', e => navegaciones.push(e));
+    const $ = id => lista.shadowRoot.getElementById(id);
+    const tarjetas = () => $('cuadricula').children;
+    return { lista, controlador, llamadas, conexion, espia, navegaciones, $, tarjetas };
+}
+
+describe('<lista-consultas>', () => {
+    before(async () => { await import('../src/js/boundary/components/dashboard/lista_consultas.js'); });
+
+    test('al conectarse muestra hoy en el filtro y, al cargar, una tarjeta por consulta y el resumen', async () => {
+        const { lista, $, tarjetas, llamadas } = montarLista();
+        conectar(lista);
+        assert.equal($('desde').value, '2026-11-13');
+        assert.equal($('hasta').value, '2026-11-13');
+        assert.equal($('estado').textContent, 'Cargando consultas…');
+        await asentar();
+        assert.deepEqual(llamadas.dashboard, [{ desde: '2026-11-13', hasta: '2026-11-13' }]);
+        assert.equal(tarjetas().length, 2);
+        assert.equal(tarjetas()[0].localName, 'tarjeta-consulta-dashboard');
+        assert.match($('resumen').textContent, /^2 consultas del 13 nov 2026$/);
+        assert.equal($('estado').hidden, true);
+    });
+
+    test('sin consultas muestra el estado vacío', async () => {
+        const { lista, $, tarjetas } = montarLista({ dashboard: async () => [] });
+        conectar(lista);
+        await asentar();
+        assert.equal(tarjetas().length, 0);
+        assert.equal($('resumen').textContent, MENSAJES.sinConsultas);
+    });
+
+    test('cambiar consultas reconstruye las tarjetas; cambiar solo valores las conserva', async () => {
+        const { lista, controlador, tarjetas } = montarLista();
+        conectar(lista);
+        await asentar();
+        const primera = tarjetas()[0];
+        await controlador.alternarRegistro(UUID(101));
+        await asentar();
+        assert.equal(tarjetas()[0], primera, 'misma tarjeta');
+        assert.equal(primera.valores[UUID(101)].valor, 'Registro de prueba');
+        controlador.estado.consultas = normalizarConsultas([consultaCruda(3)]);
+        await asentar();
+        assert.notEqual(tarjetas()[0], primera);
+        assert.equal(tarjetas().length, 1);
+    });
+
+    test('un rango de más de 31 días se marca en el formulario y no se pide', async () => {
+        const { lista, $, llamadas } = montarLista();
+        conectar(lista);
+        await asentar();
+        $('desde').value = '2026-10-01';
+        $('hasta').value = '2026-11-13';
+        $('filtro').dispatchEvent(new Event('submit', { cancelable: true }));
+        await asentar();
+        assert.equal($('error-rango').hidden, false);
+        assert.equal($('error-rango').textContent, MENSAJES.rangoExcedido);
+        assert.equal($('desde').getAttribute('aria-invalid'), 'true');
+        assert.equal(lista.shadowRoot.activeElement, $('desde'));
+        assert.equal(llamadas.dashboard.length, 1, 'solo la carga inicial');
+        $('desde').value = '2026-10-14';
+        $('desde').dispatchEvent(new Event('change'));
+        await asentar();
+        assert.equal($('error-rango').hidden, true);
+        assert.equal($('desde').hasAttribute('aria-invalid'), false);
+        $('filtro').dispatchEvent(new Event('submit', { cancelable: true }));
+        await asentar();
+        assert.deepEqual(llamadas.dashboard.at(-1), { desde: '2026-10-14', hasta: '2026-11-13' });
+    });
+
+    test('"Hoy" vuelve a la fecha de hoy y busca', async () => {
+        const { lista, $, llamadas } = montarLista();
+        conectar(lista);
+        await asentar();
+        $('desde').value = '2026-11-01';
+        $('desde').dispatchEvent(new Event('change'));
+        $('hoy').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal($('desde').value, '2026-11-13');
+        assert.deepEqual(llamadas.dashboard.at(-1), { desde: '2026-11-13', hasta: '2026-11-13' });
+    });
+
+    test('"Atender" en una tarjeta permitida emite navegar a /consulta/<id>; la otra explica el motivo', async () => {
+        const { lista, tarjetas, navegaciones } = montarLista();
+        conectar(lista);
+        await asentar();
+        const [permitida, ajena] = tarjetas();
+        assert.equal(permitida.motivo, null);
+        assert.equal(ajena.motivo, 'Le corresponde a Doctor.');
+        conectar(permitida);
+        permitida.shadowRoot.getElementById('atender').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal(navegaciones.length, 1);
+        assert.deepEqual(navegaciones[0].detail, { ruta: `/consulta/${UUID(1)}` });
+        assert.equal(navegaciones[0].bubbles && navegaciones[0].composed, true);
+    });
+
+    test('sin red, "Atender" se deshabilita en las tarjetas sin reconstruirlas', async () => {
+        const { lista, tarjetas, conexion } = montarLista();
+        conectar(lista);
+        await asentar();
+        const primera = tarjetas()[0];
+        conexion.emitir(false);
+        await asentar();
+        assert.equal(tarjetas()[0], primera);
+        assert.equal(primera.motivo, MENSAJES.sinRedAtender);
+    });
+
+    test('un error del servicio se muestra con "Volver a intentar"', async () => {
+        const { lista, $, llamadas } = montarLista({ dashboard: async () => { throw Object.assign(new Error('x'), { status: 403, code: 'auth.rolActivo' }); } });
+        conectar(lista);
+        await asentar();
+        assert.equal($('error').hidden, false);
+        assert.equal($('error-texto').textContent, MENSAJES.sinRol);
+        $('reintentar').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal(llamadas.dashboard.length, 2);
+    });
+
+    test('al desconectarse cancela la suscripción; un cambio de sesión después de reconectar vuelve a buscar', async () => {
+        const { lista, controlador, espia, llamadas } = montarLista();
+        conectar(lista);
+        await asentar();
+        desconectar(lista);
+        const antes = espia.repintados;
+        controlador.estado.error = 'no debe pintarse';
+        await asentar();
+        assert.equal(espia.repintados, antes);
+        lista.sesion = sesionCon(UUID(901)); // desconectada: solo se guarda
+        assert.equal(llamadas.dashboard.length, 1);
+        conectar(lista);
+        await asentar();
+        lista.sesion = sesionCon(UUID(902));
+        await asentar();
+        assert.equal(controlador.estado.sesion.rolActivo.idPersonaRol, UUID(902));
+        assert.equal(llamadas.dashboard.length, 3);
+    });
+});

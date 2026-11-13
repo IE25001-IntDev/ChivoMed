@@ -4,7 +4,9 @@
  * (id, className, hidden, disabled, checked, type, name, value), texto, eventos (EventTarget),
  * <template> con innerHTML y content.cloneNode, Shadow DOM abierto, getElementById,
  * querySelector(All) con selectores simples compuestos (tag, #id, .clase, [attr="v"], :checked)
- * y foco. No hay layout, estilos, CSS ni parseo de HTML general: la plantilla debe estar bien formada.
+ * foco y creación de Web Components registrados con document.createElement. Los eventos no
+ * burbujean por el árbol, y agregar un elemento no llama a connectedCallback (usar conectar()).
+ * No hay layout, estilos, CSS ni parseo de HTML general: la plantilla debe estar bien formada.
  *
  * instalarDom() pone en globalThis: document, HTMLElement, customElements (los que falten).
  */
@@ -175,8 +177,18 @@ function parsear(html) {
     return raiz.childNodes.slice();
 }
 
+/** Como el navegador: un tag registrado en customElements crea una instancia de su clase. */
 function crearElemento(tag) {
-    return tag.toLowerCase() === "template" ? new Plantilla() : new Elemento(tag);
+    const nombre = tag.toLowerCase();
+    if (nombre === "template") return new Plantilla();
+    const Clase = globalThis.customElements?.get?.(nombre);
+    if (Clase) {
+        const elemento = new Clase();
+        elemento.localName = nombre;
+        elemento.tagName = nombre.toUpperCase();
+        return elemento;
+    }
+    return new Elemento(tag);
 }
 
 class HTMLElementDoble extends Elemento {

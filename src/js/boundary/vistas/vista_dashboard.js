@@ -6,13 +6,15 @@
  *
  * Recibe del router `contexto` = { sesion, soloLectura?, ... }. Acepta `controlador` asignado antes
  * de conectarse (pruebas); si no, crea el suyo.
- * Slot `consultas`: la lista de consultas (parte 2) se agrega como hijo con slot="consultas".
+ * Slot `consultas`: al conectarse agrega <lista-consultas slot="consultas"> (parte 2) como hijo y,
+ * tras un cambio de rol, le pasa la sesión nueva para que vuelva a buscar.
  * Emite 'sesion-actualizada' { sesion } (bubbles, composed) cuando el estado publica `sesionCambiada`.
  */
 import { ControladorDashboard, mensajeMemoria, MENSAJES } from "./controlador_dashboard.js";
 import { ROLES } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import "../components/dashboard/lista_consultas.js";
 import { plantilla } from "../plantilla.js";
 
 const PLANTILLA = plantilla(`
@@ -44,6 +46,7 @@ const PLANTILLA = plantilla(`
 class VistaDashboard extends HTMLElement {
     #controlador = null;
     #cancelar = null;
+    #lista = null;
     #alEnviar = event => this.#enviar(event);
     #alElegir = () => this.#pintarBoton(this.#controlador.estado);
     #alReintentar = () => this.#controlador.cargar();
@@ -72,6 +75,12 @@ class VistaDashboard extends HTMLElement {
         this.$("selector").addEventListener("submit", this.#alEnviar);
         this.$("selector").addEventListener("change", this.#alElegir);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
+        if (!this.#lista) {
+            this.#lista = document.createElement("lista-consultas");
+            this.#lista.slot = "consultas";
+            this.#lista.contexto = { sesion: this.contexto?.sesion ?? null, soloLectura: Boolean(this.contexto?.soloLectura) };
+            this.append(this.#lista);
+        }
         this.#controlador ??= new ControladorDashboard();
         this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         // iniciar() escribe la sesión y "cargando" de forma síncrona; el pintado completo va después
@@ -93,6 +102,7 @@ class VistaDashboard extends HTMLElement {
     #pintar(estado, cambios) {
         const cambio = clave => !cambios || cambios.has(clave);
         if (cambios?.has("sesionCambiada") && estado.sesionCambiada) {
+            if (this.#lista) this.#lista.sesion = estado.sesionCambiada;
             this.dispatchEvent(new CustomEvent("sesion-actualizada", {
                 bubbles: true, composed: true, detail: { sesion: estado.sesionCambiada },
             }));
