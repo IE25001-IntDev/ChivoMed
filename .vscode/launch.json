@@ -17,15 +17,6 @@
             "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}/src",
             "runtimeExecutable": "/usr/bin/google-chrome-stable"
-        },
-        {
-            "type": "chrome",
-            "request": "launch",
-            "name": "ChivoMed (BrowserSync + Chrome)",
-            "url": "http://localhost:3000",
-            "webRoot": "${workspaceFolder}/src",
-            "runtimeExecutable": "/usr/bin/google-chrome-stable",
-            "preLaunchTask": "LanzarBrowserSync"
         }
     ]
 }
