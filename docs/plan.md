@@ -59,12 +59,21 @@
 - `npm start` pasa a usar `scripts/dev_server.js`, que ya tiene el proxy a `/galenosv/api`. Se quitan BrowserSync y Playwright de `package.json` y se eliminan los tests e2e (`tests/browser/`). `tests/api_proxy.test.js` importa `bs-config.cjs`, así que hay que portarlo a `dev_server.js` o eliminarlo.
 - HU4 "retroceder": reabre el paso anterior en el backend con `PUT /api/consultas-procedimientos-pasos/{id}/retroceso`. Responde 409 si es el primer paso o si el paso actual tiene valor u órdenes; la vista debe mostrar el motivo del 409. Endpoint acordado, pendiente en el backend.
 - Offline: cada vista conserva en memoria, nunca en disco, los últimos datos cargados, para seguir mostrándolos sin red. Se borran al cerrar sesión o recargar. Se aplica desde la fase 3.
+- `src/js/boundary/components/medico/*` va a la limpieza de la Fase 4 (no se reutiliza: son plantillas enteras con `innerHTML` y `escapeHtml`). No se borra todavía: el plan de la HU4 lo lee antes para extraer las reglas de negocio. La parte 2 de HU3 y la HU4 se escriben con componentes nuevos bajo la norma de abajo, reutilizando los servicios de `control/`.
+
+**Estado reactivo y plantillas** (norma desde 2026-11-13)
+- Cada vista tiene un controlador sin DOM cuyo estado es un `crearEstado(...)` de `src/js/control/estado_reactivo.js`. El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
+- La vista se suscribe con `suscribir()` en `connectedCallback` y cancela en `disconnectedCallback`. Repinta a partir del `Set` de claves que cambiaron.
+- Los objetos y arreglos que se guardan en el estado van congelados; para cambiarlos se reemplazan, no se mutan.
+- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de `plantilla()` de `src/js/boundary/plantilla.js`, que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
+- Un componente que muestra contenido de otro lo recibe por `<slot>` (p. ej. `<slot name="consultas">` en `<vista-dashboard>`).
+- Las vistas se prueban en Node con el DOM mínimo de `tests/dobles/dom_minimo.js`, que solo modela lo que usan las vistas; si una vista necesita algo nuevo del DOM, se agrega ahí.
 
 ## Orden de trabajo
 1. SPA
    - Fase 1: `src/js/boundary/router.js`, `src/js/boundary/rutas.js`, `tests/router.test.js` y `tests/rutas.test.js`. Sin cambio visible.
    - Fase 2: `index.html` solo con `<app-shell>`; `app_shell.js`, `session_bar.js`; `<vista-login>` por documento; `<vista-no-encontrada>` y `<vista-citas>` mínima; `npm start` con `scripts/dev_server.js`; quitar BrowserSync, Playwright y los e2e; reescribir las pruebas de login con contraseña y de acceso del rol PACIENTE.
-   - Fase 3: vistas de citas, dashboard y consulta (reusando los componentes de médico y del portal).
+   - Fase 3: vistas de citas, dashboard y consulta (componentes nuevos; del portal se reutilizan `<tarjeta-consulta>`, `PatientPortalService` y `patient_format.js`).
    - Fase 4: borrar los HTML y JS fuera de alcance, limpiar `auth_service.js`, cambiar `npm start` y quitar BrowserSync, Playwright y los e2e.
 2. PWA: manifest, service worker y funcionamiento fuera de línea.
 3. Completar las HU según lo que exponga el backend.
