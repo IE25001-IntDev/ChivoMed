@@ -8,6 +8,8 @@ class OrdenExamen extends DefaultEntity {
             fechaCreacion: null,
             indicaciones: null,
             idConsultaProcedimientoPaso: null,
+            // HU4 (B5): examen ordenado; null en órdenes anteriores a la migración.
+            idExamen: null,
         }, datos);
     }
 }

@@ -34,6 +34,16 @@ class AtencionService extends DefaultService {
             { ...opciones, Entidad: null });
     }
 
+    /**
+     * Una consulta de la clínica del rol activo con la misma forma que un elemento del dashboard
+     * (GET /atencion/consultas/{id}, contrato B6): paciente, procedimientos y pasos con nivel,
+     * estado, responsable y tieneValor. Es la única lectura de la HU4 que no depende del rol.
+     */
+    consulta(idConsulta, opciones = {}) {
+        if (!idConsulta) throw new TypeError("El identificador de la consulta es obligatorio.");
+        return this.solicitar("GET", `${this.recurso}/consultas/${encodeURIComponent(idConsulta)}`, { ...opciones, Entidad: null });
+    }
+
     /** PUT /atencion/rol-activo → { idPersonaRol, idConsulta }. Con consulta en curso: 409 rolCambio.cerrarAntesCambiar. */
     cambiarRol(idPersonaRol, opciones = {}) {
         return this.solicitar("PUT", `${this.recurso}/rol-activo`, {
