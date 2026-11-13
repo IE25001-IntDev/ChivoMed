@@ -162,3 +162,16 @@ describe('<theme-toggle>: ciclo de vida', () => {
         assert.equal(html().dataset.theme, 'dark');
     });
 });
+
+describe('components.css', () => {
+    test('solo tiene reglas para <theme-toggle>: cada clase existe en su Shadow DOM', async () => {
+        const { readFile } = await import('node:fs/promises');
+        const css = (await readFile(new URL('../src/resources/components.css', import.meta.url), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+        const clases = new Set([...css.matchAll(/\.([a-z][\w-]*)/gi)].map(m => m[1]));
+        const { boton } = montar();
+        const usadas = new Set(boton.shadowRoot.querySelectorAll('*')
+            .flatMap(e => [...e.className.split(/\s+/), ...(e.getAttribute('class') ?? '').split(/\s+/)]).filter(Boolean));
+        assert.deepEqual([...clases].filter(c => !usadas.has(c)), []);
+        assert.ok(clases.has('theme-button') && clases.has('sun-icon') && clases.has('moon-icon') && clases.has('theme-label'));
+    });
+});
