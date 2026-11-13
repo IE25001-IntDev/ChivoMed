@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import AtencionService from '../src/js/control/atencion_service.js';
 import ConsultaProcedimientoPasoService from '../src/js/control/consulta_procedimiento_paso_service.js';
 import OrdenExamen from '../src/js/entities/orden_examen.js';
+import ConsultaService from '../src/js/control/consulta_service.js';
 
 // Datos inventados; nunca datos reales de pacientes ni de personal.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -48,6 +49,7 @@ describe('ConsultaProcedimientoPasoService (HU4)', () => {
         assert.equal(peticiones[0].url, `${BASE}/consultas-procedimientos-pasos/${UUID(3)}/retroceso`);
         assert.equal(peticiones[0].opciones.method, 'PUT');
         assert.equal(peticiones[0].opciones.body, undefined);
+        assert.equal(peticiones[0].opciones.headers.has('Content-Type'), false);
         assert.equal(peticiones[0].opciones.headers.get('X-CSRF-Token'), 'csrf-prueba');
         assert.equal(respuesta.data.valor, 'Registro de prueba');
     });
@@ -97,5 +99,24 @@ describe('ConsultaProcedimientoPasoService (HU4)', () => {
         const { data } = await new ConsultaProcedimientoPasoService(opciones(fetchImpl)).ordenesExamen(UUID(3)).listar();
         assert.equal(data[0].idExamen, UUID(4));
         assert.equal(data[1].idExamen, null);
+    });
+});
+
+describe('ConsultaService (HU4): Content-Type solo con cuerpo', () => {
+    test('retomar() hace PUT …/sesion sin cuerpo ni Content-Type; cerrar() lleva JSON', async () => {
+        const { peticiones, fetchImpl } = fetchDoble(() => new Response(null, { status: 204 }));
+        const servicio = new ConsultaService(opciones(fetchImpl));
+        await servicio.retomar(UUID(4));
+        await servicio.cerrar(UUID(4));
+        await servicio.cerrar(UUID(4), { observaciones: 'Nota de prueba' });
+        const [retomar, cerrarVacio, cerrarConNotas] = peticiones.map(p => p.opciones);
+        assert.equal(peticiones[0].url, `${BASE}/consultas/${UUID(4)}/sesion`);
+        assert.equal(retomar.body, undefined);
+        assert.equal(retomar.headers.has('Content-Type'), false);
+        assert.equal(retomar.headers.get('X-CSRF-Token'), 'csrf-prueba');
+        assert.equal(cerrarVacio.body, '{}');
+        assert.equal(cerrarVacio.headers.get('Content-Type'), 'application/json');
+        assert.equal(cerrarConNotas.body, JSON.stringify({ observaciones: 'Nota de prueba' }));
+        assert.equal(cerrarConNotas.headers.get('Content-Type'), 'application/json');
     });
 });

@@ -145,6 +145,25 @@ describe('DefaultService (Suite de Pruebas Unitarias P2-2)', () => {
         assert.equal(res.data.nombre, 'Creado');
     });
 
+    test('PUT o POST sin cuerpo no envían Content-Type, aunque venga en las cabeceras', async () => {
+        const capturadas = [];
+        const fakeFetch = async (url, opts) => {
+            capturadas.push(opts);
+            return new Response(null, { status: 204 });
+        };
+        const servicio = new DefaultService('elementos', MockEntity, {
+            baseUrl: 'http://api.local', fetchImpl: fakeFetch,
+            headers: { 'Content-Type': 'application/json' },
+        });
+        await servicio.solicitar('PUT', 'elementos/uuid-1/accion');
+        await servicio.solicitar('POST', 'elementos/uuid-1/accion', { headers: { 'Content-Type': 'application/json' } });
+        await servicio.eliminar('uuid-1');
+        for (const opts of capturadas) {
+            assert.equal(opts.body, undefined);
+            assert.equal(opts.headers.has('Content-Type'), false);
+        }
+    });
+
     test('actualizar() envía PUT a la ruta con ID y cabecera application/json', async () => {
         let peticionCapturada = null;
         const fakeFetch = async (url, opts) => {

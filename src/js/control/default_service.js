@@ -37,7 +37,11 @@ class DefaultService {
             headers.set("X-CSRF-Token", sesion.csrfToken);
         }
         if (!headers.has("Accept")) headers.set("Accept", "application/json");
-        if (data !== undefined && !headers.has("Content-Type")) {
+        // Content-Type solo acompaña a un cuerpo: un PUT/POST vacío con application/json
+        // hace que el backend responda 400 json.invalido.
+        if (data === undefined) {
+            headers.delete("Content-Type");
+        } else if (!headers.has("Content-Type")) {
             headers.set("Content-Type", metodo === "PATCH"
                 ? "application/merge-patch+json" : "application/json");
         }
