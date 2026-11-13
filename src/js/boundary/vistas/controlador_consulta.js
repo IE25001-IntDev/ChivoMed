@@ -427,6 +427,180 @@ export class ControladorConsulta {
         return this.#cargarDetalle();
     }
 
+    // ---------------------------------------------------------------- acciones
+
+    /** Motivo por el que las acciones del paso actual no están disponibles, o null. */
+    get motivoNoActuar() {
+        if (this.bloqueo) return this.bloqueo;
+        if (this.estado.accion) return MENSAJES.accionEnCurso;
+        const paso = this.pasoActual;
+        if (!paso) return MENSAJES.sinPendientes;
+        const { detalle } = this.estado;
+        if (detalle.idPaso !== paso.idConsultaProcedimientoPaso || detalle.cargando || detalle.error) return MENSAJES.detalle;
+        return null;
+    }
+
+    /** null si se puede pedir el retroceso; si no, su motivo. Solo se ofrece si el paso no es el primero. */
+    get motivoNoRetroceder() {
+        return this.motivoNoActuar ?? motivoNoRetroceder(this.estado.detalle);
+    }
+
+    /**
+     * Ejecuta una acción del flujo con su indicador. Si sale bien vuelve a leer la consulta y el
+     * paso actual; si falla deja el motivo en `errorAccion` sin perder lo cargado ni el borrador.
+     * Algunos rechazos significan que lo mostrado quedó viejo, así que también se recarga.
+     */
+    async #ejecutar(accion, operacion, { alTerminar, alFallar, recargarTras = new Set(["consulta.pasoYaCompletado", "consulta.yaCerrada"]) } = {}) {
+        Object.assign(this.estado, { accion, errorAccion: null, confirmando: null });
+        const idCarga = this.#secuencia;
+        let ok = false;
+        try {
+            await operacion();
+            if (idCarga !== this.#secuencia) return false;
+            ok = true;
+            await alTerminar?.();
+        } catch (error) {
+            if (idCarga !== this.#secuencia) return false;
+            this.estado.errorAccion = mensajeDeErrorConsulta(error);
+            if (recargarTras.has(error?.code)) await this.#recargar();
+            await alFallar?.(error);
+        } finally {
+            if (idCarga === this.#secuencia) {
+                Object.assign(this.estado, { accion: null, acabado: congelar({ accion, ok }) });
+            }
+        }
+        return ok;
+    }
+
+    /** Vuelve a leer la consulta y el paso actual, sin retomarla. Un fallo no borra lo mostrado. */
+    async #recargar() {
+        const id = this.#secuencia;
+        try {
+            const { data } = await this.#servicio.consulta(this.estado.idConsulta);
+            if (id !== this.#secuencia) return;
+            const [consulta] = normalizarConsultas([data]);
+            if (!consulta || consulta.idConsulta !== this.estado.idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
+            this.estado.consulta = consulta;
+            await this.#cargarDetalle(id);
+        } catch (error) {
+            if (id !== this.#secuencia) return;
+            this.estado.errorAccion ??= mensajeDeErrorConsulta(error);
+        }
+    }
+
+    #olvidarBorrador(idPaso) {
+        this.#memoria.guardar(this.#claveBorrador(idPaso), null);
+    }
+
+    /**
+     * Completa el paso actual con lo escrito ("Avanzar", o "Completar paso" si es el último).
+     * Un borrador vacío se envía como null: nunca se inventa un valor.
+     */
+    avanzar() {
+        if (this.motivoNoActuar) return Promise.resolve(false);
+        const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
+        const valor = this.estado.borrador.trim() || null;
+        return this.#ejecutar("avanzar", () => this.#servicio.completar(idPaso, valor), {
+            alTerminar: async () => {
+                this.#olvidarBorrador(idPaso);
+                Object.assign(this.estado, { idElegido: null, aviso: null, borrador: "" });
+                await this.#recargar();
+            },
+        });
+    }
+
+    /** Pide retroceder: si hay algo escrito, primero pide confirmar que se descartará. */
+    pedirRetroceso() {
+        if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
+        if (this.estado.borrador.trim()) {
+            Object.assign(this.estado, { confirmando: "retroceso", errorAccion: null });
+            return Promise.resolve(false);
+        }
+        return this.#retroceder();
+    }
+
+    #retroceder() {
+        if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
+        const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
+        let anterior = null;
+        return this.#ejecutar("retroceder", async () => { anterior = (await this.#servicio.retroceder(idPaso))?.data ?? null; }, {
+            alTerminar: async () => {
+                this.#olvidarBorrador(idPaso);
+                const idAnterior = texto(anterior?.idConsultaProcedimientoPaso) ? anterior.idConsultaProcedimientoPaso : null;
+                // El paso reabierto muestra su valor guardado, no un borrador viejo de antes de completarlo.
+                if (idAnterior) this.#olvidarBorrador(idAnterior);
+                Object.assign(this.estado, { idElegido: idAnterior, aviso: null, borrador: "" });
+                await this.#recargar();
+            },
+        });
+    }
+
+    /** Pide cerrar la consulta; queda esperando la confirmación. */
+    pedirCierre(observaciones = "") {
+        if (this.bloqueo || this.estado.accion || !puedeCerrar(this.estado.consulta)) return false;
+        const notas = typeof observaciones === "string" ? observaciones.trim() : "";
+        if (notas.length > MAX_TEXTO) {
+            this.estado.errorAccion = `Las observaciones admiten hasta ${MAX_TEXTO} caracteres.`;
+            return false;
+        }
+        this.#observaciones = notas;
+        Object.assign(this.estado, { confirmando: "cierre", errorAccion: null });
+        return true;
+    }
+
+    #observaciones = "";
+
+    #cerrar() {
+        if (this.bloqueo || !puedeCerrar(this.estado.consulta)) return Promise.resolve(false);
+        const notas = this.#observaciones ? { observaciones: this.#observaciones } : {};
+        return this.#ejecutar("cierre", () => this.#servicio.cerrar(this.estado.idConsulta, notas), {
+            recargarTras: new Set(["consulta.completeAntesCerrar", "consulta.procedimientoSinFinal", "consulta.yaCerrada"]),
+            alTerminar: async () => {
+                this.#observaciones = "";
+                this.estado.aviso = MENSAJES.cerradaAhora;
+                await this.#recargar();
+            },
+        });
+    }
+
+    /** Confirma la acción pendiente (retroceso o cierre). */
+    confirmar() {
+        const pendiente = this.estado.confirmando;
+        if (pendiente === "retroceso") return this.#retroceder();
+        if (pendiente === "cierre") return this.#cerrar();
+        return Promise.resolve(false);
+    }
+
+    cancelar() {
+        this.estado.confirmando = null;
+        this.#observaciones = "";
+    }
+
+    /** Emite una orden de un examen asignable del paso actual; solo recarga las órdenes. */
+    emitirOrden({ idExamen, indicaciones } = {}) {
+        if (this.motivoNoActuar) return Promise.resolve(false);
+        const invalida = validarOrden({ idExamen, indicaciones }, this.estado.detalle.asignables);
+        if (invalida) {
+            this.estado.errorAccion = invalida;
+            return Promise.resolve(false);
+        }
+        const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
+        const actualizar = async campos => {
+            const respuestas = await Promise.all(campos.map(c => (c === "ordenes" ? this.#servicio.ordenes(idPaso) : this.#servicio.asignables(idPaso))));
+            if (this.estado.detalle.idPaso !== idPaso) return;
+            const cambios = {};
+            campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? normalizarOrdenes(respuestas[i]?.data) : normalizarAsignables(respuestas[i]?.data); });
+            this.estado.detalle = congelar({ ...this.estado.detalle, ...cambios });
+            this.#guardarEnMemoria();
+        };
+        return this.#ejecutar("orden", () => this.#servicio.ordenar(idPaso, { idExamen, indicaciones }), {
+            recargarTras: new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada"]),
+            alTerminar: () => actualizar(["ordenes"]).catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
+            // Un examen que dejó de ser asignable: se actualiza la lista para que no se vuelva a elegir.
+            alFallar: error => (error?.code === "consulta.examenNoAsignable" ? actualizar(["asignables"]).catch(() => {}) : null),
+        });
+    }
+
     cambiarBorrador(valor) {
         const borrador = typeof valor === "string" ? valor : "";
         this.estado.borrador = borrador;
