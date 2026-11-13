@@ -55,7 +55,7 @@
 - El frontend rechaza y cierra una sesión que no sea de DOCTOR o ADMINISTRACION, pero eso no es una barrera de seguridad: el backend debe negar el login a otros roles.
 - Alcance reducido a las 4 HU. Rutas: `#/citas` (HU1, pública, ruta por defecto), `#/login` (HU2), `#/dashboard` (HU3) y `#/consulta/:id` (HU4), más una vista de no encontrada.
 - Las rutas de empleado aceptan los roles DOCTOR y ADMINISTRACION.
-- Fuera de alcance: portada, administración, vista de cuenta y portal del paciente con login. Los componentes y servicios del portal que sirvan se reutilizan en HU1 (`<tarjeta-consulta>`, `PatientPortalService`, `patient_format.js`).
+- Fuera de alcance: portada, administración, vista de cuenta y portal del paciente con login. La HU1 no reutiliza el portal (ver `docs/reportes/hu1-plan.md`, D3): `<tarjeta-consulta>` (`components/card_consulta.js`), `PatientPortalService` (`control/patient_portal_service.js` y su export en `control/index.js`) y `patient_format.js` van a la limpieza de la Fase 4. Hoy `patient_format.js` solo lo importan `card_consulta.js` y `patient.js`, ambos del portal.
 - `npm start` pasa a usar `scripts/dev_server.js`, que ya tiene el proxy a `/galenosv/api`. Se quitan BrowserSync y Playwright de `package.json` y se eliminan los tests e2e (`tests/browser/`). `tests/api_proxy.test.js` importa `bs-config.cjs`, así que hay que portarlo a `dev_server.js` o eliminarlo.
 - HU4 "retroceder": reabre el paso anterior en el backend con `PUT /api/consultas-procedimientos-pasos/{id}/retroceso`. Responde 409 si es el primer paso o si el paso actual tiene valor u órdenes; la vista debe mostrar el motivo del 409. Endpoint acordado, pendiente en el backend.
 - Offline: cada vista conserva en memoria, nunca en disco, los últimos datos cargados, para seguir mostrándolos sin red. Se borran al cerrar sesión o recargar. Se aplica desde la fase 3.
@@ -73,8 +73,8 @@
 1. SPA
    - Fase 1: `src/js/boundary/router.js`, `src/js/boundary/rutas.js`, `tests/router.test.js` y `tests/rutas.test.js`. Sin cambio visible.
    - Fase 2: `index.html` solo con `<app-shell>`; `app_shell.js`, `session_bar.js`; `<vista-login>` por documento; `<vista-no-encontrada>` y `<vista-citas>` mínima; `npm start` con `scripts/dev_server.js`; quitar BrowserSync, Playwright y los e2e; reescribir las pruebas de login con contraseña y de acceso del rol PACIENTE.
-   - Fase 3: vistas de citas, dashboard y consulta (componentes nuevos; del portal se reutilizan `<tarjeta-consulta>`, `PatientPortalService` y `patient_format.js`).
-   - Fase 4: borrar los HTML y JS fuera de alcance, limpiar `auth_service.js`, cambiar `npm start` y quitar BrowserSync, Playwright y los e2e.
+   - Fase 3: vistas de citas, dashboard y consulta con componentes nuevos (la HU1 no reutiliza el portal del paciente).
+   - Fase 4: borrar los HTML y JS fuera de alcance, limpiar `auth_service.js`, cambiar `npm start` y quitar BrowserSync, Playwright y los e2e. Incluye `src/js/boundary/components/medico/*` y, del portal del paciente, `<tarjeta-consulta>` (`components/card_consulta.js`), `PatientPortalService` (`control/patient_portal_service.js` y su export en `control/index.js`) y `patient_format.js`.
 2. PWA: manifest, service worker y funcionamiento fuera de línea.
 3. Completar las HU según lo que exponga el backend.
 4. Pruebas de unidad por HU y cobertura de componentes.
