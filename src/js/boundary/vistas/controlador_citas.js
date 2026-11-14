@@ -16,7 +16,7 @@
  */
 import CitasPublicasService, { segundosDeEspera } from "../../control/citas_publicas_service.js";
 import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../../control/auth_service.js";
-import { crearValidadorFormato } from "../../control/formato_documento.js";
+import { autoformatear, crearValidadorFormato } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { hoySV, sumarDias, diasEntre, esFechaISO, ZONA_SV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida } from "./memoria_vistas.js";
@@ -288,8 +288,10 @@ export class ControladorCitas {
         this.#invalidarDocumento();
     }
 
+    /** Guarda el número; al escribir hacia adelante inserta los guiones del formato (p. ej., DUI). */
     escribirNumero(valor) {
-        const numero = typeof valor === "string" ? valor : "";
+        const tipo = this.tipo(this.estado.idTipoDocumento);
+        const numero = autoformatear(typeof valor === "string" ? valor : "", tipo?.expresionRegular, this.estado.numeroDocumento);
         if (numero === this.estado.numeroDocumento) return;
         this.#actualizar({ numeroDocumento: numero });
         if (this.estado.errores.numero) this.#errores({ numero: null });

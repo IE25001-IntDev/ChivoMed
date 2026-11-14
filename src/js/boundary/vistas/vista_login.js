@@ -15,7 +15,7 @@ import { plantilla } from "../plantilla.js";
 const PLANTILLA = plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Acceso del personal</h1>
-  <p class="subtitulo">Ingresa con tu documento de identidad. Solo para personal médico y administrativo.</p>
+  <p class="subtitulo">Ingresa con tu documento de identidad. Solo para el personal de la clínica.</p>
   <p class="aviso" id="aviso" role="status" hidden></p>
   <form id="formulario" novalidate>
     <div class="campo">
@@ -48,6 +48,9 @@ class VistaLogin extends HTMLElement {
     #alEnviar = event => this.#enviar(event);
     #alCambiarTipo = () => this.#mostrarIndicaciones();
     #alReintentar = () => this.#controlador.cargarTipos();
+    #alEscribirNumero = () => this.#formatearNumero();
+    /** Último valor del número, para no reformatear mientras se borra. */
+    #numeroAnterior = "";
     #tiposPintados = null;
     #cancelarConexion = null;
     #cargaPintada = null;
@@ -75,6 +78,7 @@ class VistaLogin extends HTMLElement {
         this.$ = id => raiz.getElementById(id);
         this.$("formulario").addEventListener("submit", this.#alEnviar);
         this.$("tipo").addEventListener("change", this.#alCambiarTipo);
+        this.$("numero").addEventListener("input", this.#alEscribirNumero);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
         const aviso = this.$("aviso");
         aviso.hidden = this.contexto?.query?.get("sesion") !== "finalizada";
@@ -94,6 +98,7 @@ class VistaLogin extends HTMLElement {
     disconnectedCallback() {
         this.$("formulario").removeEventListener("submit", this.#alEnviar);
         this.$("tipo").removeEventListener("change", this.#alCambiarTipo);
+        this.$("numero").removeEventListener("input", this.#alEscribirNumero);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
         this.#cancelarConexion?.();
         this.#cancelar?.();
@@ -148,6 +153,13 @@ class VistaLogin extends HTMLElement {
         texto.textContent = error ?? "";
         if (error) control.setAttribute("aria-invalid", "true");
         else control.removeAttribute("aria-invalid");
+    }
+
+    #formatearNumero() {
+        const campo = this.$("numero");
+        const formateado = this.#controlador.formatearNumero(this.$("tipo").value, campo.value, this.#numeroAnterior);
+        if (formateado !== campo.value) campo.value = formateado;
+        this.#numeroAnterior = formateado;
     }
 
     #mostrarIndicaciones() {

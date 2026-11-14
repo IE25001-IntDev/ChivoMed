@@ -7,7 +7,7 @@
 import { listarTiposDocumento, iniciarSesion, cerrarSesion, esEmpleado } from "../../control/auth_service.js";
 import { RUTAS, RUTA_INICIO_EMPLEADO } from "../rutas.js";
 import { rutaDeRetorno } from "../router.js";
-import { crearValidadorFormato } from "../../control/formato_documento.js";
+import { autoformatear, crearValidadorFormato } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 
 export const MAX_NUMERO_DOCUMENTO = 50;
@@ -56,6 +56,15 @@ export class ControladorLogin {
 
     tipo(idTipoDocumento) {
         return this.estado.tipos.find(t => t.idTipoDocumento === idTipoDocumento) ?? null;
+    }
+
+    /**
+     * Número con los guiones del formato del tipo, al escribir hacia adelante (p. ej., DUI
+     * "010000044" → "01000004-4"). `anterior` es el valor previo del campo: si el nuevo es más
+     * corto (se está borrando), se devuelve tal cual.
+     */
+    formatearNumero(idTipoDocumento, valor, anterior) {
+        return autoformatear(valor, this.tipo(idTipoDocumento)?.expresionRegular, anterior);
     }
 
     async cargarTipos() {

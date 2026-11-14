@@ -98,7 +98,11 @@ class TarjetaConsultaDashboard extends HTMLElement {
         this.$("inicio").textContent = formatearFechaHora(c.fechaInicio);
         this.$("estado").textContent = c.fechaFin ? `Cerrada el ${formatearFechaHora(c.fechaFin)}` : "Abierta";
         this.$("pendiente").hidden = !c.pendienteParaMi;
-        this.$("atender").textContent = accionAtender(c) === "cerrar" ? "Cerrar consulta" : "Atender";
+        const cerrar = accionAtender(c) === "cerrar";
+        this.$("atender").textContent = cerrar ? "Cerrar consulta" : "Atender";
+        // Nombre accesible único: varias tarjetas tienen el mismo botón visible.
+        const cuando = formatearFechaHora(c.fechaInicio);
+        this.$("atender").setAttribute("aria-label", `${cerrar ? "Cerrar la consulta de" : "Atender a"} ${paciente.nombre}, ${cuando}`);
         this.$("tarjeta").className = c.pendienteParaMi ? "tarjeta-consulta pendiente" : "tarjeta-consulta";
 
         this.#registros = new Map();

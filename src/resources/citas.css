@@ -27,7 +27,11 @@
   border-radius: 999px; background: var(--mint-soft); color: var(--accent-text); font-weight: 700;
 }
 .paso.actual .numero-paso { background: var(--accent); color: var(--on-accent); }
-.nombre-paso { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .9rem; }
+/* Hasta dos líneas: "Número de documento" se lee completo en vez de cortarse con "…". */
+.nombre-paso {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere; line-height: 1.2; font-weight: 600; font-size: .9rem;
+}
 
 /* En pantallas angostas solo los números: el <h2> del paso ya dice su nombre y el botón conserva su aria-label. */
 @media (max-width: 720px) {

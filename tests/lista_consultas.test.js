@@ -303,6 +303,8 @@ describe('<lista-consultas>', () => {
         conectar(normal);
         assert.equal(cierre.shadowRoot.getElementById('atender').textContent, 'Cerrar consulta');
         assert.equal(normal.shadowRoot.getElementById('atender').textContent, 'Atender');
+        assert.match(cierre.shadowRoot.getElementById('atender').getAttribute('aria-label'), /^Cerrar la consulta de Paciente Prueba 1, 13 nov.? 2026/);
+        assert.match(normal.shadowRoot.getElementById('atender').getAttribute('aria-label'), /^Atender a Paciente Prueba 2, 13 nov.? 2026/);
     });
 
     test('sin red, "Atender" se deshabilita en las tarjetas sin reconstruirlas', async () => {

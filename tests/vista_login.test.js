@@ -158,3 +158,21 @@ describe('<vista-login>: envío', () => {
         assert.equal(ctx.$('tipo').querySelectorAll('option').length, 2);
     });
 });
+
+describe('<vista-login>: autoformato del número', () => {
+    test('con DUI inserta el guion al escribir y lo respeta al borrar', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        const escribir = valor => { ctx.$('numero').value = valor; ctx.$('numero').dispatchEvent(new Event('input')); };
+        escribir('12345678');
+        escribir('123456789');
+        assert.equal(ctx.$('numero').value, '12345678-9');
+        escribir('12345678-');
+        assert.equal(ctx.$('numero').value, '12345678-');
+        desconectar(ctx.vista);
+        escribir('123456789');
+        assert.equal(ctx.$('numero').value, '123456789', 'desconectada ya no escucha');
+    });
+});

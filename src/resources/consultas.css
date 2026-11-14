@@ -1,12 +1,17 @@
 /* Consultas del dashboard (HU3): <lista-consultas> y <tarjeta-consulta-dashboard>. Tokens de app.css. */
 
 /* Filtro de fechas */
+/* Las acciones tienen su propia columna (auto) y no se parten: "Buscar" y "Hoy" quedan juntos
+   aunque aparezca el error de rango, que ocupa una fila completa debajo. */
 .filtro-fechas {
   display: grid; gap: var(--espacio-3); align-items: end;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   margin-bottom: var(--espacio-4);
 }
-.filtro-fechas .acciones-filtro { display: flex; gap: var(--espacio-2); flex-wrap: wrap; }
+@media (min-width: 560px) {
+  .filtro-fechas { grid-template-columns: minmax(11rem, 1fr) minmax(11rem, 1fr) auto; }
+}
+.filtro-fechas .acciones-filtro { display: flex; gap: var(--espacio-2); flex-wrap: nowrap; align-self: end; }
 .filtro-fechas .error-campo { grid-column: 1 / -1; }
 /* "Buscar paciente": filtra lo cargado; ocupa una fila propia bajo el filtro de fechas. */
 .campo-busqueda { max-width: 32rem; margin-bottom: var(--espacio-4); }

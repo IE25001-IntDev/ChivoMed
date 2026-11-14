@@ -469,3 +469,19 @@ describe('ControladorCitas: sin red y memoria', () => {
         assert.equal(ctx.suscriptores.size, 0);
     });
 });
+
+describe('ControladorCitas: autoformato del número', () => {
+    test('con DUI inserta el guion al escribir y no al borrar; con Pasaporte no toca', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero('12345678');
+        controlador.escribirNumero('123456789');
+        assert.equal(estado.numeroDocumento, '12345678-9');
+        controlador.escribirNumero('12345678-');
+        assert.equal(estado.numeroDocumento, '12345678-');
+        controlador.elegirTipo(PASAPORTE.idTipoDocumento);
+        controlador.escribirNumero('A12345678');
+        assert.equal(estado.numeroDocumento, 'A12345678');
+    });
+});
