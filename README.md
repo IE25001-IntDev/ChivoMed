@@ -80,6 +80,21 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
 
   Una consulta en la que no te toca ningún paso se abre en solo lectura y muestra el motivo.
 
+## Modo sin conexión
+
+1. Con red, entra con una cuenta de empleado y abre el dashboard. Si quieres probar también la
+   HU4 sin red, abre una consulta.
+2. En DevTools → Network, marca **Offline** y recarga (F5).
+3. El shell se carga desde el service worker. El dashboard y la última consulta abierta se ven
+   en **solo lectura**, con el aviso "Sin conexión. Mostrando … guardadas a las HH:MM". Las
+   acciones que escriben se deshabilitan con su motivo.
+4. Al volver la red, la sesión se verifica de nuevo y los datos se actualizan solos.
+
+La copia sin conexión vive en IndexedDB. Guarda solo la sesión verificada (sin token), el
+último dashboard y la consulta abierta. Caduca a las 8 horas y se borra al cerrar sesión o al
+entrar con otra cuenta. La búsqueda pública de citas (HU1) no se guarda en disco: sin red
+muestra solo la última búsqueda hecha mientras la página sigue abierta.
+
 ## Qué es normal ver en la consola del navegador
 
 - Al cargar sin sesión, `GET …/auth/me` responde **401**: así se sabe que no hay sesión.

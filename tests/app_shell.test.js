@@ -152,6 +152,14 @@ describe('<app-shell>: montaje de rutas', () => {
         assert.equal(memoria.sesion, null);
     });
 
+    test('un 401 al verificar la sesión borra la sesión de respaldo y los datos guardados', async () => {
+        memoria.recordarSesion(sesion());
+        memoria.guardar(`${UUID(1)}:dashboard.ultimo:${UUID(3)}`, { consultas: [] });
+        await montar('#/dashboard', 'vista-login');
+        assert.equal(memoria.sesion, null);
+        assert.equal(memoria.leer(`${UUID(1)}:dashboard.ultimo:${UUID(3)}`), null);
+    });
+
     test('al navegar, el foco va al título de lo montado o, si no tiene, a <main>', async () => {
         const ctx = await montar('#/citas', 'vista-citas');
         servidor(() => json({}, 500));

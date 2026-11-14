@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.14";
+    const VERSION = "2026-11-13.15";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -76,6 +76,7 @@
         "./js/boundary/vistas/vista_no_encontrada.js",
         "./js/boundary/vistas/vista_sin_conexion.js",
         "./js/boundary/pwa/sw_logica.js",
+        "./js/boundary/pwa/almacen_offline.js",
         "./js/boundary/pwa/caches_cliente.js",
         "./js/boundary/pwa/registro_sw.js",
         "./js/boundary/pwa/controlador_instalacion.js",

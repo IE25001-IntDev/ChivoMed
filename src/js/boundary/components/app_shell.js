@@ -8,6 +8,9 @@
  *    vista (la que compara verificarSesionActual antes de escribir) y la barra de sesión.
  * Sin red, el router monta las rutas de empleado en solo lectura con la última sesión verificada
  * (memoria_vistas) o, si no hay, <vista-sin-conexion>; al volver la red se vuelve a verificar.
+ * Antes de la primera ruta espera a que memoria_vistas cargue su copia en IndexedDB, para que
+ * una recarga sin red siga mostrando el último dashboard y la consulta abierta. Un 401 al verificar
+ * la sesión también borra esa copia.
  * Además registra el service worker y, al cerrar o perder la sesión, borra los cachés con datos
  * y la memoria de las vistas.
  */
@@ -89,7 +92,11 @@ class AppShell extends HTMLElement {
             inicioPorRol,
             esEmpleado,
             ventana: window,
-            autenticar: obtenerSesion,
+            autenticar: () => obtenerSesion().catch(error => {
+                // Sin sesión en el servidor, la copia de otra sesión no sirve de respaldo.
+                if (error?.status === 401) memoria.limpiar();
+                throw error;
+            }),
             montar: (tag, contexto) => this.#montar(tag, contexto),
             mostrarError: (error, contexto) => this.#mostrarError(error, contexto),
             esErrorDeRed: error => error?.code === CODIGO_SIN_RED,
@@ -101,7 +108,9 @@ class AppShell extends HTMLElement {
         this.addEventListener("sesion-actualizada", this.#alActualizarSesion);
         document.addEventListener("sesion-expirada", this.#alExpirar);
         this.#cancelarConexion = conexion.suscribir(this.#alCambiarRed);
-        this.#router.iniciar();
+        const hidratando = memoria.hidratar();
+        if (hidratando) hidratando.finally(() => { if (this.isConnected) this.#router.iniciar(); });
+        else this.#router.iniciar();
         registrarServiceWorker();
     }
 

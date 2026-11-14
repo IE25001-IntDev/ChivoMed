@@ -6,7 +6,8 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * "Atender" publica `estado.navegarA = { ruta }` (un objeto nuevo cada vez).
- * Lo cargado queda en memoria_vistas (nunca en disco) para seguir mostrándolo sin red.
+ * Lo cargado queda en memoria_vistas para seguir mostrándolo sin red. La última búsqueda
+ * (`dashboard.ultimo`, con su rango) también va a disco y es lo que se muestra al recargar sin red.
  */
 import AtencionService from "../../control/atencion_service.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
@@ -230,6 +231,19 @@ export class ControladorConsultas {
         return idPersonaRol ? MemoriaVistas.clave(this.estado.sesion, `dashboard.consultas:${idPersonaRol}:${desde}:${hasta}`) : null;
     }
 
+    #claveUltimo() {
+        const idPersonaRol = this.estado.sesion?.rolActivo?.idPersonaRol;
+        return idPersonaRol ? MemoriaVistas.clave(this.estado.sesion, `dashboard.ultimo:${idPersonaRol}`) : null;
+    }
+
+    /** Lo guardado para un rango: el de ese rango o, si coincide, la última búsqueda (la que viene de disco). */
+    #guardadoPara(desde, hasta) {
+        const guardado = this.#memoria.leer(this.#claveConsultas(desde, hasta));
+        if (guardado) return guardado;
+        const ultimo = this.#memoria.leer(this.#claveUltimo());
+        return ultimo?.desde === desde && ultimo?.hasta === hasta ? ultimo : null;
+    }
+
     #claveValor(idPaso) {
         return MemoriaVistas.clave(this.estado.sesion, `dashboard.valor:${idPaso}`);
     }
@@ -258,6 +272,11 @@ export class ControladorConsultas {
         this.#cancelarConexion = this.#conexion.suscribir?.(enLinea => this.#alCambiarRed(enLinea)) ?? null;
         const hoy = hoySV(this.#reloj);
         Object.assign(this.estado, { sesion, soloLectura, enLinea: this.#conexion.enLinea, desde: hoy, hasta: hoy, errorRango: null });
+        // Sin red y sin nada de hoy (p. ej., tras recargar), se muestra la última búsqueda con su rango.
+        if ((!this.#conexion.enLinea || soloLectura) && !this.#guardadoPara(hoy, hoy)) {
+            const ultimo = this.#memoria.leer(this.#claveUltimo());
+            if (ultimo && validarRango(ultimo.desde, ultimo.hasta) === null) Object.assign(this.estado, { desde: ultimo.desde, hasta: ultimo.hasta });
+        }
         return this.buscar();
     }
 
@@ -298,7 +317,7 @@ export class ControladorConsultas {
         if (errorRango) return;
         const consultado = congelar({ desde, hasta });
         const clave = this.#claveConsultas(desde, hasta);
-        const guardado = this.#memoria.leer(clave);
+        const guardado = this.#guardadoPara(desde, hasta);
         if (!this.#conexion.enLinea) {
             this.#secuencia++;
             if (guardado) this.#mostrar(guardado, consultado, { desdeMemoria: true });
@@ -314,6 +333,7 @@ export class ControladorConsultas {
             const consultas = normalizarConsultas(data);
             const en = this.#reloj();
             this.#memoria.guardar(clave, congelar({ consultas, en }));
+            this.#memoria.guardar(this.#claveUltimo(), congelar({ desde, hasta, consultas, en }));
             this.#mostrar({ consultas, en }, consultado, { desdeMemoria: false });
         } catch (error) {
             if (id !== this.#secuencia) return;

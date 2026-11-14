@@ -11,7 +11,8 @@
  * consulta cerrada o la falta de red dejan la vista en solo lectura con su motivo.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
- * Lo cargado y el borrador quedan en memoria_vistas (nunca en disco) para seguir mostrándolos sin red.
+ * Lo cargado y el borrador quedan en memoria_vistas para seguir mostrándolos sin red; solo la
+ * consulta (sin borrador ni valor guardado) va además a disco para verla tras recargar sin red.
  */
 import AtencionService from "../../control/atencion_service.js";
 import ConsultaService from "../../control/consulta_service.js";
