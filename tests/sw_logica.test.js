@@ -238,3 +238,34 @@ describe('instalación y activación', () => {
         assert.ok(Object.isFrozen(SW.CATALOGOS_PUBLICOS));
     });
 });
+
+describe('atenderMensaje: reclamar una página sin control (Ctrl+Shift+R)', () => {
+    const clientesDoble = () => {
+        const llamadas = { claim: 0 };
+        return { llamadas, clients: { claim: async () => { llamadas.claim++; } } };
+    };
+
+    test('{ tipo: "reclamar" } llama una vez a clients.claim() y devuelve su promesa', async () => {
+        const { llamadas, clients } = clientesDoble();
+        const promesa = SW.atenderMensaje({ tipo: 'reclamar' }, { clients });
+        assert.ok(promesa instanceof Promise);
+        await promesa;
+        assert.equal(llamadas.claim, 1);
+    });
+
+    test('cualquier otro mensaje se ignora: devuelve null y no reclama', () => {
+        const { llamadas, clients } = clientesDoble();
+        for (const datos of [null, undefined, 'reclamar', 7, {}, { tipo: 'otro' }, { tipo: 'RECLAMAR' }]) {
+            assert.equal(SW.atenderMensaje(datos, { clients }), null, JSON.stringify(datos));
+        }
+        assert.equal(llamadas.claim, 0);
+    });
+
+    test('sw.js escucha "message" y pasa la promesa de atenderMensaje a waitUntil', async () => {
+        const { readFileSync } = await import('node:fs');
+        const codigo = readFileSync(new URL('../src/sw.js', import.meta.url), 'utf8');
+        assert.match(codigo, /addEventListener\(\s*["']message["']/);
+        assert.match(codigo, /atenderMensaje\(\s*event\.data\s*,\s*\{\s*clients:\s*self\.clients\s*\}\s*\)/);
+        assert.match(codigo, /event\.waitUntil\(/);
+    });
+});

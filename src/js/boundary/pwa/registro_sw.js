@@ -6,7 +6,12 @@ export async function registrarServiceWorker({ navegador = globalThis.navigator,
     if (!navegador?.serviceWorker) return null;
     try {
         // updateViaCache "none": el navegador revisa sw.js y sus importScripts sin usar la caché HTTP.
-        return await navegador.serviceWorker.register(url.href, { scope: new URL("./", url).href, updateViaCache: "none" });
+        const registro = await navegador.serviceWorker.register(url.href, { scope: new URL("./", url).href, updateViaCache: "none" });
+        // Ctrl+Shift+R deja la página sin control aunque haya un SW activo (activate no se repite y
+        // no hay claim): sin red, las hojas de estilo de las vistas fallarían. Se le pide que la reclame.
+        // En la primera instalación `active` es null y el claim de activate ya la toma.
+        if (!navegador.serviceWorker.controller && registro?.active) registro.active.postMessage({ tipo: "reclamar" });
+        return registro;
     } catch (error) {
         console.warn("No se pudo registrar el service worker:", error?.message);
         return null;

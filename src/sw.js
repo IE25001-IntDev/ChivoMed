@@ -1,7 +1,7 @@
 /* Service worker de ChivoMed. Toda la lógica está en js/boundary/pwa/sw_logica.js (probada con node --test). */
 importScripts("./js/boundary/pwa/sw_logica.js");
 
-const { responder, precachear, limpiarVersionesViejas } = self.ChivoMedSW;
+const { responder, precachear, limpiarVersionesViejas, atenderMensaje } = self.ChivoMedSW;
 const base = self.registration.scope;
 
 self.addEventListener("install", event => {
@@ -10,6 +10,12 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
     event.waitUntil(limpiarVersionesViejas(caches).then(() => self.clients.claim()));
+});
+
+// Una página sin control (cargada con Ctrl+Shift+R) pide que se la reclame; ver registro_sw.js.
+self.addEventListener("message", event => {
+    const promesa = atenderMensaje(event.data, { clients: self.clients });
+    if (promesa) event.waitUntil(promesa);
 });
 
 self.addEventListener("fetch", event => {

@@ -84,6 +84,32 @@ describe('registrarServiceWorker', () => {
         assert.ok(registrada.endsWith('/src/sw.js'), registrada);
     });
 
+    // Ctrl+Shift+R carga la página sin control del SW y activate no vuelve a correr (no hay claim):
+    // sin red, los <link> que crean las vistas fallan. Se le pide al SW activo que la reclame.
+    const conActivo = ({ controller = null, active = undefined } = {}) => {
+        const mensajes = [];
+        const activo = active === undefined ? { postMessage: m => mensajes.push(m) } : active;
+        return { mensajes, navegador: { serviceWorker: { controller, register: async () => ({ active: activo }) } } };
+    };
+
+    test('página sin control y SW activo: le pide que la reclame con { tipo: "reclamar" }', async () => {
+        const { mensajes, navegador } = conActivo();
+        await registrarServiceWorker({ navegador });
+        assert.deepEqual(mensajes, [{ tipo: 'reclamar' }]);
+    });
+
+    test('página ya controlada: no envía mensaje', async () => {
+        const { mensajes, navegador } = conActivo({ controller: {} });
+        await registrarServiceWorker({ navegador });
+        assert.deepEqual(mensajes, []);
+    });
+
+    test('primera instalación (sin SW activo todavía): no envía mensaje; activate hace el claim', async () => {
+        const { navegador } = conActivo({ active: null });
+        const registro = await registrarServiceWorker({ navegador });
+        assert.deepEqual(registro, { active: null });
+    });
+
     test('si el registro falla devuelve null y no rompe la app', async () => {
         const avisos = [];
         console.warn = (...args) => avisos.push(args);

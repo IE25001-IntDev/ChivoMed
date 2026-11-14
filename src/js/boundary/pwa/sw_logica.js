@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-14.1";
+    const VERSION = "2026-11-14.2";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -226,8 +226,17 @@
         return datos;
     }
 
+    /**
+     * Mensaje de una página. { tipo: "reclamar" }: una página cargada con Ctrl+Shift+R queda sin
+     * control del SW y activate no vuelve a correr; clients.claim() la toma para que, sin red, sus
+     * hojas de estilo y módulos salgan del precache. Devuelve la promesa, o null si se ignora.
+     */
+    function atenderMensaje(datos, { clients }) {
+        return datos?.tipo === "reclamar" ? clients.claim() : null;
+    }
+
     raiz.ChivoMedSW = Object.freeze({
         VERSION, CACHE_SHELL, CACHE_DATOS, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
-        clasificar, esCatalogoCacheable, responder, precachear, limpiarVersionesViejas, limpiarDatos,
+        clasificar, esCatalogoCacheable, responder, precachear, limpiarVersionesViejas, limpiarDatos, atenderMensaje,
     });
 })(globalThis);
