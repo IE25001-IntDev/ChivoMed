@@ -66,10 +66,15 @@ Los de `../galenasv/docs/datos-demo-rubrica.md` (se restauran con `bash scripts/
 - Cada paso de una consulta lo atiende quien tiene su rol responsable, y la cierra quien completó el paso final; el frontend se guía por `pendienteParaMi` y no compara roles por nombre.
 - Para saber de qué rol es un paso se compara `paso.rolPaso.idRol` con `sesion.rolActivo.idRol` (`esPasoDeMiRol` en `controlador_consultas.js`), nunca por nombre ni por código. La vista de consulta hace `PUT …/sesion` solo si `pendienteParaMi` y la consulta no está cerrada; si no, queda en solo lectura.
 
-## Estado actual (2026-11-13)
-Plan: `docs/reportes/correcciones-plan.md`. Commits en `spa`, sin push:
+## Estado actual (2026-11-14)
+Plan: `docs/reportes/correcciones-plan.md`. Commits en `spa`:
 - Hechos: F0 (plan), F1 `dfa93de` (cualquier empleado, `nombreRol`), F2 `d18bacd` (README), F4 `f0d8d41` (offline con IndexedDB), F5 `24cbd64` (quita CRUD sin uso), F6 `4c5db3a` (prueba de `theme_init.js` y cobertura sobre `src`), F7 `b385c85` (atiende quien tiene el paso; errores B8), F10 `653a293` (buscar paciente y título por rango), F11 `b1ae634` (nombre accesible de "Atender", autoformato del documento, detalles de UI). F3 no requería código.
-- Pendientes: F8 (salir de la consulta, `DELETE /api/atencion/consulta`, backend `0e5f644`) y F9 (exámenes con casillas y filtro por `tiposExamen`, backend `c154c94`). Antes de implementarlas, leer el Resource y el DTO actuales. F12 (reporte final) después.
+- Implementados con `npm test` en verde (751), PENDIENTE la prueba manual contra el backend real:
+  - F8 `5905436`…`aa1f620`: salir de la consulta en curso (`DELETE /api/atencion/consulta`, backend `0e5f644`) desde el dashboard y desde la consulta; "Salir de esa consulta y atender esta" ante el 409 `consulta.cerrarAntesRetomar`.
+  - Service worker `83c67a5`: una página cargada con Ctrl+Shift+R pide `{ tipo: "reclamar" }` y el SW hace `clients.claim()`, para que sin red los CSS y módulos salgan del precache.
+  - F9 `7f6e61d`, `1ec8ca4`, `46cd952`: exámenes con casillas, filtro por `tiposExamen` (backend `c154c94`), "Ya ordenado", un POST por examen en serie y resultado por examen; el foco va al resultado.
+  - A revisar a mano: salir y cambiar de rol; el 409 con otra consulta en curso; Ctrl+Shift+R y luego sin red (Chrome); asignar varios exámenes, éxito parcial y "Ya ordenado"; casillas a 1280 y 375 px y en modo oscuro.
+- Pendiente: F12 (reporte final), después de la prueba manual.
 - `rolPaso.idRol` y `rolActivo.idRol`: el backend ya los manda (commit `0856fa3`). El frontend ya compara por `idRol` en `esPasoDeMiRol`, y `obtenerSesion` conserva `rolActivo` completo; falta validar `rolActivo.idRol` como UUID en `obtenerSesion` (`auth_service.js`), agregar el campo a las sesiones de prueba y comprobarlo contra el backend real (que Lucía tenga preseleccionado el Triaje y Carlos la Consulta médica).
 - Los estilos de F11 (`citas.css`, `consultas.css`, `components.css`) no se han revisado en el navegador: indicador de pasos a 1280 px, filtro de fechas con el error de rango, botón de tema junto a "Instalar app", a 375 px y en modo oscuro.
 - La documentación del backend ya está al día con B8 (`api-rest.md` describe `rolPaso`; la §10 de `../galenasv/docs/LEVANTAR.md` tiene la demo nueva). Si algo no coincide, manda el código.
