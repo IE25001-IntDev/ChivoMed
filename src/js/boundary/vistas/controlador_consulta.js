@@ -59,6 +59,9 @@ export const MENSAJES = Object.freeze({
     retrocesoConRegistro: "Este paso ya tiene un registro guardado; no se puede retroceder.",
     accionEnCurso: "Espera a que termine la operación en curso.",
     examenRequerido: "Elige un examen de la lista.",
+    seleccionVacia: "Elige al menos un examen.",
+    examenAjeno: "Elige exámenes de la lista.",
+    yaOrdenado: nombre => `${nombre} ya está ordenado en este paso.`,
     textoLargo: `Admite hasta ${MAX_TEXTO} caracteres.`,
     sinExamen: "Orden sin examen asociado",
     examenNoDisponible: "Examen ya no disponible",
@@ -183,10 +186,56 @@ export function validarOrden({ idExamen, indicaciones } = {}, asignables = NINGU
     return null;
 }
 
-function normalizarAsignables(datos) {
+/** Tipos de examen activos de un examen asignable (B8): válidos, sin repetir y congelados. */
+function normalizarTipos(datos) {
+    if (!Array.isArray(datos)) return NINGUNA;
+    const vistos = new Set();
+    const tipos = [];
+    for (const t of datos) {
+        if (!t || !texto(t.idTipoExamen) || !texto(t.nombre) || vistos.has(t.idTipoExamen)) continue;
+        vistos.add(t.idTipoExamen);
+        tipos.push(congelar({ idTipoExamen: t.idTipoExamen, nombre: t.nombre.trim() }));
+    }
+    return congelar(tipos);
+}
+
+/**
+ * DTO de GET …/examenes-asignables: [{ idExamen, nombre, tiposExamen: [{ idTipoExamen, nombre }] }].
+ * Sin `tiposExamen` queda [] (el filtro por categoría se oculta).
+ */
+export function normalizarAsignables(datos) {
     if (!Array.isArray(datos)) return NINGUNA;
     return congelar(datos.filter(e => e && texto(e.idExamen) && texto(e.nombre))
-        .map(e => congelar({ idExamen: e.idExamen, nombre: e.nombre.trim() })));
+        .map(e => congelar({ idExamen: e.idExamen, nombre: e.nombre.trim(), tiposExamen: normalizarTipos(e.tiposExamen) })));
+}
+
+/** F9: categorías del filtro: la unión de los tipos de los asignables, por nombre. */
+export function categoriasDe(asignables) {
+    const porId = new Map();
+    for (const e of asignables ?? NINGUNA) for (const t of e.tiposExamen ?? NINGUNA) if (!porId.has(t.idTipoExamen)) porId.set(t.idTipoExamen, t);
+    return congelar([...porId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
+}
+
+/** F9: asignables de una categoría; "" (Todas) los devuelve todos. */
+export function examenesVisibles(asignables, idTipoExamen = "") {
+    if (!idTipoExamen) return asignables;
+    return congelar(asignables.filter(e => e.tiposExamen.some(t => t.idTipoExamen === idTipoExamen)));
+}
+
+/** F9: idExamen ya ordenados en el paso. El backend no impide repetir una orden; el frontend sí. */
+export function idsOrdenados(ordenes) {
+    return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(texto))]);
+}
+
+/** F9: valida la asignación de varios exámenes antes de enviarla. Devuelve el mensaje o null. */
+export function validarAsignacion({ idsExamen, indicaciones } = {}, asignables = NINGUNA, ordenes = NINGUNA) {
+    if (!Array.isArray(idsExamen) || idsExamen.length === 0) return MENSAJES.seleccionVacia;
+    if (!idsExamen.every(id => asignables.some(e => e.idExamen === id))) return MENSAJES.examenAjeno;
+    const ordenados = idsOrdenados(ordenes);
+    const repetido = idsExamen.find(id => ordenados.includes(id));
+    if (repetido) return MENSAJES.yaOrdenado(asignables.find(e => e.idExamen === repetido).nombre);
+    if (typeof indicaciones === "string" && indicaciones.trim().length > MAX_TEXTO) return `Las indicaciones admiten hasta ${MAX_TEXTO} caracteres.`;
+    return null;
 }
 
 function normalizarOrdenes(datos) {

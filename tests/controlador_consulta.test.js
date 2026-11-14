@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     MENSAJES, MAX_TEXTO, mensajeDeErrorConsulta, CODIGOS_POR_ROL, pasosPendientes, elegirPasoActual,
     motivoBloqueo, puedeOfrecerRetroceso, motivoNoRetroceder, puedeCerrar, nombreDeOrden, validarOrden, servicioConsulta,
+    normalizarAsignables, categoriasDe, examenesVisibles, idsOrdenados, validarAsignacion,
 } from '../src/js/boundary/vistas/controlador_consulta.js';
 import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
@@ -130,6 +131,63 @@ describe('motivos y reglas de las acciones', () => {
         assert.equal(validarOrden({ idExamen: UUID(399) }, asignables), MENSAJES.examenRequerido);
         assert.equal(validarOrden({ idExamen: UUID(301), indicaciones: 'x'.repeat(MAX_TEXTO) }, asignables), null);
         assert.match(validarOrden({ idExamen: UUID(301), indicaciones: 'x'.repeat(MAX_TEXTO + 1) }, asignables), /255/);
+    });
+});
+
+describe('F9: exámenes asignables con tipos, filtro y validación de la asignación', () => {
+    const LAB = { idTipoExamen: UUID(501), nombre: 'Laboratorio clínico' };
+    const IMG = { idTipoExamen: UUID(502), nombre: 'Imagenología' };
+    const crudo = (n, tiposExamen) => ({ ...examen(n), ...(tiposExamen === undefined ? {} : { tiposExamen }) });
+
+    test('normalizarAsignables conserva tiposExamen recortados y congelados', () => {
+        const [a] = normalizarAsignables([crudo(1, [{ idTipoExamen: UUID(501), nombre: '  Laboratorio clínico ' }])]);
+        assert.deepEqual(a, { idExamen: UUID(301), nombre: 'Examen 1', tiposExamen: [LAB] });
+        assert.ok(Object.isFrozen(a) && Object.isFrozen(a.tiposExamen) && Object.isFrozen(a.tiposExamen[0]));
+    });
+
+    test('sin tiposExamen (o si no es lista) queda []; descarta tipos inválidos y repetidos', () => {
+        const [sinCampo, noLista, sucios] = normalizarAsignables([
+            crudo(1), crudo(2, 'Laboratorio'),
+            crudo(3, [LAB, LAB, null, { idTipoExamen: '', nombre: 'x' }, { idTipoExamen: UUID(503), nombre: '  ' }, IMG]),
+        ]);
+        assert.deepEqual(sinCampo.tiposExamen, []);
+        assert.deepEqual(noLista.tiposExamen, []);
+        assert.deepEqual(sucios.tiposExamen, [LAB, IMG]);
+        assert.deepEqual(normalizarAsignables(null), []);
+        assert.deepEqual(normalizarAsignables([{ idExamen: UUID(9) }, null]), [], 'sin nombre se descarta');
+    });
+
+    test('categoriasDe: unión de tipos por id, ordenada por nombre; un examen con dos tipos cuenta en ambas', () => {
+        const asignables = normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG, LAB]), crudo(3, [])]);
+        assert.deepEqual(categoriasDe(asignables), [IMG, LAB]);
+        assert.ok(Object.isFrozen(categoriasDe(asignables)));
+        assert.deepEqual(categoriasDe(normalizarAsignables([crudo(1)])), [], 'sin tipos no hay filtro');
+    });
+
+    test('examenesVisibles: "" (Todas) devuelve todos; un tipo, solo los que lo tienen', () => {
+        const asignables = normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG, LAB]), crudo(3, [])]);
+        assert.equal(examenesVisibles(asignables, ''), asignables);
+        assert.deepEqual(examenesVisibles(asignables, IMG.idTipoExamen).map(e => e.nombre), ['Examen 2']);
+        assert.deepEqual(examenesVisibles(asignables, LAB.idTipoExamen).map(e => e.nombre), ['Examen 1', 'Examen 2']);
+        assert.deepEqual(examenesVisibles(asignables, UUID(599)), []);
+    });
+
+    test('idsOrdenados: los idExamen de las órdenes del paso, sin nulos ni repetidos', () => {
+        const ordenes = [{ idExamen: UUID(301) }, { idExamen: null }, { idExamen: UUID(301) }, { idExamen: UUID(302) }];
+        assert.deepEqual(idsOrdenados(ordenes), [UUID(301), UUID(302)]);
+        assert.deepEqual(idsOrdenados(null), []);
+    });
+
+    test('validarAsignacion: al menos uno, todos de la lista, ninguno ya ordenado; indicaciones hasta 255', () => {
+        const asignables = normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG])]);
+        const ordenes = [{ idOrdenExamen: UUID(601), idExamen: UUID(302) }];
+        assert.equal(validarAsignacion({ idsExamen: [UUID(301)] }, asignables, ordenes), null);
+        assert.equal(validarAsignacion({ idsExamen: [UUID(301)], indicaciones: 'x'.repeat(MAX_TEXTO) }, asignables), null);
+        assert.equal(validarAsignacion({ idsExamen: [] }, asignables), MENSAJES.seleccionVacia);
+        assert.equal(validarAsignacion({}, asignables), MENSAJES.seleccionVacia);
+        assert.equal(validarAsignacion({ idsExamen: [UUID(301), UUID(399)] }, asignables), MENSAJES.examenAjeno);
+        assert.equal(validarAsignacion({ idsExamen: [UUID(301), UUID(302)] }, asignables, ordenes), 'Examen 2 ya está ordenado en este paso.');
+        assert.match(validarAsignacion({ idsExamen: [UUID(301)], indicaciones: 'x'.repeat(MAX_TEXTO + 1) }, asignables), /255/);
     });
 });
 

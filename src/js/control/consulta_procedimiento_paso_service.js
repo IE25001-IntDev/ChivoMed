@@ -28,7 +28,10 @@ class ConsultaProcedimientoPasoService extends DefaultService {
         return this.solicitar("PUT", `${this.ruta(id)}/retroceso`, opciones);
     }
 
-    /** HU4: exámenes activos que se pueden ordenar en este paso: [{ idExamen, nombre }] por nombre. */
+    /**
+     * HU4: exámenes activos que se pueden ordenar en este paso, por nombre:
+     * [{ idExamen, nombre, tiposExamen: [{ idTipoExamen, nombre }] }] (tipos activos, por nombre; B8).
+     */
     examenesAsignables(id, opciones = {}) {
         return this.solicitar("GET", `${this.ruta(id)}/examenes-asignables`, { ...opciones, Entidad: null });
     }
