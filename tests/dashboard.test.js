@@ -116,8 +116,9 @@ function conexionDoble(enLinea = true) {
 
 /** Prepara el controlador con dobles de servicio, /auth/me, conexión, memoria real y reloj fijo. */
 function preparar({ asignaciones = async () => ASIGNACIONES, cambiarRol = async id => ({ idPersonaRol: id, idConsulta: null }),
+    contexto = async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: null }), salirDeConsulta = async () => null,
     obtenerSesion, enLinea = true, memoria = new MemoriaVistas(), reloj = () => new Date(2026, 10, 13, 9, 30) } = {}) {
-    const llamadas = { asignaciones: 0, cambiarRol: [], obtenerSesion: 0 };
+    const llamadas = { asignaciones: 0, cambiarRol: [], obtenerSesion: 0, contexto: 0, salirDeConsulta: 0 };
     const estados = [];
     const sesionesNuevas = [];
     let ultimoCambio = null;
@@ -126,6 +127,8 @@ function preparar({ asignaciones = async () => ASIGNACIONES, cambiarRol = async 
         servicio: {
             asignaciones: async () => { llamadas.asignaciones++; return { data: await asignaciones() }; },
             cambiarRol: async id => { llamadas.cambiarRol.push(id); ultimoCambio = id; return { data: await cambiarRol(id) }; },
+            contexto: async () => { llamadas.contexto++; return { data: await contexto() }; },
+            salirDeConsulta: async () => { llamadas.salirDeConsulta++; return { status: 204, data: await salirDeConsulta() }; },
         },
         obtenerSesion: async () => {
             llamadas.obtenerSesion++;
@@ -200,10 +203,11 @@ describe('agruparPorClinica', () => {
 });
 
 describe('mensajeDeError', () => {
-    test('consulta en curso: usa el motivo del backend con 409 o con 400', () => {
+    test('consulta en curso (F8): siempre el texto propio, nunca el message del backend', () => {
+        assert.equal(MENSAJES.cerrarAntes, 'Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.');
         for (const status of [409, 400]) {
             assert.equal(mensajeDeError(errorHttp(status, CODIGO_CERRAR_ANTES, 'Cierre la consulta antes de cambiar de médico o rol.')),
-                'Cierre la consulta antes de cambiar de médico o rol.');
+                MENSAJES.cerrarAntes);
         }
         assert.equal(mensajeDeError(errorHttp(409, CODIGO_CERRAR_ANTES)), MENSAJES.cerrarAntes);
     });
@@ -319,7 +323,7 @@ describe('ControladorDashboard: cambio de rol', () => {
             const { controlador, llamadas, sesionesNuevas } = preparar({ cambiarRol: async () => { throw errorHttp(status, CODIGO_CERRAR_ANTES, motivo); } });
             await controlador.iniciar(sesionCon(DOC_NORTE));
             assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
-            assert.equal(controlador.estado.aviso, motivo);
+            assert.equal(controlador.estado.aviso, MENSAJES.cerrarAntes);
             assert.equal(controlador.estado.error, null);
             assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
             assert.equal(llamadas.obtenerSesion, 0, 'sin cambio no se pide /auth/me');
@@ -441,5 +445,166 @@ describe('ControladorDashboard: sin conexión', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE));
         assert.equal(estados[0].grupos.length, 2, 'primer pintado con lo guardado');
         assert.ok(estados.every(e => !e.desdeMemoria));
+    });
+});
+
+describe('ControladorDashboard: consulta en curso (F8)', () => {
+    const EN_CURSO = UUID(500);
+    const conCurso = async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: EN_CURSO });
+    const cerrarAntes = async () => { throw errorHttp(409, CODIGO_CERRAR_ANTES, 'Cierre la consulta antes de cambiar de médico o rol.'); };
+
+    test('carga GET /atencion en paralelo con las asignaciones y publica enCurso', async () => {
+        let soltarContexto;
+        const { controlador, llamadas } = preparar({
+            contexto: () => new Promise(resolve => { soltarContexto = () => resolve({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: EN_CURSO }); }),
+        });
+        const carga = controlador.iniciar(sesionCon(DOC_NORTE));
+        // Las dos peticiones salen antes de que responda cualquiera de ellas.
+        assert.equal(llamadas.asignaciones, 1);
+        assert.equal(llamadas.contexto, 1);
+        soltarContexto();
+        await carga;
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+        assert.equal(controlador.estado.grupos.length, 2);
+    });
+
+    test('sin consulta en curso, o con un id que no es UUID, enCurso queda null', async () => {
+        for (const idConsulta of [null, 'no-es-uuid', 7]) {
+            const { controlador } = preparar({ contexto: async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta }) });
+            await controlador.iniciar(sesionCon(DOC_NORTE));
+            assert.equal(controlador.estado.enCurso, null);
+        }
+    });
+
+    for (const [nombre, falla] of [['red', errorHttp(0, 'conexion.error')], ['500', errorHttp(500, 'error.interno', 'detalle')]]) {
+        test(`si contexto() falla (${nombre}) las asignaciones se ven igual, enCurso es null y no hay error`, async () => {
+            const { controlador } = preparar({ contexto: async () => { throw falla; } });
+            await controlador.iniciar(sesionCon(DOC_NORTE));
+            assert.equal(controlador.estado.enCurso, null);
+            assert.equal(controlador.estado.error, null);
+            assert.equal(controlador.estado.aviso, null);
+            assert.equal(controlador.estado.grupos.length, 2);
+            assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
+        });
+    }
+
+    test('409 con enCurso vacío: mensaje propio y contexto() se pide una sola vez más', async () => {
+        let enCurso = null;
+        const { controlador, llamadas } = preparar({
+            contexto: async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: enCurso }),
+            cambiarRol: cerrarAntes,
+        });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(llamadas.contexto, 1);
+        enCurso = EN_CURSO; // la consulta se abrió en otra pestaña
+        assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
+        assert.equal(controlador.estado.aviso, MENSAJES.cerrarAntes);
+        assert.notEqual(controlador.estado.aviso, 'Cierre la consulta antes de cambiar de médico o rol.');
+        assert.equal(llamadas.contexto, 2);
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+    });
+
+    test('409 con enCurso ya conocido: no vuelve a pedir contexto()', async () => {
+        const { controlador, llamadas } = preparar({ contexto: conCurso, cambiarRol: cerrarAntes });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        await controlador.cambiar(DOC_SUR.idPersonaRol);
+        assert.equal(llamadas.contexto, 1);
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+        assert.equal(controlador.estado.aviso, MENSAJES.cerrarAntes);
+    });
+
+    test('409 → salirDeConsulta() → cambiar(): rol cambiado, enCurso null y el mensaje de salida', async () => {
+        let enConsulta = true;
+        const { controlador, llamadas } = preparar({
+            contexto: async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: enConsulta ? EN_CURSO : null }),
+            cambiarRol: async id => { if (enConsulta) await cerrarAntes(); return { idPersonaRol: id, idConsulta: null }; },
+            salirDeConsulta: async () => { enConsulta = false; return null; },
+        });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
+        assert.equal(controlador.estado.aviso, MENSAJES.cerrarAntes);
+
+        assert.equal(await controlador.salirDeConsulta(), true);
+        assert.equal(llamadas.salirDeConsulta, 1);
+        assert.equal(controlador.estado.enCurso, null);
+        assert.equal(controlador.estado.aviso, null, 'el motivo del 409 ya no aplica');
+        assert.equal(controlador.estado.confirmacion, 'Saliste de la consulta. Ya puedes cambiar de rol.');
+        assert.equal(controlador.estado.saliendo, false);
+
+        assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), true);
+        assert.equal(controlador.estado.activa.idPersonaRol, DOC_SUR.idPersonaRol);
+        assert.equal(controlador.estado.enCurso, null);
+        assert.equal(controlador.estado.confirmacion, 'Saliste de la consulta. Ya puedes cambiar de rol.');
+        assert.deepEqual(llamadas.cambiarRol, [DOC_SUR.idPersonaRol, DOC_SUR.idPersonaRol], 'sin reintento automático');
+    });
+
+    test('marca saliendo mientras espera e ignora un segundo clic', async () => {
+        let soltar;
+        const { controlador, llamadas } = preparar({ contexto: conCurso, salirDeConsulta: () => new Promise(resolve => { soltar = resolve; }) });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        const primera = controlador.salirDeConsulta();
+        assert.equal(controlador.estado.saliendo, true);
+        assert.equal(await controlador.salirDeConsulta(), false);
+        soltar(null);
+        assert.equal(await primera, true);
+        assert.equal(llamadas.salirDeConsulta, 1);
+    });
+
+    test('salirDeConsulta() con 401: sesión finalizada como en las otras acciones y enCurso se conserva', async () => {
+        const { controlador } = preparar({ contexto: conCurso, salirDeConsulta: async () => { throw errorHttp(401, 'auth.sesion', 'Vuelva a iniciar sesión.'); } });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(controlador.estado.error, MENSAJES.sesionFinalizada);
+        assert.equal(controlador.estado.error, mensajeDeError(errorHttp(401)), 'mismo texto que el 401 del cambio de rol');
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+        assert.equal(controlador.estado.confirmacion, null);
+        assert.equal(controlador.estado.saliendo, false);
+    });
+
+    test('salirDeConsulta() con error de red: error de conexión y enCurso se conserva', async () => {
+        const { controlador } = preparar({ contexto: conCurso, salirDeConsulta: async () => { throw errorHttp(0, 'conexion.error'); } });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(controlador.estado.error, MENSAJES.conexion);
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+    });
+
+    test('sin red no hace el DELETE y avisa que hace falta conexión', async () => {
+        const { controlador, llamadas, conexion } = preparar({ contexto: conCurso });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        conexion.emitir(false);
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(llamadas.salirDeConsulta, 0);
+        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+    });
+
+    test('en solo lectura no hace el DELETE', async () => {
+        const { controlador, llamadas } = preparar({ contexto: conCurso });
+        await controlador.iniciar(sesionCon(DOC_NORTE), { soloLectura: true });
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(llamadas.salirDeConsulta, 0);
+        assert.equal(controlador.estado.aviso, MENSAJES.soloLectura);
+    });
+
+    test('enCurso no se escribe en MemoriaVistas ni en IndexedDB', async () => {
+        const enDisco = [];
+        const memoria = new MemoriaVistas({ persistencia: { leer: async () => null, guardar: (ranura, valor) => enDisco.push([ranura, valor]), borrar: () => {} } });
+        memoria.recordarSesion(sesionCon(DOC_NORTE));
+        const { controlador } = preparar({ memoria, contexto: conCurso });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(controlador.estado.enCurso, EN_CURSO);
+        const guardado = memoria.leer(MemoriaVistas.clave(sesionCon(DOC_NORTE), 'dashboard.asignaciones'));
+        assert.deepEqual(Object.keys(guardado).sort(), ['asignaciones', 'en']);
+        assert.ok(enDisco.length > 0, 'las asignaciones sí van a disco');
+        assert.ok(!JSON.stringify(enDisco).includes(EN_CURSO), 'el id de la consulta en curso no va a disco');
+        assert.ok(!JSON.stringify(enDisco).includes('enCurso'));
+    });
+
+    test('sin red al iniciar no pide contexto() y enCurso queda null', async () => {
+        const { controlador, llamadas } = preparar({ enLinea: false, contexto: conCurso });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(llamadas.contexto, 0);
+        assert.equal(controlador.estado.enCurso, null);
     });
 });

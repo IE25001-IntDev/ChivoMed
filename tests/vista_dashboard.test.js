@@ -188,7 +188,9 @@ describe('<vista-dashboard>: cambio de rol', () => {
         $('selector').dispatchEvent(new Event('submit', { cancelable: true }));
         await asentar();
         assert.equal($('aviso').hidden, false);
-        assert.equal($('aviso').textContent, motivo);
+        // F8: texto propio del frontend, no el message del backend.
+        assert.equal($('aviso').textContent, 'Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.');
+        assert.notEqual($('aviso').textContent, motivo);
         assert.equal(vista.shadowRoot.activeElement, $('aviso'));
         assert.equal(vista.shadowRoot.querySelector('input:checked').value, DOC_NORTE.idPersonaRol);
         assert.equal(eventos.length, 0);

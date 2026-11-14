@@ -26,7 +26,9 @@ export const MENSAJES = Object.freeze({
     noDisponible: "El selector de rol todavía no está disponible.",
     generico: "No pudimos cargar tus roles. Inténtalo de nuevo.",
     cambioFallido: "No pudimos cambiar tu rol. Inténtalo de nuevo.",
-    cerrarAntes: "Cierra la consulta en curso antes de cambiar de rol.",
+    /** F8: texto propio para rolCambio.cerrarAntesCambiar; se ignora el message del backend. */
+    cerrarAntes: "Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.",
+    salioDeConsulta: "Saliste de la consulta. Ya puedes cambiar de rol.",
     sesionNoActualizada: "Cambiaste de rol, pero no pudimos actualizar tu sesión. Recarga la página.",
     soloLectura: "Estás sin conexión: puedes ver tus roles, pero cambiar de rol requiere red.",
     sinAsignaciones: "No tienes roles de empleado activos en ninguna clínica.",
@@ -94,7 +96,7 @@ export function agruparPorClinica(asignaciones, idPersonaRolActivo = null) {
 
 /** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
 export function mensajeDeError(error, { cambio = false } = {}) {
-    if (error?.code === CODIGO_CERRAR_ANTES) return texto(error.message) ? error.message : MENSAJES.cerrarAntes;
+    if (error?.code === CODIGO_CERRAR_ANTES) return MENSAJES.cerrarAntes;
     switch (error?.status) {
         case 0: return MENSAJES.conexion;
         case 401: return MENSAJES.sesionFinalizada;
@@ -119,7 +121,7 @@ export class ControladorDashboard {
 
     /**
      * @param {object} [opciones]
-     * @param {{ asignaciones: Function, cambiarRol: Function }} [opciones.servicio] resuelven { data }
+     * @param {{ asignaciones: Function, cambiarRol: Function, contexto: Function, salirDeConsulta: Function }} [opciones.servicio] resuelven { data }
      * @param {() => Promise<object>} [opciones.obtenerSesion] GET /auth/me
      * @param {{ enLinea: boolean, suscribir: Function }} [opciones.conexion]
      * @param {MemoriaVistas} [opciones.memoria]
@@ -147,6 +149,12 @@ export class ControladorDashboard {
             aviso: null,
             desdeMemoria: false,
             actualizadoEn: null,
+            /** F8: idConsulta en curso según GET /atencion, o null. Nunca se guarda en memoria ni en disco. */
+            enCurso: null,
+            /** F8: true mientras espera el DELETE /atencion/consulta. */
+            saliendo: false,
+            /** F8: confirmación tras salir de la consulta ("Saliste de la consulta…"). */
+            confirmacion: null,
         });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
         this.estado = estado;
@@ -209,8 +217,13 @@ export class ControladorDashboard {
         }
         const id = ++this.#secuencia;
         this.#actualizar({ cargando: true, error: null });
+        // GET /atencion sale a la vez que las asignaciones; si falla, solo se pierde el aviso.
+        const contexto = this.#leerEnCurso().then(enCurso => {
+            if (id === this.#secuencia) this.#actualizar({ enCurso });
+        });
         try {
             const { data } = await this.#servicio.asignaciones();
+            await contexto;
             if (id !== this.#secuencia) return;
             this.#asignaciones = normalizarAsignaciones(data);
             this.#hayDatos = true;
@@ -219,6 +232,7 @@ export class ControladorDashboard {
             this.#actualizar({ ...this.#derivados(), cargando: false, vacio: !this.#asignaciones.length,
                 desdeMemoria: false, actualizadoEn: en, error: null });
         } catch (error) {
+            await contexto;
             if (id !== this.#secuencia) return;
             if (error?.status === 0 && tieneDatos) {
                 this.#actualizar({ cargando: false, desdeMemoria: true, error: null });
@@ -241,9 +255,15 @@ export class ControladorDashboard {
         try {
             await this.#servicio.cambiarRol(idPersonaRol);
         } catch (error) {
-            // Consulta en curso: no es un fallo, es el motivo por el que no se puede cambiar.
-            if (error?.code === CODIGO_CERRAR_ANTES) this.#actualizar({ cambiando: null, aviso: mensajeDeError(error) });
-            else this.#actualizar({ cambiando: null, error: mensajeDeError(error, { cambio: true }) });
+            // Consulta en curso: no es un fallo, es el motivo por el que no se puede cambiar. Se
+            // ofrecen "Ir a la consulta en curso" y "Salir de la consulta"; si aún no se conoce su
+            // id, se pide GET /atencion una sola vez.
+            if (error?.code === CODIGO_CERRAR_ANTES) {
+                const enCurso = this.estado.enCurso ?? await this.#leerEnCurso();
+                this.#actualizar({ cambiando: null, aviso: mensajeDeError(error), confirmacion: null, enCurso });
+            } else {
+                this.#actualizar({ cambiando: null, error: mensajeDeError(error, { cambio: true }) });
+            }
             return false;
         }
         let sesion;
@@ -255,6 +275,38 @@ export class ControladorDashboard {
         }
         this.#actualizar({ sesion });
         this.#actualizar({ ...this.#derivados(), cambiando: null, sesionCambiada: sesion });
+        return true;
+    }
+
+    /** idConsulta en curso según GET /atencion, o null si no hay, no es un UUID o la petición falla. */
+    async #leerEnCurso() {
+        try {
+            const { data } = await this.#servicio.contexto();
+            return typeof data?.idConsulta === "string" && UUID.test(data.idConsulta) ? data.idConsulta : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * F8: sale de la consulta en curso sin cerrarla (DELETE /atencion/consulta). No reintenta el
+     * cambio de rol: el usuario vuelve a pulsar "Usar este rol". Devuelve true si el backend respondió.
+     */
+    async salirDeConsulta() {
+        if (this.estado.saliendo || this.estado.cambiando) return false;
+        if (this.estado.soloLectura || !this.#conexion.enLinea) {
+            this.#actualizar({ aviso: this.estado.soloLectura ? MENSAJES.soloLectura : MENSAJE_SIN_RED });
+            return false;
+        }
+        this.#actualizar({ saliendo: true, error: null, confirmacion: null });
+        try {
+            await this.#servicio.salirDeConsulta();
+        } catch (error) {
+            // 401: mismo texto que el resto de acciones; DefaultService ya emitió 'sesion-expirada'.
+            this.#actualizar({ saliendo: false, error: mensajeDeError(error) });
+            return false;
+        }
+        this.#actualizar({ saliendo: false, enCurso: null, aviso: null, confirmacion: MENSAJES.salioDeConsulta });
         return true;
     }
 }
