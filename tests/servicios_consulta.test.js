@@ -41,6 +41,45 @@ describe('AtencionService.consulta (HU4, contrato B6)', () => {
     });
 });
 
+describe('AtencionService.salirDeConsulta (F8, B8)', () => {
+    const sinContenido = () => new Response(null, { status: 204 });
+
+    test('hace DELETE /atencion/consulta sin cuerpo, con CSRF, y un 204 da data null', async () => {
+        const { peticiones, fetchImpl } = fetchDoble(sinContenido);
+        const respuesta = await new AtencionService(opciones(fetchImpl)).salirDeConsulta();
+        assert.equal(peticiones.length, 1);
+        assert.equal(peticiones[0].url, `${BASE}/atencion/consulta`);
+        assert.equal(peticiones[0].opciones.method, 'DELETE');
+        assert.equal(peticiones[0].opciones.body, undefined);
+        assert.equal(peticiones[0].opciones.headers.has('Content-Type'), false);
+        assert.equal(peticiones[0].opciones.headers.get('X-CSRF-Token'), 'csrf-prueba');
+        assert.equal(respuesta.status, 204);
+        assert.equal(respuesta.data, null);
+    });
+
+    test('es idempotente: un segundo DELETE también resuelve con 204', async () => {
+        const { peticiones, fetchImpl } = fetchDoble(sinContenido);
+        const servicio = new AtencionService(opciones(fetchImpl));
+        const primera = await servicio.salirDeConsulta();
+        const segunda = await servicio.salirDeConsulta();
+        assert.deepEqual([primera.status, segunda.status], [204, 204]);
+        assert.equal(peticiones.length, 2);
+        assert.ok(peticiones.every(p => p.opciones.method === 'DELETE' && p.opciones.headers.get('X-CSRF-Token') === 'csrf-prueba'));
+    });
+
+    test('un 401 llega con su code y su status', async () => {
+        const { fetchImpl } = fetchDoble(Response.json({ status: 401, code: 'auth.sesion', message: 'Vuelva a iniciar sesión.' }, { status: 401 }));
+        await assert.rejects(new AtencionService(opciones(fetchImpl)).salirDeConsulta(),
+            error => error.status === 401 && error.code === 'auth.sesion');
+    });
+
+    test('un error de red se convierte en status 0 conexion.error', async () => {
+        const fetchImpl = async () => { throw new TypeError('Failed to fetch'); };
+        await assert.rejects(new AtencionService(opciones(fetchImpl)).salirDeConsulta(),
+            error => error.status === 0 && error.code === 'conexion.error');
+    });
+});
+
 describe('ConsultaProcedimientoPasoService (HU4)', () => {
     test('retroceder() hace PUT …/retroceso sin cuerpo, con CSRF, y devuelve el paso reabierto', async () => {
         const dto = { idConsultaProcedimientoPaso: UUID(2), estado: 'PENDIENTE', valor: 'Registro de prueba' };

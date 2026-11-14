@@ -44,6 +44,15 @@ class AtencionService extends DefaultService {
         return this.solicitar("GET", `${this.recurso}/consultas/${encodeURIComponent(idConsulta)}`, { ...opciones, Entidad: null });
     }
 
+    /**
+     * DELETE /atencion/consulta (B8): sale de la consulta en curso sin cerrarla. Sin cuerpo, con
+     * X-CSRF-Token; responde 204 (data null). Idempotente: sin consulta en curso también da 204.
+     * Errores: 401 auth.sesion, 403 auth.asignacion, 403 auth.csrf.
+     */
+    salirDeConsulta(opciones = {}) {
+        return this.solicitar("DELETE", `${this.recurso}/consulta`, { ...opciones, Entidad: null });
+    }
+
     /** PUT /atencion/rol-activo → { idPersonaRol, idConsulta }. Con consulta en curso: 409 rolCambio.cerrarAntesCambiar. */
     cambiarRol(idPersonaRol, opciones = {}) {
         return this.solicitar("PUT", `${this.recurso}/rol-activo`, {
