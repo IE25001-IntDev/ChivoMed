@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-13.15";
+    const VERSION = "2026-11-13.16";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -90,26 +90,17 @@
         "./js/control/estado_reactivo.js",
         "./js/control/formato_documento.js",
         "./js/control/consulta_procedimiento_paso_service.js",
-        "./js/control/consulta_procedimiento_service.js",
         "./js/control/consulta_service.js",
-        "./js/control/examen_resultado_service.js",
         "./js/control/orden_examen_service.js",
-        "./js/control/procedimiento_paso_examen_service.js",
-        "./js/control/procedimiento_paso_secuencia_service.js",
         "./js/control/procedimiento_paso_service.js",
         "./js/entities/atencion.js",
         "./js/entities/default_entity.js",
         "./js/entities/default_error.js",
         "./js/entities/default_response.js",
         "./js/entities/consulta.js",
-        "./js/entities/consulta_procedimiento.js",
         "./js/entities/consulta_procedimiento_paso.js",
-        "./js/entities/examen.js",
-        "./js/entities/examen_resultado.js",
         "./js/entities/orden_examen.js",
         "./js/entities/procedimiento_paso.js",
-        "./js/entities/procedimiento_paso_examen.js",
-        "./js/entities/procedimiento_paso_secuencia.js",
     ]);
 
     const ESTRATEGIAS = Object.freeze({

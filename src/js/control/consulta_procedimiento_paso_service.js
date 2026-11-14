@@ -1,7 +1,6 @@
 import DefaultService from "./default_service.js";
 import ConsultaProcedimientoPaso from "../entities/consulta_procedimiento_paso.js";
 import OrdenExamenService from "./orden_examen_service.js";
-import Examen from "../entities/examen.js";
 import OrdenExamen from "../entities/orden_examen.js";
 
 /** Servicio REST de ConsultaProcedimientoPaso; hereda CRUD y respuestas comunes de DefaultService. */
@@ -13,12 +12,6 @@ class ConsultaProcedimientoPasoService extends DefaultService {
     /** Servicio de /consultas-procedimientos-pasos/{id}/ordenes-examen. */
     ordenesExamen(id) {
         return this.relacionados(id, "ordenes-examen", OrdenExamenService, ["POST"]);
-    }
-
-    asignarResponsable(id, idPersonaRol, opciones = {}) {
-        return this.solicitar("PUT", `${this.ruta(id)}/responsable`, {
-            ...opciones, data: { idPersonaRol },
-        });
     }
 
     completar(id, valor = null, opciones = {}) {
@@ -49,12 +42,6 @@ class ConsultaProcedimientoPasoService extends DefaultService {
         const datos = { idConsultaProcedimientoPaso: id, idExamen };
         if (typeof indicaciones === "string" && indicaciones.trim()) datos.indicaciones = indicaciones.trim();
         return this.solicitar("POST", `${this.ruta(id)}/ordenes-examen`, { ...opciones, data: datos, Entidad: OrdenExamen });
-    }
-
-    registrarExamen(id, datos, opciones = {}) {
-        return this.solicitar("POST", `${this.ruta(id)}/examenes`, {
-            ...opciones, data: datos, Entidad: Examen,
-        });
     }
 }
 
