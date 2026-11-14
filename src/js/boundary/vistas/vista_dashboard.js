@@ -40,14 +40,12 @@ const PLANTILLA = plantilla(`
   </div>
   <p class="aviso aviso-motivo" id="aviso" role="alert" tabindex="-1" hidden></p>
   <div class="region-en-curso" id="region-en-curso" role="status">
-    <div class="en-curso" id="en-curso" hidden>
-      <p id="en-curso-texto"></p>
-      <div class="acciones-en-curso">
-        <a class="boton boton-secundario" id="ir-en-curso"></a>
-        <button class="boton boton-secundario" id="salir" type="button"></button>
-      </div>
-    </div>
+    <p class="aviso aviso-en-curso" id="en-curso-texto" hidden></p>
     <p class="aviso aviso-exito" id="confirmacion" tabindex="-1" hidden></p>
+  </div>
+  <div class="acciones-en-curso" id="acciones-en-curso" hidden>
+    <a class="boton boton-secundario" id="ir-en-curso"></a>
+    <button class="boton boton-secundario" id="salir" type="button"></button>
   </div>
   <form id="selector" aria-labelledby="titulo-roles" novalidate>
     <div class="grupos-clinica" id="grupos"></div>
@@ -167,13 +165,15 @@ class VistaDashboard extends HTMLElement {
     }
 
     /**
-     * F8: la región role="status" nunca se oculta; solo su contenido. Con consulta en curso muestra
-     * el aviso, el enlace a #/consulta/{id} y "Salir de la consulta"; al salir, la confirmación.
+     * F8: la región role="status" nunca se oculta y solo tiene textos: el aviso de consulta en curso
+     * y la confirmación al salir. El enlace a #/consulta/{id} y "Salir de la consulta" van fuera de
+     * ella, para que el lector de pantalla anuncie solo el mensaje.
      */
     #pintarEnCurso(estado, cambio) {
         const enCurso = estado.enCurso;
-        this.$("en-curso").hidden = !enCurso;
+        this.$("en-curso-texto").hidden = !enCurso;
         this.$("en-curso-texto").textContent = enCurso ? TEXTOS.enCurso : "";
+        this.$("acciones-en-curso").hidden = !enCurso;
         const enlace = this.$("ir-en-curso");
         enlace.textContent = TEXTOS.irEnCurso;
         if (enCurso) enlace.setAttribute("href", `#/consulta/${enCurso}`);

@@ -209,9 +209,24 @@ describe('<vista-dashboard>: consulta en curso (F8)', () => {
         await asentar();
         assert.equal($('region-en-curso').getAttribute('role'), 'status');
         assert.equal($('region-en-curso').hidden, false);
-        assert.equal($('en-curso').hidden, true);
+        assert.equal($('en-curso-texto').hidden, true);
+        assert.equal($('acciones-en-curso').hidden, true);
         assert.equal($('confirmacion').hidden, true);
         assert.equal($('ir-en-curso').hasAttribute('href'), false);
+    });
+
+    test('la región role="status" solo contiene textos: el enlace y el botón quedan fuera', () => {
+        const { vista, $ } = montar({ idConsulta: EN_CURSO });
+        conectar(vista);
+        const etiquetas = nodo => [...nodo.children].flatMap(h => [h.localName, ...etiquetas(h)]);
+        assert.deepEqual(etiquetas($('region-en-curso')), ['p', 'p']);
+        assert.equal($('acciones-en-curso').getAttribute('role'), null);
+    });
+
+    test('los destinos de focus() son enfocables: #error, #aviso y #confirmacion tienen tabindex="-1"', () => {
+        const { vista, $ } = montar();
+        conectar(vista);
+        for (const id of ['error', 'aviso', 'confirmacion']) assert.equal($(id).getAttribute('tabindex'), '-1', id);
     });
 
     test('con consulta en curso: aviso, enlace #/consulta/{id} con su texto y botón "Salir de la consulta"', async () => {
@@ -219,7 +234,8 @@ describe('<vista-dashboard>: consulta en curso (F8)', () => {
         conectar(vista);
         await asentar();
         assert.equal($('region-en-curso').hidden, false);
-        assert.equal($('en-curso').hidden, false);
+        assert.equal($('acciones-en-curso').hidden, false);
+        assert.equal($('en-curso-texto').hidden, false);
         assert.equal($('en-curso-texto').textContent, 'Tienes una consulta en curso.');
         assert.equal($('ir-en-curso').getAttribute('href'), `#/consulta/${EN_CURSO}`);
         assert.equal($('ir-en-curso').textContent, 'Ir a la consulta en curso');
@@ -243,7 +259,7 @@ describe('<vista-dashboard>: consulta en curso (F8)', () => {
         await asentar();
         assert.equal(llamadas.salirDeConsulta, 1);
         assert.equal($('region-en-curso').hidden, false, 'la región no se oculta');
-        assert.equal($('en-curso').hidden, true);
+        assert.equal($('acciones-en-curso').hidden, true);
         assert.equal($('ir-en-curso').hasAttribute('href'), false);
         assert.equal($('confirmacion').hidden, false);
         assert.equal($('confirmacion').textContent, 'Saliste de la consulta. Ya puedes cambiar de rol.');
@@ -262,7 +278,7 @@ describe('<vista-dashboard>: consulta en curso (F8)', () => {
         assert.equal($('salir').textContent, 'Saliendo…');
         soltar(null);
         await asentar();
-        assert.equal($('en-curso').hidden, true);
+        assert.equal($('acciones-en-curso').hidden, true);
     });
 
     test('si salir falla (401), el error se muestra y enfoca, y el aviso con el enlace sigue', async () => {
@@ -275,7 +291,7 @@ describe('<vista-dashboard>: consulta en curso (F8)', () => {
         assert.equal($('error').hidden, false);
         assert.equal($('error-texto').textContent, 'Tu sesión ha finalizado. Vuelve a iniciar sesión.');
         assert.equal(vista.shadowRoot.activeElement, $('error'));
-        assert.equal($('en-curso').hidden, false);
+        assert.equal($('acciones-en-curso').hidden, false);
         assert.equal($('ir-en-curso').getAttribute('href'), `#/consulta/${EN_CURSO}`);
     });
 
@@ -298,7 +314,7 @@ describe('<vista-dashboard>: consulta en curso (F8)', () => {
         elegir();
         await asentar();
         assert.equal($('aviso').hidden, false);
-        assert.equal($('en-curso').hidden, false);
+        assert.equal($('acciones-en-curso').hidden, false);
         $('salir').dispatchEvent(new Event('click'));
         await asentar();
         assert.equal($('aviso').hidden, true);
