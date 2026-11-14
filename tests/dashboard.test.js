@@ -513,7 +513,7 @@ describe('ControladorDashboard: consulta en curso (F8)', () => {
         assert.equal(controlador.estado.aviso, MENSAJES.cerrarAntes);
     });
 
-    test('409 → salirDeConsulta() → cambiar(): rol cambiado, enCurso null y el mensaje de salida', async () => {
+    test('409 → salirDeConsulta() → cambiar(): rol cambiado, enCurso null y sin mensajes de salida ni del 409', async () => {
         let enConsulta = true;
         const { controlador, llamadas } = preparar({
             contexto: async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: enConsulta ? EN_CURSO : null }),
@@ -534,7 +534,11 @@ describe('ControladorDashboard: consulta en curso (F8)', () => {
         assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), true);
         assert.equal(controlador.estado.activa.idPersonaRol, DOC_SUR.idPersonaRol);
         assert.equal(controlador.estado.enCurso, null);
-        assert.equal(controlador.estado.confirmacion, 'Saliste de la consulta. Ya puedes cambiar de rol.');
+        // Con el rol ya cambiado no queda ningún mensaje de la salida ni del 409.
+        assert.equal(controlador.estado.confirmacion, null);
+        assert.equal(controlador.estado.aviso, null);
+        assert.ok(![controlador.estado.confirmacion, controlador.estado.aviso, controlador.estado.error]
+            .some(m => typeof m === 'string' && m.startsWith('Saliste de la consulta')));
         assert.deepEqual(llamadas.cambiarRol, [DOC_SUR.idPersonaRol, DOC_SUR.idPersonaRol], 'sin reintento automático');
     });
 

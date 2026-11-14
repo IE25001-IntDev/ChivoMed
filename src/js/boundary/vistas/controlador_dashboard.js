@@ -274,7 +274,8 @@ export class ControladorDashboard {
             return false;
         }
         this.#actualizar({ sesion });
-        this.#actualizar({ ...this.#derivados(), cambiando: null, sesionCambiada: sesion });
+        // Con el rol ya cambiado, la confirmación de salida y el motivo del 409 dejan de aplicar.
+        this.#actualizar({ ...this.#derivados(), cambiando: null, sesionCambiada: sesion, confirmacion: null, aviso: null });
         return true;
     }
 
