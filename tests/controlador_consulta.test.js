@@ -1,13 +1,13 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    MENSAJES, MAX_TEXTO, mensajeDeErrorConsulta, codigoDeRol, pasosPendientes, elegirPasoActual,
+    MENSAJES, MAX_TEXTO, mensajeDeErrorConsulta, CODIGOS_POR_ROL, pasosPendientes, elegirPasoActual,
     motivoBloqueo, puedeOfrecerRetroceso, motivoNoRetroceder, puedeCerrar, nombreDeOrden, validarOrden, servicioConsulta,
 } from '../src/js/boundary/vistas/controlador_consulta.js';
 import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import {
-    UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
+    UUID, ID_CONSULTA, ID_ROL_DOCTOR, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
 } from './dobles/consulta.js';
 
 // ------------------------------------------------------------------------------ funciones puras
@@ -29,6 +29,17 @@ describe('mensajeDeErrorConsulta', () => {
             'El procedimiento X no ha llegado a un paso final.');
         assert.match(mensajeDeErrorConsulta(errorHttp(409, 'consulta.procedimientoSinFinal', '')), /paso final/);
     });
+    test('B8: cada rechazo por rol tiene su mensaje; noResponsablePaso usa el del backend, que trae el rol', () => {
+        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.noResponsablePaso', 'Este paso lo atiende el rol Enfermera.')),
+            'Este paso lo atiende el rol Enfermera.');
+        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.noResponsablePaso', '')), MENSAJES.otroRol);
+        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.soloFinalizador', 'x')), MENSAJES.soloFinalizador);
+        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.soloEmpleado', 'x')), MENSAJES.soloEmpleado);
+        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.rolClinica', 'x')), MENSAJES.rolClinica);
+        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'consulta.sinPasoParaRol', 'x')), MENSAJES.sinPasoParaRol);
+        assert.deepEqual([...CODIGOS_POR_ROL].sort(), ['consulta.noResponsablePaso', 'consulta.rolClinica', 'consulta.sinPasoParaRol',
+            'consulta.soloEmpleado', 'consulta.soloFinalizador']);
+    });
     test('un 409 o 400 desconocido muestra el message del backend; sin él, el genérico', () => {
         assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'otro.codigo', 'Motivo del backend.')), 'Motivo del backend.');
         assert.equal(mensajeDeErrorConsulta(errorHttp(400, 'otro.codigo', '')), MENSAJES.generico);
@@ -45,15 +56,10 @@ describe('mensajeDeErrorConsulta', () => {
 
 describe('pasos pendientes y paso actual', () => {
     const [varios] = normalizarConsultas([consultaB6({ procedimientos: [
-        procedimiento(1, [paso(1), pendiente(2, { responsable: { nombre: 'Persona', rol: 'Administración' } })]),
-        procedimiento(2, [paso(3), pendiente(4)]),
+        procedimiento(1, [paso(1), pendiente(2, { responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
+        procedimiento(2, [paso(3), pendiente(4, { rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
     ] })]);
-
-    test('codigoDeRol compara el nombre del rol con el código de la sesión', () => {
-        assert.equal(codigoDeRol('Administración'), 'ADMINISTRACION');
-        assert.equal(codigoDeRol(' Doctor '), 'DOCTOR');
-        assert.equal(codigoDeRol(null), null);
-    });
+    const doctor = { idRol: ID_ROL_DOCTOR, nombreRol: 'Doctor' };
     test('pasosPendientes lista los PENDIENTE de todos los procedimientos con el nombre del procedimiento', () => {
         assert.deepEqual(pasosPendientes(varios).map(p => [p.paso.nombre, p.procedimiento]), [['Paso 2', 'Procedimiento 1'], ['Paso 4', 'Procedimiento 2']]);
         assert.equal(Object.isFrozen(pasosPendientes(varios)), true);
@@ -61,16 +67,16 @@ describe('pasos pendientes y paso actual', () => {
     });
     test('elegirPasoActual: sin pendientes, null; con uno, ese', () => {
         const [cerrada] = normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [paso(1)])] })]);
-        assert.equal(elegirPasoActual(cerrada, 'DOCTOR'), null);
+        assert.equal(elegirPasoActual(cerrada, doctor), null);
         const [una] = normalizarConsultas([consultaB6()]);
-        assert.equal(elegirPasoActual(una, 'ADMINISTRACION').nombre, 'Paso 2');
+        assert.equal(elegirPasoActual(una, null).nombre, 'Paso 2');
     });
-    test('elegirPasoActual: con varios prefiere el del rol activo; un elegido válido gana y uno inválido se ignora', () => {
-        assert.equal(elegirPasoActual(varios, 'DOCTOR').nombre, 'Paso 4');
-        assert.equal(elegirPasoActual(varios, 'ADMINISTRACION').nombre, 'Paso 2');
-        assert.equal(elegirPasoActual(varios, 'OTRO').nombre, 'Paso 2', 'ninguno coincide: el primero');
-        assert.equal(elegirPasoActual(varios, 'DOCTOR', UUID(102)).nombre, 'Paso 2');
-        assert.equal(elegirPasoActual(varios, 'DOCTOR', UUID(101)).nombre, 'Paso 4', 'un completado no se elige');
+    test('elegirPasoActual: con varios prefiere el del rol activo por idRol; un elegido válido gana y uno inválido se ignora', () => {
+        assert.equal(elegirPasoActual(varios, doctor).nombre, 'Paso 4');
+        assert.equal(elegirPasoActual(varios, { nombreRol: 'Doctor' }).nombre, 'Paso 2', 'sin idRol no compara: nunca por nombre');
+        assert.equal(elegirPasoActual(varios, { idRol: UUID(701) }).nombre, 'Paso 2', 'ninguno coincide: el primero');
+        assert.equal(elegirPasoActual(varios, doctor, UUID(102)).nombre, 'Paso 2');
+        assert.equal(elegirPasoActual(varios, doctor, UUID(101)).nombre, 'Paso 4', 'un completado no se elige');
     });
 });
 
@@ -78,14 +84,17 @@ describe('motivos y reglas de las acciones', () => {
     const [abierta] = normalizarConsultas([consultaB6()]);
     const [cerrada] = normalizarConsultas([consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00' })]);
 
-    test('motivoBloqueo: el rol va antes que todo, luego cerrada, luego sin red o solo lectura', () => {
-        assert.equal(motivoBloqueo({ rol: 'DOCTOR', consulta: abierta }), null);
-        assert.equal(motivoBloqueo({ rol: 'ADMINISTRACION', consulta: cerrada, enLinea: false }), MENSAJES.soloDoctor);
-        assert.equal(motivoBloqueo({ rol: null, consulta: abierta }), MENSAJES.soloDoctor);
-        assert.equal(MENSAJES.soloDoctor, 'Solo el rol Doctor puede atender consultas.');
-        assert.equal(motivoBloqueo({ rol: 'DOCTOR', consulta: cerrada, enLinea: false }), MENSAJES.cerrada);
-        assert.equal(motivoBloqueo({ rol: 'DOCTOR', consulta: abierta, enLinea: false }), MENSAJES.sinRed);
-        assert.equal(motivoBloqueo({ rol: 'DOCTOR', consulta: abierta, soloLectura: true }), MENSAJES.sinRed);
+    test('motivoBloqueo: cerrada, luego si no me toca (a quién le corresponde), luego sin red, luego sin seleccionar', () => {
+        const [ajena] = normalizarConsultas([consultaB6({ pendienteParaMi: false, procedimientos: [procedimiento(1, [paso(1),
+            pendiente(2, { responsable: { nombre: 'Lucía Pérez', rol: 'Enfermera' } })])] })]);
+        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true }), null);
+        assert.equal(motivoBloqueo({ consulta: null }), null);
+        assert.equal(motivoBloqueo({ consulta: cerrada, atendiendo: true, enLinea: false }), MENSAJES.cerrada);
+        assert.equal(motivoBloqueo({ consulta: ajena, enLinea: false }), 'Le corresponde a Lucía Pérez.');
+        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true, enLinea: false }), MENSAJES.sinRed);
+        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true, soloLectura: true }), MENSAJES.sinRed);
+        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: false }), MENSAJES.sinSeleccion);
+        assert.equal(Object.hasOwn(MENSAJES, 'soloDoctor'), false);
     });
     test('Retroceder solo se ofrece si el paso no es el primero (nivel > 0)', () => {
         assert.equal(puedeOfrecerRetroceso({ nivel: 0 }), false);
@@ -145,11 +154,12 @@ describe('servicioConsulta', () => {
 // ------------------------------------------------------------------------------ carga
 
 describe('ControladorConsulta: carga', () => {
-    test('DOCTOR: retoma, lee la consulta, pide paso, órdenes y asignables, y luego la definición: 6 peticiones', async () => {
+    test('si le toca: lee la consulta, la selecciona, pide paso, órdenes y asignables, y luego la definición: 6 peticiones', async () => {
         const { controlador, nombres, llamadas, iniciar } = preparar();
         await iniciar();
-        assert.deepEqual(nombres(), ['retomar', 'consulta', 'paso', 'ordenes', 'asignables', 'definicion']);
-        assert.deepEqual(llamadas[0], ['retomar', ID_CONSULTA]);
+        assert.deepEqual(nombres(), ['consulta', 'retomar', 'paso', 'ordenes', 'asignables', 'definicion']);
+        assert.deepEqual(llamadas[1], ['retomar', ID_CONSULTA]);
+        assert.equal(controlador.estado.atendiendo, true);
         assert.deepEqual(llamadas.slice(2, 5).map(l => l[1]), [UUID(102), UUID(102), UUID(102)], 'los datos son del paso PENDIENTE');
         assert.deepEqual(llamadas[5], ['definicion', UUID(400)]);
         const { estado } = controlador;
@@ -170,16 +180,45 @@ describe('ControladorConsulta: carga', () => {
         assert.equal(nombres().length, 6);
     });
 
-    test('una consulta cerrada (409 yaCerrada) se muestra en solo lectura, sin pedir datos del paso', async () => {
+    test('una consulta cerrada se muestra en solo lectura, sin seleccionarla ni pedir datos del paso', async () => {
         const { controlador, nombres, iniciar } = preparar({ respuestas: {
-            retomar: errorHttp(409, 'consulta.yaCerrada'),
             consulta: () => consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00', procedimientos: [procedimiento(1, [paso(1)])] }),
         } });
         await iniciar();
-        assert.deepEqual(nombres(), ['retomar', 'consulta']);
+        assert.deepEqual(nombres(), ['consulta']);
         assert.equal(controlador.estado.error, null);
         assert.equal(controlador.bloqueo, MENSAJES.cerrada);
     });
+
+    test('si se cerró entre la lectura y la selección (409 yaCerrada), se vuelve a leer y queda en solo lectura', async () => {
+        let lecturas = 0;
+        const { controlador, nombres, iniciar } = preparar({ respuestas: {
+            retomar: errorHttp(409, 'consulta.yaCerrada'),
+            consulta: () => (++lecturas === 1 ? consultaB6()
+                : consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00', procedimientos: [procedimiento(1, [paso(1)])] })),
+        } });
+        await iniciar();
+        assert.deepEqual(nombres(), ['consulta', 'retomar', 'consulta']);
+        assert.equal(controlador.estado.error, null);
+        assert.equal(controlador.bloqueo, MENSAJES.cerrada);
+    });
+
+    for (const [status, code] of [[409, 'consulta.sinPasoParaRol'], [403, 'consulta.noResponsablePaso'], [403, 'consulta.soloFinalizador'],
+        [403, 'consulta.soloEmpleado'], [403, 'consulta.rolClinica']]) {
+        test(`${status} ${code} al seleccionarla: se vuelve a leer y queda en solo lectura con su mensaje`, async () => {
+            let lecturas = 0;
+            const { controlador, nombres, iniciar } = preparar({ respuestas: {
+                retomar: errorHttp(status, code, 'Motivo del backend.'),
+                consulta: () => consultaB6({ pendienteParaMi: ++lecturas === 1 }),
+            } });
+            await iniciar();
+            assert.deepEqual(nombres(), ['consulta', 'retomar', 'consulta'], 'sin datos clínicos del paso');
+            assert.equal(controlador.estado.error, null);
+            assert.equal(controlador.estado.atendiendo, false);
+            assert.equal(controlador.estado.aviso, mensajeDeErrorConsulta(errorHttp(status, code, 'Motivo del backend.')));
+            assert.equal(controlador.bloqueo, 'Le corresponde a Persona Responsable.');
+        });
+    }
 
     test('409 cerrarAntesRetomar: muestra el motivo y ofrece la consulta en curso', async () => {
         const { controlador, nombres, iniciar } = preparar({ respuestas: {
@@ -187,7 +226,7 @@ describe('ControladorConsulta: carga', () => {
             contexto: () => ({ idPersonaRol: UUID(900), idConsulta: UUID(2) }),
         } });
         await iniciar();
-        assert.deepEqual(nombres(), ['retomar', 'contexto']);
+        assert.deepEqual(nombres(), ['consulta', 'retomar', 'contexto']);
         assert.equal(controlador.estado.error, MENSAJES.enCurso);
         assert.equal(controlador.estado.enCurso, UUID(2));
         assert.equal(controlador.estado.consulta, null);
@@ -207,11 +246,13 @@ describe('ControladorConsulta: carga', () => {
         }
     });
 
-    test('ADMINISTRACION: no retoma ni pide datos clínicos del paso; ve la consulta en solo lectura', async () => {
-        const { controlador, nombres, iniciar } = preparar({ sesion: sesionCon('ADMINISTRACION') });
+    test('si no le toca (Carlos en el Triaje de Lucía): no la selecciona ni pide datos clínicos del paso; solo lectura', async () => {
+        const { controlador, nombres, iniciar } = preparar({ respuestas: { consulta: () => consultaB6({ pendienteParaMi: false,
+            procedimientos: [procedimiento(1, [paso(1), pendiente(2, { responsable: { nombre: 'Lucía Pérez', rol: 'Enfermera' } })])] }) } });
         await iniciar();
         assert.deepEqual(nombres(), ['consulta']);
-        assert.equal(controlador.bloqueo, MENSAJES.soloDoctor);
+        assert.equal(controlador.estado.atendiendo, false);
+        assert.equal(controlador.bloqueo, 'Le corresponde a Lucía Pérez.');
         assert.equal(controlador.estado.detalle.idPaso, null);
         assert.equal(controlador.pasoActual.idConsultaProcedimientoPaso, UUID(102), 'igual se señala el paso actual');
     });
@@ -252,9 +293,9 @@ describe('ControladorConsulta: carga', () => {
     });
 
     test('con varios pendientes empieza en el del rol activo y el selector cambia de paso pidiendo sus datos', async () => {
-        const { controlador, llamadas, iniciar } = preparar({ respuestas: { consulta: () => consultaB6({ procedimientos: [
-            procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Administración' } })]),
-            procedimiento(2, [pendiente(4, { nivel: 0 })]),
+        const { controlador, llamadas, iniciar } = preparar({ sesion: sesionCon('DOCTOR', 1, ID_ROL_DOCTOR), respuestas: { consulta: () => consultaB6({ procedimientos: [
+            procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
+            procedimiento(2, [pendiente(4, { nivel: 0, rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
         ] }) } });
         await iniciar();
         assert.equal(controlador.pasoActual.idConsultaProcedimientoPaso, UUID(104));
@@ -270,10 +311,10 @@ describe('ControladorConsulta: carga', () => {
 
     test('una carga del paso que quedó obsoleta no pisa la del paso elegido después', async () => {
         const liberar = {};
-        const { controlador, iniciar } = preparar({ respuestas: {
+        const { controlador, iniciar } = preparar({ sesion: sesionCon('DOCTOR', 1, ID_ROL_DOCTOR), respuestas: {
             consulta: () => consultaB6({ procedimientos: [
-                procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Administración' } })]),
-                procedimiento(2, [pendiente(4, { nivel: 0 })]),
+                procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
+                procedimiento(2, [pendiente(4, { nivel: 0, rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
             ] }),
             asignables: id => (id === UUID(102) ? new Promise(r => { liberar.lento = () => r([examen(9)]); }) : [examen(1)]),
         } });
@@ -337,7 +378,8 @@ describe('ControladorConsulta: sin conexión', () => {
         conexion.emitir(true);
         await asentar(); await asentar();
         assert.equal(controlador.estado.error, null);
-        assert.equal(nombres().filter(n => n === 'retomar').length, 2);
+        // La primera carga falló al leer, antes de seleccionarla: solo la segunda la selecciona.
+        assert.equal(nombres().filter(n => n === 'retomar').length, 1);
         conexion.emitir(false);
         assert.equal(controlador.bloqueo, MENSAJES.sinRed);
         assert.equal(controlador.estado.consulta.idConsulta, ID_CONSULTA, 'lo cargado sigue a la vista');

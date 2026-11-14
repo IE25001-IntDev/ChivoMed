@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     ControladorConsultas, MENSAJES, MAX_DIAS, validarRango, normalizarConsultas, arbolDePasos, motivoNoAtender,
-    etiquetaEstado, resumenResultado, mensajeDeError,
+    etiquetaEstado, resumenResultado, mensajeDeError, accionAtender, esPasoDeMiRol,
 } from '../src/js/boundary/vistas/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
@@ -132,39 +132,53 @@ describe('motivoNoAtender', () => {
         const [c] = normalizarConsultas([consulta(1, { fechaFin: '2026-11-13T10:00:00-06:00' })]);
         assert.equal(motivoNoAtender(c), MENSAJES.cerrada);
     });
-    test('no es para mí y hay un paso PENDIENTE con responsable: dice a quién le corresponde', () => {
-        const [c] = normalizarConsultas([consulta(1, { pendienteParaMi: false })]);
-        assert.equal(motivoNoAtender(c), 'Le corresponde a Doctor.');
-        const [admin] = normalizarConsultas([consulta(1, { pendienteParaMi: false, procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P',
-            pasos: [paso(1), paso(2, { estado: 'PENDIENTE', responsable: { nombre: 'Persona', rol: 'Administración' } })] }] })]);
-        assert.equal(motivoNoAtender(admin), 'Le corresponde a Administración.');
+    // Demo del guion: SA-4 (Toma de presión de Julia) está pendiente para Lucía, Enfermera.
+    const ajena = (pendiente, extra = {}) => normalizarConsultas([consulta(1, { pendienteParaMi: false, ...extra,
+        procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'Control de hipertensión', pasos: [paso(1), paso(2, { estado: 'PENDIENTE', ...pendiente })] }] })])[0];
+    const ROL_ENFERMERA = { idRol: UUID(600), nombre: 'Enfermera' };
+
+    test('no es para mí: dice la persona asignada y, si llega rolPaso, el rol del paso', () => {
+        const lucia = { nombre: 'Lucía Pérez', rol: 'Enfermera' };
+        assert.equal(motivoNoAtender(ajena({ responsable: lucia, rolPaso: ROL_ENFERMERA })), 'Le corresponde a Lucía Pérez (Enfermera).');
+        assert.equal(motivoNoAtender(ajena({ responsable: lucia })), 'Le corresponde a Lucía Pérez.', 'sin rolPaso no usa el rol de la persona');
+        assert.equal(motivoNoAtender(ajena({ responsable: null, rolPaso: ROL_ENFERMERA })), 'Este paso lo atiende el rol Enfermera.');
     });
-    test('no es para mí y el paso pendiente no tiene responsable o no hay pendientes: motivo general', () => {
-        const [sinResp] = normalizarConsultas([consulta(1, { pendienteParaMi: false, procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P',
-            pasos: [paso(2, { estado: 'PENDIENTE', responsable: null })] }] })]);
-        assert.equal(motivoNoAtender(sinResp), MENSAJES.sinPendiente);
+    test('no es para mí y no se sabe quién atiende el paso: respaldo genérico', () => {
+        assert.equal(motivoNoAtender(ajena({ responsable: null })), MENSAJES.otroRol);
+        assert.equal(MENSAJES.otroRol, 'Este paso lo atiende otro rol.');
+    });
+    test('sin pasos pendientes y no me toca: solo cierra quien completó el paso final', () => {
         const [todoListo] = normalizarConsultas([consulta(1, { pendienteParaMi: false, procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P', pasos: [paso(1)] }] })]);
-        assert.equal(motivoNoAtender(todoListo), MENSAJES.sinPendiente);
+        assert.equal(motivoNoAtender(todoListo), MENSAJES.soloFinalizador);
     });
     test('sin red o en solo lectura no se puede atender', () => {
         assert.equal(motivoNoAtender(abierta, { enLinea: false }), MENSAJES.sinRedAtender);
         assert.equal(motivoNoAtender(abierta, { soloLectura: true }), MENSAJES.sinRedAtender);
     });
-    test('con el rol DOCTOR se aplican las demás reglas', () => {
-        assert.equal(motivoNoAtender(abierta, { rol: 'DOCTOR' }), null);
-        assert.equal(motivoNoAtender(abierta, { rol: 'DOCTOR', enLinea: false }), MENSAJES.sinRedAtender);
+    test('no depende del rol activo: no hay lista fija de roles que atienden', () => {
+        assert.equal(Object.hasOwn(MENSAJES, 'soloDoctor'), false);
+        assert.equal(motivoNoAtender(abierta, { rol: 'ADMINISTRACION' }), null);
     });
-    test('un rol que no es DOCTOR no atiende, y ese motivo va antes que todos los demás', () => {
-        const [cerrada] = normalizarConsultas([consulta(1, { fechaFin: '2026-11-13T10:00:00-06:00' })]);
-        const [ajena] = normalizarConsultas([consulta(1, { pendienteParaMi: false })]);
-        assert.equal(MENSAJES.soloDoctor, 'Solo el rol Doctor puede atender consultas.');
-        for (const rol of ['ADMINISTRACION', null, '']) {
-            assert.equal(motivoNoAtender(abierta, { rol }), MENSAJES.soloDoctor, `rol ${rol}`);
-            assert.equal(motivoNoAtender(cerrada, { rol }), MENSAJES.soloDoctor);
-            assert.equal(motivoNoAtender(ajena, { rol }), MENSAJES.soloDoctor);
-            assert.equal(motivoNoAtender(abierta, { rol, enLinea: false, soloLectura: true }), MENSAJES.soloDoctor);
-            assert.equal(motivoNoAtender(null, { rol }), MENSAJES.soloDoctor);
-        }
+    test('un rolPaso mal formado se descarta', () => {
+        assert.equal(ajena({ rolPaso: { idRol: 'x', nombre: 'Enfermera' } }).procedimientos[0].pasos[1].rolPaso, null);
+        assert.deepEqual(ajena({ rolPaso: ROL_ENFERMERA }).procedimientos[0].pasos[1].rolPaso, ROL_ENFERMERA);
+    });
+});
+
+describe('accionAtender y esPasoDeMiRol', () => {
+    test('"cerrar" si me toca y no quedan pasos pendientes; si no, "atender"', () => {
+        const [cerrarla] = normalizarConsultas([consulta(1, { procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P', pasos: [paso(1)] }] })]);
+        assert.equal(accionAtender(cerrarla), 'cerrar');
+        assert.equal(accionAtender(normalizarConsultas([consulta(1)])[0]), 'atender');
+        assert.equal(accionAtender({ ...cerrarla, fechaFin: '2026-11-13T10:00:00-06:00' }), 'atender');
+        assert.equal(accionAtender(null), 'atender');
+    });
+    test('compara solo por idRol, y solo si los dos lados lo traen', () => {
+        const pasoEnfermera = { rolPaso: { idRol: UUID(600), nombre: 'Enfermera' } };
+        assert.equal(esPasoDeMiRol(pasoEnfermera, { idRol: UUID(600) }), true);
+        assert.equal(esPasoDeMiRol(pasoEnfermera, { idRol: UUID(601), nombreRol: 'Enfermera' }), false, 'nunca por nombre');
+        assert.equal(esPasoDeMiRol(pasoEnfermera, { nombreRol: 'Enfermera' }), false);
+        assert.equal(esPasoDeMiRol({ rolPaso: null }, { idRol: UUID(600) }), false);
     });
 });
 
@@ -357,14 +371,13 @@ describe('ControladorConsultas: atender', () => {
         assert.equal(controlador.atender(UUID(99)), false);
     });
 
-    test('con el rol ADMINISTRACION no publica la ruta aunque la consulta sea pendiente para él', async () => {
+    test('el rol activo no decide: Atención al público atiende lo que es pendiente para ella (Marta, SA-6)', async () => {
         const { controlador } = preparar();
-        const admin = sesionCon();
-        admin.rolActivo.codigo = 'ADMINISTRACION';
-        await controlador.iniciar(admin);
-        assert.deepEqual(controlador.contextoAtender(), { enLinea: true, soloLectura: false, rol: 'ADMINISTRACION' });
-        assert.equal(controlador.atender(UUID(1)), false);
-        assert.equal(controlador.estado.navegarA, null);
+        const marta = sesionCon();
+        marta.rolActivo.codigo = 'ADMINISTRACION';
+        await controlador.iniciar(marta);
+        assert.deepEqual(controlador.contextoAtender(), { enLinea: true, soloLectura: false });
+        assert.equal(controlador.atender(UUID(1)), true);
     });
 
     test('sin red no se puede atender', async () => {

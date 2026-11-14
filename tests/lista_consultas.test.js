@@ -271,7 +271,7 @@ describe('<lista-consultas>', () => {
         await asentar();
         const [permitida, ajena] = tarjetas();
         assert.equal(permitida.motivo, null);
-        assert.equal(ajena.motivo, 'Le corresponde a Doctor.');
+        assert.equal(ajena.motivo, 'Le corresponde a Persona Responsable.');
         conectar(permitida);
         permitida.shadowRoot.getElementById('atender').dispatchEvent(new Event('click'));
         await asentar();
@@ -280,19 +280,29 @@ describe('<lista-consultas>', () => {
         assert.equal(navegaciones[0].bubbles && navegaciones[0].composed, true);
     });
 
-    test('con el rol ADMINISTRACION todas las tarjetas dicen que solo el rol Doctor atiende', async () => {
-        const { lista, tarjetas, navegaciones } = montarLista();
-        const admin = sesionCon();
-        admin.rolActivo.codigo = 'ADMINISTRACION';
-        lista.contexto = { sesion: admin, soloLectura: false };
+    test('el rol activo no decide: con Atención al público valen pendienteParaMi y el motivo de cada tarjeta', async () => {
+        const { lista, tarjetas } = montarLista();
+        const marta = sesionCon();
+        marta.rolActivo.codigo = 'ADMINISTRACION';
+        lista.contexto = { sesion: marta, soloLectura: false };
         conectar(lista);
         await asentar();
-        assert.equal(tarjetas().length, 2);
-        for (const t of tarjetas()) assert.equal(t.motivo, MENSAJES.soloDoctor);
-        const [primera] = tarjetas();
-        conectar(primera);
-        assert.equal(primera.shadowRoot.getElementById('atender').disabled, true);
-        assert.equal(navegaciones.length, 0);
+        const [propia, ajena] = tarjetas();
+        assert.equal(propia.motivo, null);
+        assert.equal(ajena.motivo, 'Le corresponde a Persona Responsable.');
+    });
+
+    test('si solo falta cerrar la consulta, el botón dice "Cerrar consulta"', async () => {
+        const cerrarla = consultaCruda(1);
+        cerrarla.procedimientos[0].pasos = cerrarla.procedimientos[0].pasos.map(p => ({ ...p, estado: 'COMPLETADO' }));
+        const { lista, tarjetas } = montarLista({ dashboard: async () => [cerrarla, consultaCruda(2)] });
+        conectar(lista);
+        await asentar();
+        const [cierre, normal] = tarjetas();
+        conectar(cierre);
+        conectar(normal);
+        assert.equal(cierre.shadowRoot.getElementById('atender').textContent, 'Cerrar consulta');
+        assert.equal(normal.shadowRoot.getElementById('atender').textContent, 'Atender');
     });
 
     test('sin red, "Atender" se deshabilita en las tarjetas sin reconstruirlas', async () => {

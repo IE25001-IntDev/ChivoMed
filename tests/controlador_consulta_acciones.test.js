@@ -89,11 +89,27 @@ describe('ControladorConsulta: avanzar', () => {
         sinRed.conexion.emitir(false);
         assert.equal(sinRed.controlador.motivoNoActuar, MENSAJES.sinRed);
         assert.equal(await sinRed.controlador.avanzar(), false);
-        const admin = flujo({ sesion: sesionCon('ADMINISTRACION') });
-        await admin.iniciar();
-        assert.equal(admin.controlador.motivoNoActuar, MENSAJES.soloDoctor);
-        assert.equal(await admin.controlador.avanzar(), false);
-        for (const { nombres } of [sinRed, admin]) assert.equal(nombres().includes('completar'), false);
+        // El paso pendiente es de otro rol (pendienteParaMi false): solo lectura con a quién le corresponde.
+        const ajena = flujo({ respuestas: { consulta: () => consultaB6({ pendienteParaMi: false }) } });
+        await ajena.iniciar();
+        assert.equal(ajena.controlador.motivoNoActuar, 'Le corresponde a Persona Responsable.');
+        assert.equal(await ajena.controlador.avanzar(), false);
+        for (const { nombres } of [sinRed, ajena]) assert.equal(nombres().includes('completar'), false);
+    });
+
+    test('un 403 noResponsablePaso al avanzar muestra el rol del backend y recarga en solo lectura', async () => {
+        let mia = true;
+        const { controlador, nombres, iniciar } = flujo({ respuestas: {
+            consulta: () => consultaB6({ pendienteParaMi: mia }),
+            completar: () => { mia = false; return errorHttp(403, 'consulta.noResponsablePaso', 'Este paso lo atiende el rol Enfermera.'); },
+        } });
+        await iniciar();
+        controlador.cambiarBorrador('PA 120/80');
+        assert.equal(await controlador.avanzar(), false);
+        assert.equal(controlador.estado.errorAccion, 'Este paso lo atiende el rol Enfermera.');
+        assert.equal(nombres().filter(n => n === 'consulta').length, 2, 'se volvió a leer la consulta');
+        assert.equal(controlador.bloqueo, 'Le corresponde a Persona Responsable.');
+        assert.equal(controlador.estado.detalle.idPaso, null, 'en solo lectura no quedan datos clínicos del paso');
     });
 
     test('en el último paso (indicaFin) se completa igual, y después se ofrece el cierre', async () => {

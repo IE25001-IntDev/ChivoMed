@@ -14,7 +14,7 @@
 import {
     ControladorConsulta, MENSAJES, motivoNoRetroceder, puedeOfrecerRetroceso, puedeCerrar,
 } from "./controlador_consulta.js";
-import { ROL_ATIENDE, arbolDePasos, etiquetaEstado } from "./controlador_consultas.js";
+import { arbolDePasos, etiquetaEstado } from "./controlador_consultas.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { plantilla } from "../plantilla.js";
 import { formatearFecha, formatearFechaHora, ZONA_SV } from "../fechas_sv.js";
@@ -263,7 +263,7 @@ class VistaConsulta extends HTMLElement {
     #pintarPaneles(estado, ctrl) {
         const { paso: panelPaso, examenes: panelExamenes, cierre: panelCierre } = this.#paneles;
         const { consulta, detalle, accion, confirmando } = estado;
-        const esDoctor = ctrl.rol === ROL_ATIENDE;
+        const atiende = ctrl.atiende;
         const abierta = Boolean(consulta) && !consulta.fechaFin;
         const paso = ctrl.pasoActual;
         const motivo = ctrl.motivoNoActuar;
@@ -273,13 +273,13 @@ class VistaConsulta extends HTMLElement {
             const procedimiento = consulta.procedimientos.find(p => p.pasos.includes(paso))?.nombre ?? null;
             panelPaso.modelo = Object.freeze({
                 paso, procedimiento, pendientes: ctrl.pendientes, indicaFin: detalle.indicaFin === true,
-                borrador: estado.borrador, editable: esDoctor, aviso: estado.aviso === MENSAJES.reabierto ? estado.aviso : null,
+                borrador: estado.borrador, editable: atiende, aviso: estado.aviso === MENSAJES.reabierto ? estado.aviso : null,
                 motivo, ofrecerRetroceso: puedeOfrecerRetroceso(paso), motivoRetroceso: motivoNoRetroceder(detalle),
                 confirmando: confirmando === "retroceso", accion,
             });
         }
 
-        const conExamenes = abierta && esDoctor && Boolean(paso) && detalle.idPaso === paso?.idConsultaProcedimientoPaso && !detalle.cargando && !detalle.error;
+        const conExamenes = abierta && atiende && Boolean(paso) && detalle.idPaso === paso?.idConsultaProcedimientoPaso && !detalle.cargando && !detalle.error;
         panelExamenes.hidden = !conExamenes;
         if (conExamenes) {
             panelExamenes.modelo = Object.freeze({
@@ -288,7 +288,7 @@ class VistaConsulta extends HTMLElement {
             });
         }
 
-        const conCierre = esDoctor && puedeCerrar(consulta);
+        const conCierre = atiende && puedeCerrar(consulta);
         panelCierre.hidden = !conCierre;
         if (conCierre) {
             const motivoCierre = ctrl.bloqueo ?? (accion ? MENSAJES.accionEnCurso : null);

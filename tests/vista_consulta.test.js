@@ -32,7 +32,7 @@ async function montar({ sesion = sesionCon(), soloLectura = false, ...opciones }
 describe('<vista-consulta>', () => {
     test('al conectarse carga la consulta del id de la ruta y muestra paciente, recorrido y paneles', async () => {
         const { vista, $, p, llamadas } = await montar();
-        assert.deepEqual(llamadas[0], ['retomar', ID_CONSULTA]);
+        assert.deepEqual(llamadas.slice(0, 2), [['consulta', ID_CONSULTA], ['retomar', ID_CONSULTA]]);
         assert.equal($('paciente').textContent, 'Paciente De Prueba');
         assert.equal($('edad').textContent, '26 años (nació el 31 dic 1999)');
         assert.equal($('documentos').textContent, 'DUI 00000000-0');
@@ -74,15 +74,16 @@ describe('<vista-consulta>', () => {
         assert.deepEqual(llamadas.find(l => l[0] === 'completar'), ['completar', UUID(102), 'Atención']);
     });
 
-    test('con el rol ADMINISTRACION todo queda en solo lectura con su motivo', async () => {
-        const { vista, $, p, nombres } = await montar({ sesion: sesionCon('ADMINISTRACION') });
+    test('si no le toca al rol activo, todo queda en solo lectura con a quién le corresponde', async () => {
+        const { vista, $, p, nombres } = await montar({ respuestas: { consulta: () => consultaB6({ pendienteParaMi: false,
+            procedimientos: [procedimiento(1, [paso(1), pendiente(2, { responsable: { nombre: 'Lucía Pérez', rol: 'Enfermera' } })])] }) } });
         assert.deepEqual(nombres(), ['consulta']);
         assert.equal($('bloqueo').hidden, false);
-        assert.equal($('bloqueo').textContent, 'Solo el rol Doctor puede atender consultas.');
+        assert.equal($('bloqueo').textContent, 'Le corresponde a Lucía Pérez.');
         assert.equal(vista.paneles.examenes.hidden, true);
         assert.equal(vista.paneles.cierre.hidden, true);
         assert.equal(p('paso', 'avanzar').disabled, true);
-        assert.equal(p('paso', 'motivo').textContent, MENSAJES.soloDoctor);
+        assert.equal(p('paso', 'motivo').textContent, 'Le corresponde a Lucía Pérez.');
         assert.equal(p('paso', 'valor').hasAttribute('readonly'), true);
     });
 

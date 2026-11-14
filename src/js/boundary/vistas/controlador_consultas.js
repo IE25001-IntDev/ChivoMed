@@ -3,6 +3,8 @@
  * Filtra por fechas de El Salvador (hoy por defecto, máximo 31 días contando ambos extremos),
  * carga GET /atencion/dashboard, arma la jerarquía de pasos por `nivel`, pide bajo demanda lo
  * registrado en un paso y decide si una consulta se puede atender y, si no, por qué.
+ * Quién atiende lo decide el backend (`pendienteParaMi`): cada paso lo atiende su rol responsable
+ * y cierra quien completó el paso final (B8). El frontend no fija roles ni los compara por nombre.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * "Atender" publica `estado.navegarA = { ruta }` (un objeto nuevo cada vez).
@@ -37,7 +39,8 @@ export const MENSAJES = Object.freeze({
     cerrada: "Esta consulta ya está cerrada.",
     sinPendiente: "No tienes pasos pendientes en esta consulta.",
     sinRedAtender: "Sin conexión: para atender una consulta necesitas red.",
-    soloDoctor: "Solo el rol Doctor puede atender consultas.",
+    otroRol: "Este paso lo atiende otro rol.",
+    soloFinalizador: "Cierra la consulta quien completó el paso de finalización.",
     sinConsultas: "No hay consultas en estas fechas.",
 });
 
@@ -68,7 +71,20 @@ function normalizarPaso(p) {
         fechaInicio: textoONull(p.fechaInicio),
         fechaFin: textoONull(p.fechaFin),
         tieneValor: p.tieneValor === true,
+        rolPaso: normalizarRolPaso(p.rolPaso),
     });
+}
+
+/** Rol responsable de la definición del paso ({ idRol, nombre }), si el backend lo envía; si no, null. */
+function normalizarRolPaso(rol) {
+    if (!rol || typeof rol.idRol !== "string" || !UUID.test(rol.idRol)) return null;
+    return congelar({ idRol: rol.idRol, nombre: textoONull(rol.nombre) });
+}
+
+/** true si el paso es del rol activo. Solo compara `idRol`; sin ese dato en los dos lados, false. */
+export function esPasoDeMiRol(paso, rolActivo) {
+    const id = paso?.rolPaso?.idRol;
+    return Boolean(id) && typeof rolActivo?.idRol === "string" && rolActivo.idRol === id;
 }
 
 function normalizarProcedimiento(p) {
@@ -126,21 +142,38 @@ export function arbolDePasos(pasos) {
     return congelar(raiz.map(congelarNodo));
 }
 
-/** Único rol al que el backend le permite atender una consulta (HU4). */
-export const ROL_ATIENDE = "DOCTOR";
+/** Pasos PENDIENTE de la consulta, en orden. */
+function pendientesDe(consulta) {
+    return consulta?.procedimientos?.flatMap(p => p.pasos.filter(s => s.estado === "PENDIENTE")) ?? NINGUNA;
+}
+
+/** A quién le toca un paso que no es mío: la persona asignada y el rol del paso, si se conocen. */
+export function motivoOtroRol(paso) {
+    const persona = paso?.responsable?.nombre ?? null;
+    const rol = paso?.rolPaso?.nombre ?? null;
+    if (persona) return rol ? `Le corresponde a ${persona} (${rol}).` : `Le corresponde a ${persona}.`;
+    return rol ? `Este paso lo atiende el rol ${rol}.` : MENSAJES.otroRol;
+}
+
+/**
+ * Qué ofrece una consulta que me toca: "cerrar" si ya no quedan pasos PENDIENTE (yo completé el
+ * paso final y falta cerrarla) o "atender" si tengo un paso pendiente.
+ */
+export function accionAtender(consulta) {
+    return consulta?.pendienteParaMi && !consulta.fechaFin && !pendientesDe(consulta).length ? "cerrar" : "atender";
+}
 
 /**
  * null si la consulta se puede atender; si no, el motivo para mostrar junto al botón.
- * `rol` es el código del rol activo; si se indica y no es DOCTOR, ese motivo va antes que todos.
+ * Se decide por los datos del backend, nunca por el rol activo: `pendienteParaMi` dice si me toca
+ * un paso o cerrarla; si no, el motivo dice a quién le corresponde el paso pendiente.
  */
-export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false, rol } = {}) {
-    if (rol !== undefined && rol !== ROL_ATIENDE) return MENSAJES.soloDoctor;
+export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false } = {}) {
     if (!consulta) return MENSAJES.sinPendiente;
     if (consulta.fechaFin) return MENSAJES.cerrada;
     if (!consulta.pendienteParaMi) {
-        const pendiente = consulta.procedimientos?.flatMap(p => p.pasos)
-            .find(p => p.estado === "PENDIENTE" && (p.responsable?.rol || p.responsable?.nombre));
-        return pendiente ? `Le corresponde a ${pendiente.responsable.rol ?? pendiente.responsable.nombre}.` : MENSAJES.sinPendiente;
+        const [pendiente] = pendientesDe(consulta);
+        return pendiente ? motivoOtroRol(pendiente) : MENSAJES.soloFinalizador;
     }
     if (!enLinea || soloLectura) return MENSAJES.sinRedAtender;
     return null;
@@ -401,10 +434,10 @@ export class ControladorConsultas {
         }
     }
 
-    /** Lo que decide motivoNoAtender, tomado del estado: red, solo lectura y código del rol activo. */
+    /** Lo que decide motivoNoAtender, tomado del estado: red y solo lectura. */
     contextoAtender() {
-        const { enLinea, soloLectura, sesion } = this.estado;
-        return { enLinea, soloLectura, rol: sesion?.rolActivo?.codigo ?? null };
+        const { enLinea, soloLectura } = this.estado;
+        return { enLinea, soloLectura };
     }
 
     /** Publica la ruta de la consulta solo si se puede atender. Devuelve true si la publicó. */

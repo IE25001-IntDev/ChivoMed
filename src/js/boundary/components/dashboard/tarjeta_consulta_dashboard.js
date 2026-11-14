@@ -6,12 +6,12 @@
  *              los paneles de registro que cambiaron).
  *  - motivo:   null si se puede atender; si no, el texto que explica por qué no.
  * Emite (bubbles, composed): 'ver-registro' { idPaso }, 'reintentar-registro' { idPaso },
- * 'atender' { idConsulta }.
+ * 'atender' { idConsulta }. El botón dice "Cerrar consulta" si al rol activo solo le falta cerrarla.
  * Todos los datos se pintan con textContent; la plantilla es fija.
  */
 import { hojaDeEstilos } from "../../vistas/estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { arbolDePasos, etiquetaEstado } from "../../vistas/controlador_consultas.js";
+import { arbolDePasos, etiquetaEstado, accionAtender } from "../../vistas/controlador_consultas.js";
 import { formatearFecha, formatearFechaHora } from "../../fechas_sv.js";
 
 const PLANTILLA = plantilla(`
@@ -98,6 +98,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
         this.$("inicio").textContent = formatearFechaHora(c.fechaInicio);
         this.$("estado").textContent = c.fechaFin ? `Cerrada el ${formatearFechaHora(c.fechaFin)}` : "Abierta";
         this.$("pendiente").hidden = !c.pendienteParaMi;
+        this.$("atender").textContent = accionAtender(c) === "cerrar" ? "Cerrar consulta" : "Atender";
         this.$("tarjeta").className = c.pendienteParaMi ? "tarjeta-consulta pendiente" : "tarjeta-consulta";
 
         this.#registros = new Map();

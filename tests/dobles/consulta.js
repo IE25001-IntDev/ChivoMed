@@ -24,8 +24,12 @@ export const consultaB6 = (extra = {}) => ({
     procedimientos: [procedimiento(1, [paso(1), pendiente(2)])],
     ...extra,
 });
-export const sesionCon = (codigo = 'DOCTOR', usuario = 1) => ({
-    usuario: { idUsuario: UUID(800 + usuario) }, rolActivo: { idPersonaRol: UUID(900), codigo }, csrfToken: 'csrf-prueba',
+/** Identificador del rol Doctor en las pruebas que comparan `rolPaso.idRol` con el rol activo. */
+export const ID_ROL_DOCTOR = UUID(700);
+export const sesionCon = (codigo = 'DOCTOR', usuario = 1, idRol = undefined) => ({
+    usuario: { idUsuario: UUID(800 + usuario) },
+    rolActivo: { idPersonaRol: UUID(900), codigo, ...(idRol ? { idRol } : {}) },
+    csrfToken: 'csrf-prueba',
 });
 export const examen = n => ({ idExamen: UUID(300 + n), nombre: `Examen ${n}` });
 

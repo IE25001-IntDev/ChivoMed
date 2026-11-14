@@ -1,14 +1,17 @@
 /**
  * Lógica de la vista de una consulta (HU4) sin DOM.
  *
- * Al iniciar retoma la consulta en la sesión (PUT /consultas/{id}/sesion), la lee con
- * GET /atencion/consultas/{id} (misma forma que un elemento del dashboard) y, del paso PENDIENTE
- * actual, pide su registro, sus órdenes, los exámenes asignables y si es el último paso
- * (`indicaFin` de su definición). Son peticiones fijas: nunca una por paso o procedimiento.
+ * Al iniciar lee la consulta con GET /atencion/consultas/{id} (misma forma que un elemento del
+ * dashboard). Solo si le toca al rol activo (`pendienteParaMi`: un paso pendiente de su rol o
+ * cerrarla) la selecciona en la sesión (PUT /consultas/{id}/sesion) y, del paso PENDIENTE actual,
+ * pide su registro, sus órdenes, los exámenes asignables y si es el último paso (`indicaFin` de su
+ * definición). Son peticiones fijas: nunca una por paso o procedimiento. Si no le toca, la vista
+ * queda en solo lectura sin pedir la sesión ni los datos clínicos del paso.
  *
  * Acciones: completar el paso ("Avanzar", o "Completar paso" si es el último), retroceder al
- * anterior, emitir órdenes y cerrar la consulta. Solo el rol DOCTOR atiende; los demás roles, una
- * consulta cerrada o la falta de red dejan la vista en solo lectura con su motivo.
+ * anterior, emitir órdenes y cerrar la consulta. Cada paso lo atiende su rol responsable y cierra
+ * quien completó el paso final (B8); lo decide el backend. Una consulta cerrada, una que no le toca
+ * al rol activo o la falta de red dejan la vista en solo lectura con su motivo.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * Lo cargado y el borrador quedan en memoria_vistas para seguir mostrándolos sin red; solo la
@@ -21,7 +24,7 @@ import ProcedimientoPasoService from "../../control/procedimiento_paso_service.j
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { normalizarConsultas, ROL_ATIENDE, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
+import { normalizarConsultas, motivoNoAtender, esPasoDeMiRol, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
 
 export const MAX_TEXTO = 255;
 const NINGUNA = Object.freeze([]);
@@ -29,7 +32,12 @@ const congelar = Object.freeze;
 const texto = valor => typeof valor === "string" && valor.trim().length > 0;
 
 export const MENSAJES = Object.freeze({
-    soloDoctor: MENSAJES_DASHBOARD.soloDoctor,
+    otroRol: MENSAJES_DASHBOARD.otroRol,
+    soloFinalizador: MENSAJES_DASHBOARD.soloFinalizador,
+    soloEmpleado: "Solo el personal de la clínica puede atender consultas.",
+    rolClinica: "Elige tu rol y clínica en el dashboard.",
+    sinPasoParaRol: "Esta consulta no tiene un paso pendiente para tu rol.",
+    sinSeleccion: "No pudimos seleccionar esta consulta para atenderla. Vuelve a intentarlo.",
     cerrada: "Esta consulta ya está cerrada.",
     cerradaAhora: "Consulta cerrada.",
     sinRed: "Sin conexión: necesitas red para registrar la atención.",
@@ -72,15 +80,32 @@ const POR_CODIGO = Object.freeze({
     "consulta.indicacionesValidas": `Las indicaciones admiten hasta ${MAX_TEXTO} caracteres.`,
     "consulta.otraClinica": MENSAJES.noEncontrada,
     "auth.permiso": MENSAJES.sinPermiso,
+    "consulta.soloFinalizador": MENSAJES.soloFinalizador,
+    "consulta.soloEmpleado": MENSAJES.soloEmpleado,
+    "consulta.rolClinica": MENSAJES.rolClinica,
+    "consulta.sinPasoParaRol": MENSAJES.sinPasoParaRol,
 });
 
-/** Códigos cuyo `message` del backend es más útil que un texto fijo (p. ej., trae el nombre del procedimiento). */
-const USAR_MENSAJE_BACKEND = new Set(["consulta.procedimientoSinFinal"]);
+/**
+ * Códigos cuyo `message` del backend es más útil que un texto fijo, con su respaldo: el del
+ * procedimiento sin final trae su nombre y el del responsable trae el rol del paso.
+ */
+const USAR_MENSAJE_BACKEND = Object.freeze({
+    "consulta.procedimientoSinFinal": "Un procedimiento no ha llegado a su paso final.",
+    "consulta.noResponsablePaso": MENSAJES.otroRol,
+});
+
+/**
+ * Rechazos por rol (B8): lo mostrado quedó viejo (ya no le toca al rol activo), así que se vuelve
+ * a leer la consulta y queda en solo lectura con su motivo.
+ */
+export const CODIGOS_POR_ROL = Object.freeze(["consulta.noResponsablePaso", "consulta.soloFinalizador",
+    "consulta.sinPasoParaRol", "consulta.soloEmpleado", "consulta.rolClinica"]);
 
 /** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
 export function mensajeDeErrorConsulta(error) {
     const code = error?.code;
-    if (USAR_MENSAJE_BACKEND.has(code)) return texto(error.message) ? error.message.trim() : "Un procedimiento no ha llegado a su paso final.";
+    if (code && Object.hasOwn(USAR_MENSAJE_BACKEND, code)) return texto(error.message) ? error.message.trim() : USAR_MENSAJE_BACKEND[code];
     if (code && Object.hasOwn(POR_CODIGO, code)) return POR_CODIGO[code];
     switch (error?.status) {
         case 0: return MENSAJES.conexion;
@@ -92,11 +117,6 @@ export function mensajeDeErrorConsulta(error) {
     }
 }
 
-/** "Administración" → "ADMINISTRACION": compara el nombre del rol del dashboard con el código de la sesión. */
-export function codigoDeRol(nombre) {
-    return typeof nombre === "string" ? nombre.normalize("NFD").replace(/\p{M}/gu, "").trim().toUpperCase() : null;
-}
-
 /** Pasos PENDIENTE de la consulta, en orden, con el nombre de su procedimiento. */
 export function pasosPendientes(consulta) {
     if (!consulta) return NINGUNA;
@@ -106,22 +126,28 @@ export function pasosPendientes(consulta) {
 }
 
 /**
- * Paso actual: el elegido si sigue PENDIENTE; si no, el primero cuyo responsable tiene el rol
- * activo; si ninguno, el primero. null si no quedan pendientes.
+ * Paso actual: el elegido si sigue PENDIENTE; si no, el primero del rol activo (por `idRol`, cuando
+ * el backend envía `rolPaso` y el rol activo trae `idRol`); si ninguno, el primero. null si no
+ * quedan pendientes. Nunca compara roles por nombre.
  */
-export function elegirPasoActual(consulta, codigoRol, idElegido = null) {
+export function elegirPasoActual(consulta, rolActivo, idElegido = null) {
     const pendientes = pasosPendientes(consulta).map(p => p.paso);
     if (!pendientes.length) return null;
     return pendientes.find(p => p.idConsultaProcedimientoPaso === idElegido)
-        ?? pendientes.find(p => codigoRol && codigoDeRol(p.responsable?.rol) === codigoRol)
+        ?? pendientes.find(p => esPasoDeMiRol(p, rolActivo))
         ?? pendientes[0];
 }
 
-/** Motivo por el que toda la vista queda en solo lectura, en orden de prioridad; null si se puede atender. */
-export function motivoBloqueo({ rol, consulta, enLinea = true, soloLectura = false }) {
-    if (rol !== ROL_ATIENDE) return MENSAJES.soloDoctor;
-    if (consulta?.fechaFin) return MENSAJES.cerrada;
+/**
+ * Motivo por el que toda la vista queda en solo lectura, en orden de prioridad; null si se puede
+ * atender. `atendiendo` es true si la consulta se seleccionó en la sesión (PUT …/sesion).
+ */
+export function motivoBloqueo({ consulta, atendiendo = false, enLinea = true, soloLectura = false }) {
+    if (!consulta) return null;
+    if (consulta.fechaFin) return MENSAJES.cerrada;
+    if (!consulta.pendienteParaMi) return motivoNoAtender(consulta);
     if (!enLinea || soloLectura) return MENSAJES.sinRed;
+    if (!atendiendo) return MENSAJES.sinSeleccion;
     return null;
 }
 
@@ -224,6 +250,8 @@ export class ControladorConsulta {
             error: null,
             /** idConsulta de la consulta en curso cuando esta no se pudo retomar (409). */
             enCurso: null,
+            /** true si esta consulta se seleccionó en la sesión (PUT …/sesion): le toca al rol activo. */
+            atendiendo: false,
             consulta: null,
             /** idConsultaProcedimientoPaso elegido en el selector; null usa el del rol activo. */
             idElegido: null,
@@ -250,16 +278,20 @@ export class ControladorConsulta {
 
     // ---------------------------------------------------------------- derivados para la vista
 
-    get rol() { return this.estado.sesion?.rolActivo?.codigo ?? null; }
+    get pasoActual() { return elegirPasoActual(this.estado.consulta, this.estado.sesion?.rolActivo, this.estado.idElegido); }
 
-    get pasoActual() { return elegirPasoActual(this.estado.consulta, this.rol, this.estado.idElegido); }
+    /** true si el rol activo atiende esta consulta ahora: seleccionada en la sesión, abierta y le toca. */
+    get atiende() {
+        const { consulta, atendiendo } = this.estado;
+        return atendiendo && Boolean(consulta) && !consulta.fechaFin && consulta.pendienteParaMi;
+    }
 
     get pendientes() { return pasosPendientes(this.estado.consulta); }
 
     /** Motivo de solo lectura de toda la vista, o null. */
     get bloqueo() {
-        const { consulta, enLinea, soloLectura, desdeMemoria } = this.estado;
-        return motivoBloqueo({ rol: this.rol, consulta, enLinea, soloLectura: soloLectura || desdeMemoria });
+        const { consulta, atendiendo, enLinea, soloLectura, desdeMemoria } = this.estado;
+        return motivoBloqueo({ consulta, atendiendo, enLinea, soloLectura: soloLectura || desdeMemoria });
     }
 
     // ---------------------------------------------------------------- memoria
@@ -287,7 +319,7 @@ export class ControladorConsulta {
         this.#cancelarConexion = this.#conexion.suscribir?.(enLinea => this.#alCambiarRed(enLinea)) ?? null;
         Object.assign(this.estado, {
             idConsulta, sesion, soloLectura, enLinea: this.#conexion.enLinea,
-            error: null, enCurso: null, errorAccion: null, confirmando: null, aviso: null, idElegido: null,
+            error: null, enCurso: null, errorAccion: null, confirmando: null, aviso: null, idElegido: null, atendiendo: false,
         });
         return this.#cargar({ retomar: true });
     }
@@ -313,13 +345,14 @@ export class ControladorConsulta {
         }
         Object.assign(this.estado, {
             cargando: false, error: null, consulta: guardado.consulta, detalle: guardado.detalle,
-            desdeMemoria: true, actualizadoEn: guardado.en,
+            desdeMemoria: true, actualizadoEn: guardado.en, atendiendo: false,
         });
         this.#restaurarBorrador();
     }
 
     /**
-     * Carga la consulta. Con `retomar` primero la selecciona en la sesión (solo DOCTOR y abierta).
+     * Carga la consulta. Con `retomar`, después de leerla la selecciona en la sesión, solo si está
+     * abierta y le toca al rol activo. Un rechazo por rol la deja en solo lectura con su motivo.
      * Sin red o en solo lectura muestra lo guardado en memoria, si existe.
      */
     async #cargar({ retomar = false } = {}) {
@@ -331,20 +364,29 @@ export class ControladorConsulta {
         }
         this.estado.cargando = true;
         try {
-            if (retomar && this.rol === ROL_ATIENDE) {
-                try {
-                    await this.#servicio.retomar(idConsulta);
-                } catch (error) {
-                    // Una consulta cerrada se muestra en solo lectura; cualquier otro rechazo detiene la carga.
-                    if (error?.code !== "consulta.yaCerrada") throw error;
+            let consulta = await this.#leerConsulta(idConsulta);
+            if (id !== this.#secuencia) return;
+            let atendiendo = this.estado.atendiendo;
+            let aviso = null;
+            if (retomar) {
+                atendiendo = false;
+                if (consulta.pendienteParaMi && !consulta.fechaFin) {
+                    try {
+                        await this.#servicio.retomar(idConsulta);
+                        atendiendo = true;
+                    } catch (error) {
+                        // Ya no le toca (o se cerró): se vuelve a leer y queda en solo lectura con su motivo.
+                        // Cualquier otro rechazo detiene la carga.
+                        if (error?.code !== "consulta.yaCerrada" && !CODIGOS_POR_ROL.includes(error?.code)) throw error;
+                        if (id !== this.#secuencia) return;
+                        aviso = mensajeDeErrorConsulta(error);
+                        consulta = await this.#leerConsulta(idConsulta);
+                    }
+                    if (id !== this.#secuencia) return;
                 }
             }
-            if (id !== this.#secuencia) return;
-            const { data } = await this.#servicio.consulta(idConsulta);
-            if (id !== this.#secuencia) return;
-            const [consulta] = normalizarConsultas([data]);
-            if (!consulta || consulta.idConsulta !== idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
-            Object.assign(this.estado, { consulta, cargando: false, error: null, desdeMemoria: false });
+            Object.assign(this.estado, { consulta, atendiendo, cargando: false, error: null, desdeMemoria: false });
+            if (aviso) this.estado.aviso = aviso;
             await this.#cargarDetalle(id);
         } catch (error) {
             if (id !== this.#secuencia) return;
@@ -355,6 +397,13 @@ export class ControladorConsulta {
             Object.assign(this.estado, { cargando: false, consulta: null, detalle: SIN_DETALLE, error: mensajeDeErrorConsulta(error), desdeMemoria: false });
             if (error?.code === "consulta.cerrarAntesRetomar") await this.#buscarEnCurso(id);
         }
+    }
+
+    async #leerConsulta(idConsulta) {
+        const { data } = await this.#servicio.consulta(idConsulta);
+        const [consulta] = normalizarConsultas([data]);
+        if (!consulta || consulta.idConsulta !== idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
+        return consulta;
     }
 
     async #buscarEnCurso(id) {
@@ -368,13 +417,14 @@ export class ControladorConsulta {
 
     /**
      * Pide los datos del paso actual: registro, órdenes y asignables en paralelo, y luego `indicaFin`
-     * de su definición. Solo DOCTOR con la consulta abierta (los demás roles no tienen permiso).
+     * de su definición. Solo si el rol activo atiende la consulta (los datos clínicos del paso no
+     * se piden en solo lectura).
      */
     async #cargarDetalle(idCarga = this.#secuencia) {
         const paso = this.pasoActual;
         const consulta = this.estado.consulta;
         const idDetalle = ++this.#secuenciaDetalle;
-        if (!paso || this.rol !== ROL_ATIENDE || consulta?.fechaFin) {
+        if (!paso || !this.atiende || consulta?.fechaFin) {
             this.estado.detalle = SIN_DETALLE;
             this.estado.borrador = "";
             if (this.estado.aviso === MENSAJES.reabierto) this.estado.aviso = null;
@@ -460,7 +510,7 @@ export class ControladorConsulta {
      * paso actual; si falla deja el motivo en `errorAccion` sin perder lo cargado ni el borrador.
      * Algunos rechazos significan que lo mostrado quedó viejo, así que también se recarga.
      */
-    async #ejecutar(accion, operacion, { alTerminar, alFallar, recargarTras = new Set(["consulta.pasoYaCompletado", "consulta.yaCerrada"]) } = {}) {
+    async #ejecutar(accion, operacion, { alTerminar, alFallar, recargarTras = new Set(["consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]) } = {}) {
         Object.assign(this.estado, { accion, errorAccion: null, confirmando: null });
         const idCarga = this.#secuencia;
         let ok = false;
@@ -564,7 +614,7 @@ export class ControladorConsulta {
         if (this.bloqueo || !puedeCerrar(this.estado.consulta)) return Promise.resolve(false);
         const notas = this.#observaciones ? { observaciones: this.#observaciones } : {};
         return this.#ejecutar("cierre", () => this.#servicio.cerrar(this.estado.idConsulta, notas), {
-            recargarTras: new Set(["consulta.completeAntesCerrar", "consulta.procedimientoSinFinal", "consulta.yaCerrada"]),
+            recargarTras: new Set(["consulta.completeAntesCerrar", "consulta.procedimientoSinFinal", "consulta.yaCerrada", ...CODIGOS_POR_ROL]),
             alTerminar: async () => {
                 this.#observaciones = "";
                 this.estado.aviso = MENSAJES.cerradaAhora;
@@ -604,7 +654,7 @@ export class ControladorConsulta {
             this.#guardarEnMemoria();
         };
         return this.#ejecutar("orden", () => this.#servicio.ordenar(idPaso, { idExamen, indicaciones }), {
-            recargarTras: new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada"]),
+            recargarTras: new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]),
             alTerminar: () => actualizar(["ordenes"]).catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
             // Un examen que dejó de ser asignable: se actualiza la lista para que no se vuelva a elegir.
             alFallar: error => (error?.code === "consulta.examenNoAsignable" ? actualizar(["asignables"]).catch(() => {}) : null),
