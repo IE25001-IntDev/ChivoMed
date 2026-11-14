@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { MENSAJES, MAX_TEXTO } from '../src/js/boundary/vistas/controlador_consulta.js';
+import { MENSAJES, MAX_TEXTO, textoSeleccion } from '../src/js/boundary/vistas/controlador_consulta.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import {
     UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
@@ -231,6 +231,194 @@ describe('ControladorConsulta: órdenes', () => {
         assert.equal(await controlador.emitirOrden({ idExamen: UUID(301) }), false);
         assert.match(controlador.estado.errorAccion, /ya no se puede asignar/);
         assert.deepEqual(controlador.estado.detalle.asignables.map(e => e.nombre), ['Examen 2']);
+    });
+});
+
+describe('ControladorConsulta: asignar varios exámenes (F9)', () => {
+    const LAB = { idTipoExamen: UUID(501), nombre: 'Laboratorio clínico' };
+    const IMG = { idTipoExamen: UUID(502), nombre: 'Imagenología' };
+    const conTipos = () => [{ ...examen(1), tiposExamen: [LAB] }, { ...examen(2), tiposExamen: [IMG] }, { ...examen(3), tiposExamen: [LAB, IMG] }];
+
+    /** Órdenes que cambian como en el backend: cada POST que sale bien agrega una. */
+    function conOrdenes({ ordenar = () => null, asignables = conTipos, ...respuestas } = {}) {
+        let ordenes = [];
+        return flujo({ respuestas: {
+            asignables, ordenes: () => ordenes,
+            ordenar: async (id, datos) => {
+                const fallo = await ordenar(id, datos);
+                if (fallo) return fallo;
+                const orden = { idOrdenExamen: UUID(600 + ordenes.length), idExamen: datos.idExamen, indicaciones: datos.indicaciones ?? null };
+                ordenes = [...ordenes, orden];
+                return orden;
+            },
+            ...respuestas,
+        } });
+    }
+    const elegir = (controlador, ...ns) => { for (const n of ns) controlador.alternarExamen(UUID(300 + n), true); };
+    const posts = llamadas => llamadas.filter(l => l[0] === 'ordenar');
+
+    test('la selección se conserva al cambiar el filtro; "N seleccionados"', async () => {
+        const { controlador, iniciar } = conOrdenes();
+        await iniciar();
+        elegir(controlador, 1, 2);
+        controlador.elegirCategoria(IMG.idTipoExamen);
+        assert.equal(controlador.estado.filtroExamenes, IMG.idTipoExamen);
+        assert.deepEqual(controlador.estado.seleccionExamenes, [UUID(301), UUID(302)]);
+        controlador.alternarExamen(UUID(301), false);
+        assert.deepEqual(controlador.estado.seleccionExamenes, [UUID(302)]);
+        assert.ok(Object.isFrozen(controlador.estado.seleccionExamenes));
+        controlador.elegirCategoria(UUID(599));
+        assert.equal(controlador.estado.filtroExamenes, IMG.idTipoExamen, 'una categoría que no existe se ignora');
+        controlador.elegirCategoria('');
+        assert.equal(controlador.estado.filtroExamenes, '');
+        assert.equal(textoSeleccion(0), 'Ningún examen seleccionado');
+        assert.equal(textoSeleccion(1), '1 seleccionado');
+        assert.equal(textoSeleccion(3), '3 seleccionados');
+    });
+
+    test('no se puede seleccionar un examen ajeno ni uno ya ordenado en el paso', async () => {
+        const { controlador, iniciar } = conOrdenes({ ordenes: () => [{ idOrdenExamen: UUID(600), idExamen: UUID(302) }] });
+        await iniciar();
+        controlador.alternarExamen(UUID(399), true);
+        controlador.alternarExamen(UUID(302), true);
+        assert.deepEqual(controlador.estado.seleccionExamenes, []);
+        assert.deepEqual(controlador.examenesOrdenados, [UUID(302)]);
+    });
+
+    test('éxito: un POST por examen EN SERIE con las mismas indicaciones, una sola recarga de órdenes', async () => {
+        const pendientes = [];
+        const { controlador, llamadas, nombres, iniciar } = conOrdenes({
+            ordenar: () => new Promise(resolve => pendientes.push(resolve)),
+        });
+        await iniciar();
+        elegir(controlador, 3, 1);
+        const antes = nombres().length;
+        const asignando = controlador.asignarExamenes({ indicaciones: '  En ayunas ' });
+        await asentar();
+        assert.equal(posts(llamadas).length, 1, 'el segundo POST espera al primero');
+        pendientes.shift()(null);
+        await asentar();
+        assert.equal(posts(llamadas).length, 2);
+        pendientes.shift()(null);
+        assert.equal(await asignando, true);
+        assert.deepEqual(posts(llamadas).map(l => l[2]), [
+            { idExamen: UUID(301), indicaciones: '  En ayunas ' }, { idExamen: UUID(303), indicaciones: '  En ayunas ' }],
+        'en el orden de la lista; el servicio recorta las indicaciones');
+        assert.deepEqual(nombres().slice(antes), ['ordenar', 'ordenar', 'ordenes']);
+        assert.deepEqual(controlador.estado.resultadoExamenes, [
+            { idExamen: UUID(301), nombre: 'Examen 1', ok: true, mensaje: MENSAJES.ordenEmitida },
+            { idExamen: UUID(303), nombre: 'Examen 3', ok: true, mensaje: MENSAJES.ordenEmitida }]);
+        assert.ok(Object.isFrozen(controlador.estado.resultadoExamenes));
+        assert.deepEqual(controlador.estado.seleccionExamenes, []);
+        assert.equal(controlador.estado.detalle.ordenes.length, 2);
+        assert.deepEqual(controlador.estado.acabado, { accion: 'orden', ok: true });
+    });
+
+    test('éxito parcial: examenNoAsignable no corta; mensaje por examen y recarga órdenes y asignables una vez', async () => {
+        let asignables = conTipos();
+        const { controlador, llamadas, nombres, iniciar } = conOrdenes({
+            asignables: () => asignables,
+            ordenar: (id, { idExamen }) => {
+                if (idExamen !== UUID(302)) return null;
+                asignables = asignables.filter(e => e.idExamen !== UUID(302));
+                return errorHttp(400, 'consulta.examenNoAsignable', 'x');
+            },
+        });
+        await iniciar();
+        elegir(controlador, 1, 2, 3);
+        const antes = nombres().length;
+        assert.equal(await controlador.asignarExamenes(), true);
+        assert.equal(posts(llamadas).length, 3);
+        assert.deepEqual(nombres().slice(antes).sort(), ['asignables', 'ordenar', 'ordenar', 'ordenar', 'ordenes'].sort());
+        assert.deepEqual(controlador.estado.resultadoExamenes.map(r => [r.nombre, r.ok]), [['Examen 1', true], ['Examen 2', false], ['Examen 3', true]]);
+        assert.match(controlador.estado.resultadoExamenes[1].mensaje, /ya no se puede asignar/);
+        assert.equal(controlador.estado.errorAccion, null);
+        assert.deepEqual(controlador.estado.detalle.asignables.map(e => e.nombre), ['Examen 1', 'Examen 3']);
+        assert.deepEqual(controlador.estado.seleccionExamenes, [], 'el que falló ya no es asignable y se quita');
+    });
+
+    test('un fallo propio del examen que sigue asignable lo deja seleccionado para reintentar', async () => {
+        const { controlador, iniciar } = conOrdenes({
+            ordenar: (id, { idExamen }) => (idExamen === UUID(302) ? errorHttp(400, 'consulta.examenNoAsignable', 'x') : null),
+        });
+        await iniciar();
+        elegir(controlador, 1, 2);
+        await controlador.asignarExamenes();
+        assert.deepEqual(controlador.estado.seleccionExamenes, [UUID(302)]);
+    });
+
+    test('pasoYaCompletado en el segundo corta la serie: el tercero "No se envió." y se recarga la consulta', async () => {
+        const { controlador, llamadas, nombres, iniciar } = conOrdenes({
+            ordenar: (id, { idExamen }) => (idExamen === UUID(302) ? errorHttp(409, 'consulta.pasoYaCompletado', 'x') : null),
+        });
+        await iniciar();
+        elegir(controlador, 1, 2, 3);
+        const antes = nombres().length;
+        assert.equal(await controlador.asignarExamenes(), false);
+        assert.equal(posts(llamadas).length, 2);
+        assert.deepEqual(controlador.estado.resultadoExamenes.map(r => [r.nombre, r.ok, r.mensaje]), [
+            ['Examen 1', true, MENSAJES.ordenEmitida],
+            ['Examen 2', false, 'Este paso ya estaba completado. Actualizamos la consulta.'],
+            ['Examen 3', false, MENSAJES.noEnviado]]);
+        assert.equal(controlador.estado.errorAccion, 'Este paso ya estaba completado. Actualizamos la consulta.');
+        assert.ok(nombres().slice(antes).includes('consulta'), 'recarga la consulta');
+        assert.deepEqual(controlador.estado.acabado, { accion: 'orden', ok: false });
+    });
+
+    for (const [nombre, falla, mensaje] of [['401', errorHttp(401, 'auth.sesion'), MENSAJES.sesionFinalizada],
+        ['red', errorHttp(0, 'conexion.error'), MENSAJES.conexion]]) {
+        test(`un ${nombre} en el primero corta la serie y no recarga`, async () => {
+            const { controlador, llamadas, nombres, iniciar } = conOrdenes({ ordenar: () => falla });
+            await iniciar();
+            elegir(controlador, 1, 2);
+            const antes = nombres().length;
+            assert.equal(await controlador.asignarExamenes(), false);
+            assert.equal(posts(llamadas).length, 1);
+            assert.deepEqual(nombres().slice(antes), ['ordenar']);
+            assert.deepEqual(controlador.estado.resultadoExamenes.map(r => r.mensaje), [mensaje, MENSAJES.noEnviado]);
+            assert.equal(controlador.estado.errorAccion, mensaje);
+            assert.deepEqual(controlador.estado.seleccionExamenes, [UUID(301), UUID(302)], 'se conserva para reintentar');
+        });
+    }
+
+    test('sin selección o con indicaciones de más de 255 no hay ningún POST', async () => {
+        const { controlador, nombres, iniciar } = conOrdenes();
+        await iniciar();
+        assert.equal(await controlador.asignarExamenes(), false);
+        assert.equal(controlador.estado.errorAccion, MENSAJES.seleccionVacia);
+        elegir(controlador, 1);
+        assert.equal(await controlador.asignarExamenes({ indicaciones: 'x'.repeat(MAX_TEXTO + 1) }), false);
+        assert.match(controlador.estado.errorAccion, /255/);
+        assert.equal(nombres().includes('ordenar'), false);
+        assert.equal(controlador.estado.resultadoExamenes, null);
+    });
+
+    test('al cambiar de paso se reinician el filtro, la selección y el resultado', async () => {
+        const { controlador, iniciar } = conOrdenes();
+        await iniciar();
+        elegir(controlador, 1);
+        controlador.elegirCategoria(LAB.idTipoExamen);
+        await controlador.asignarExamenes();
+        elegir(controlador, 3);
+        controlador.cambiarBorrador('Atención');
+        await controlador.avanzar();
+        assert.notEqual(controlador.pasoActual.idConsultaProcedimientoPaso, UUID(102));
+        assert.equal(controlador.estado.filtroExamenes, '');
+        assert.deepEqual(controlador.estado.seleccionExamenes, []);
+        assert.equal(controlador.estado.resultadoExamenes, null);
+    });
+
+    test('si al recargar la categoría elegida ya no existe, el filtro vuelve a "Todas"', async () => {
+        let asignables = conTipos();
+        const { controlador, iniciar } = conOrdenes({
+            asignables: () => asignables,
+            ordenar: () => { asignables = [{ ...examen(1), tiposExamen: [LAB] }]; return errorHttp(400, 'consulta.examenNoAsignable', 'x'); },
+        });
+        await iniciar();
+        controlador.elegirCategoria(IMG.idTipoExamen);
+        elegir(controlador, 2);
+        await controlador.asignarExamenes();
+        assert.equal(controlador.estado.filtroExamenes, '');
     });
 });
 

@@ -62,6 +62,8 @@ export const MENSAJES = Object.freeze({
     seleccionVacia: "Elige al menos un examen.",
     examenAjeno: "Elige exámenes de la lista.",
     yaOrdenado: nombre => `${nombre} ya está ordenado en este paso.`,
+    ordenEmitida: "Orden emitida.",
+    noEnviado: "No se envió.",
     textoLargo: `Admite hasta ${MAX_TEXTO} caracteres.`,
     sinExamen: "Orden sin examen asociado",
     examenNoDisponible: "Examen ya no disponible",
@@ -106,6 +108,9 @@ const USAR_MENSAJE_BACKEND = Object.freeze({
  */
 export const CODIGOS_POR_ROL = Object.freeze(["consulta.noResponsablePaso", "consulta.soloFinalizador",
     "consulta.sinPasoParaRol", "consulta.soloEmpleado", "consulta.rolClinica"]);
+
+/** Rechazos de una orden que dejan viejo lo mostrado: se recarga la consulta. */
+const RECARGAR_TRAS_ORDEN = new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]);
 
 /** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
 export function mensajeDeErrorConsulta(error) {
@@ -227,6 +232,18 @@ export function idsOrdenados(ordenes) {
     return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(texto))]);
 }
 
+/** F9: texto de cuántos exámenes hay seleccionados. */
+export function textoSeleccion(n) {
+    if (!n) return "Ningún examen seleccionado";
+    return n === 1 ? "1 seleccionado" : `${n} seleccionados`;
+}
+
+/**
+ * F9: errores propios de un examen; la serie sigue con el siguiente. Cualquier otro (paso
+ * completado, consulta cerrada, rechazo por rol, sesión, red, desconocido) corta la serie.
+ */
+const ERRORES_POR_EXAMEN = Object.freeze(["consulta.examenNoAsignable", "consulta.examenObligatorio"]);
+
 /** F9: valida la asignación de varios exámenes antes de enviarla. Devuelve el mensaje o null. */
 export function validarAsignacion({ idsExamen, indicaciones } = {}, asignables = NINGUNA, ordenes = NINGUNA) {
     if (!Array.isArray(idsExamen) || idsExamen.length === 0) return MENSAJES.seleccionVacia;
@@ -326,6 +343,12 @@ export class ControladorConsulta {
             navegarA: null,
             /** F8: true mientras "Salir de esa consulta y atender esta" espera el DELETE. */
             saliendo: false,
+            /** F9: categoría elegida en el panel de exámenes: "" (Todas) o un idTipoExamen. */
+            filtroExamenes: "",
+            /** F9: idExamen seleccionados (congelado, en el orden de la lista). Se conserva al filtrar. */
+            seleccionExamenes: NINGUNA,
+            /** F9: resultado de la última asignación: [{ idExamen, nombre, ok, mensaje }] congelado, o null. */
+            resultadoExamenes: null,
         });
         this.estado = estado;
         this.suscribir = suscribir;
@@ -492,11 +515,14 @@ export class ControladorConsulta {
             this.estado.detalle = SIN_DETALLE;
             this.estado.borrador = "";
             if (this.estado.aviso === MENSAJES.reabierto) this.estado.aviso = null;
+            this.#reiniciarExamenes();
             this.#guardarEnMemoria();
             return;
         }
         const idPaso = paso.idConsultaProcedimientoPaso;
         const previo = this.estado.detalle.idPaso === idPaso ? this.estado.detalle : SIN_DETALLE;
+        // F9: el filtro, la selección y el resultado son del paso; otro paso empieza de cero.
+        if (previo === SIN_DETALLE) this.#reiniciarExamenes();
         this.estado.detalle = congelar({ ...previo, idPaso, cargando: true, error: null });
         try {
             const [registro, ordenes, asignables] = await Promise.all([
@@ -511,6 +537,7 @@ export class ControladorConsulta {
                 indicaFin: definicion ? definicion.data?.indicaFin === true : null,
                 ordenes: normalizarOrdenes(ordenes?.data), asignables: normalizarAsignables(asignables?.data),
             });
+            this.#depurarExamenes();
             this.#restaurarBorrador();
             this.#guardarEnMemoria();
         } catch (error) {
@@ -518,6 +545,24 @@ export class ControladorConsulta {
             const error_ = [0, 401, 403, 404].includes(error?.status) ? mensajeDeErrorConsulta(error) : MENSAJES.detalle;
             this.estado.detalle = congelar({ ...previo, idPaso, cargando: false, error: error_ });
         }
+    }
+
+    /** F9: vuelve el filtro a "Todas" y vacía la selección y el resultado. */
+    #reiniciarExamenes() {
+        Object.assign(this.estado, { filtroExamenes: "", seleccionExamenes: NINGUNA, resultadoExamenes: null });
+    }
+
+    /**
+     * F9: tras recargar los asignables o las órdenes, quita de la selección lo que ya no se puede
+     * asignar o ya se ordenó, y vuelve a "Todas" si la categoría elegida desapareció.
+     */
+    #depurarExamenes() {
+        const { asignables } = this.estado.detalle;
+        const ordenados = this.examenesOrdenados;
+        const seleccion = this.estado.seleccionExamenes.filter(id => asignables.some(e => e.idExamen === id) && !ordenados.includes(id));
+        if (seleccion.length !== this.estado.seleccionExamenes.length) this.estado.seleccionExamenes = congelar(seleccion);
+        const filtro = this.estado.filtroExamenes;
+        if (filtro && !categoriasDe(asignables).some(t => t.idTipoExamen === filtro)) this.estado.filtroExamenes = "";
     }
 
     /** Borrador del paso actual: lo escrito en esta sesión o, si no hay, el valor guardado (paso reabierto). */
@@ -755,20 +800,101 @@ export class ControladorConsulta {
             return Promise.resolve(false);
         }
         const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
-        const actualizar = async campos => {
-            const respuestas = await Promise.all(campos.map(c => (c === "ordenes" ? this.#servicio.ordenes(idPaso) : this.#servicio.asignables(idPaso))));
-            if (this.estado.detalle.idPaso !== idPaso) return;
-            const cambios = {};
-            campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? normalizarOrdenes(respuestas[i]?.data) : normalizarAsignables(respuestas[i]?.data); });
-            this.estado.detalle = congelar({ ...this.estado.detalle, ...cambios });
-            this.#guardarEnMemoria();
-        };
+        const actualizar = campos => this.#actualizarListas(idPaso, campos);
         return this.#ejecutar("orden", () => this.#servicio.ordenar(idPaso, { idExamen, indicaciones }), {
-            recargarTras: new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]),
+            recargarTras: RECARGAR_TRAS_ORDEN,
             alTerminar: () => actualizar(["ordenes"]).catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
             // Un examen que dejó de ser asignable: se actualiza la lista para que no se vuelva a elegir.
             alFallar: error => (error?.code === "consulta.examenNoAsignable" ? actualizar(["asignables"]).catch(() => {}) : null),
         });
+    }
+
+    /** Vuelve a pedir, en paralelo, las órdenes y/o los asignables del paso, sin recargar la consulta. */
+    async #actualizarListas(idPaso, campos) {
+        const respuestas = await Promise.all(campos.map(c => (c === "ordenes" ? this.#servicio.ordenes(idPaso) : this.#servicio.asignables(idPaso))));
+        if (this.estado.detalle.idPaso !== idPaso) return;
+        const cambios = {};
+        campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? normalizarOrdenes(respuestas[i]?.data) : normalizarAsignables(respuestas[i]?.data); });
+        this.estado.detalle = congelar({ ...this.estado.detalle, ...cambios });
+        this.#depurarExamenes();
+        this.#guardarEnMemoria();
+    }
+
+    // ---------------------------------------------------------------- F9: varios exámenes
+
+    /** idExamen ya ordenados en el paso actual: salen marcados y deshabilitados ("Ya ordenado"). */
+    get examenesOrdenados() { return idsOrdenados(this.estado.detalle.ordenes); }
+
+    /** Elige la categoría del filtro: "" (Todas) o una de las categorías de los asignables. */
+    elegirCategoria(idTipoExamen) {
+        const id = typeof idTipoExamen === "string" ? idTipoExamen : "";
+        if (id && !categoriasDe(this.estado.detalle.asignables).some(t => t.idTipoExamen === id)) return;
+        this.estado.filtroExamenes = id;
+    }
+
+    /** Marca o desmarca un examen asignable que todavía no está ordenado. La selección no depende del filtro. */
+    alternarExamen(idExamen, marcado) {
+        const { asignables } = this.estado.detalle;
+        if (!asignables.some(e => e.idExamen === idExamen) || this.examenesOrdenados.includes(idExamen)) return;
+        const elegidos = new Set(this.estado.seleccionExamenes);
+        if (marcado) elegidos.add(idExamen);
+        else elegidos.delete(idExamen);
+        this.estado.seleccionExamenes = congelar(asignables.map(e => e.idExamen).filter(id => elegidos.has(id)));
+    }
+
+    /**
+     * F9: emite una orden por examen seleccionado, EN SERIE (el backend recibe una por petición), con
+     * las mismas indicaciones. Un error propio del examen se anota y se sigue; cualquier otro corta la
+     * serie (los que faltan quedan "No se envió.") y se muestra como error de la acción. Publica
+     * `resultadoExamenes`, deja seleccionados los que fallaron y recarga las órdenes una sola vez (y los
+     * asignables si alguno dejó de serlo). Devuelve true si al menos una orden se emitió y no hubo corte.
+     */
+    async asignarExamenes({ indicaciones } = {}) {
+        if (this.motivoNoActuar) return false;
+        const { asignables, ordenes } = this.estado.detalle;
+        const idsExamen = this.estado.seleccionExamenes;
+        const invalida = validarAsignacion({ idsExamen, indicaciones }, asignables, ordenes);
+        if (invalida) {
+            this.estado.errorAccion = invalida;
+            return false;
+        }
+        const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
+        const nombre = id => asignables.find(e => e.idExamen === id).nombre;
+        const resultados = [];
+        let recargarAsignables = false;
+        const publicar = () => {
+            const emitidos = new Set(resultados.filter(r => r.ok).map(r => r.idExamen));
+            Object.assign(this.estado, {
+                resultadoExamenes: congelar(resultados),
+                seleccionExamenes: congelar(this.estado.seleccionExamenes.filter(id => !emitidos.has(id))),
+            });
+        };
+        this.estado.resultadoExamenes = null;
+        const ok = await this.#ejecutar("orden", async () => {
+            for (const [i, idExamen] of idsExamen.entries()) {
+                try {
+                    await this.#servicio.ordenar(idPaso, { idExamen, indicaciones });
+                    resultados.push(congelar({ idExamen, nombre: nombre(idExamen), ok: true, mensaje: MENSAJES.ordenEmitida }));
+                } catch (error) {
+                    resultados.push(congelar({ idExamen, nombre: nombre(idExamen), ok: false, mensaje: mensajeDeErrorConsulta(error) }));
+                    if (ERRORES_POR_EXAMEN.includes(error?.code)) {
+                        recargarAsignables ||= error.code === "consulta.examenNoAsignable";
+                        continue;
+                    }
+                    for (const resto of idsExamen.slice(i + 1)) {
+                        resultados.push(congelar({ idExamen: resto, nombre: nombre(resto), ok: false, mensaje: MENSAJES.noEnviado }));
+                    }
+                    publicar();
+                    throw error;
+                }
+            }
+            publicar();
+        }, {
+            recargarTras: RECARGAR_TRAS_ORDEN,
+            alTerminar: () => this.#actualizarListas(idPaso, recargarAsignables ? ["ordenes", "asignables"] : ["ordenes"])
+                .catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
+        });
+        return ok && resultados.some(r => r.ok);
     }
 
     cambiarBorrador(valor) {
