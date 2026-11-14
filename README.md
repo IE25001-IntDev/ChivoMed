@@ -7,7 +7,7 @@ dependencias de npm. Consume el API REST del backend Jakarta EE
 
 ## Requisitos
 
-- **Node.js 22** o superior (solo para el servidor de desarrollo y las pruebas).
+- **Node.js 22.5** o superior (solo para el servidor de desarrollo y las pruebas).
 - El **backend GalenoSV** corriendo en `http://localhost:9080/galenosv`, con PostgreSQL y los
   datos demo cargados. Cómo levantarlo desde cero: `../galenasv/docs/LEVANTAR.md`.
 - El frontend debe correr en el **puerto 3000**. El backend rechaza con `403 auth.origen` las
@@ -18,6 +18,7 @@ dependencias de npm. Consume el API REST del backend Jakarta EE
 ```bash
 npm start          # http://localhost:3000 (sirve src/ y hace de proxy de /galenosv/api)
 npm test           # pruebas de unidad (node --test)
+npm run cobertura  # pruebas con cobertura, medida solo sobre src/
 ```
 
 `npm start` funciona sin `.env`. Por defecto el proxy apunta a

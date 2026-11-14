@@ -7,9 +7,10 @@
   "author": "Julio Ernesto Calderon Umana",
   "scripts": {
     "start": "node scripts/dev_server.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "cobertura": "node --test --experimental-test-coverage --test-coverage-include=src/** tests/*.test.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.5"
   }
 }
