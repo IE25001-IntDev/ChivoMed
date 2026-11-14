@@ -4,8 +4,8 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  */
-import { listarTiposDocumento, iniciarSesion, cerrarSesion } from "../../control/auth_service.js";
-import { ROLES_EMPLEADO, RUTAS, RUTA_INICIO_EMPLEADO } from "../rutas.js";
+import { listarTiposDocumento, iniciarSesion, cerrarSesion, esEmpleado } from "../../control/auth_service.js";
+import { RUTAS, RUTA_INICIO_EMPLEADO } from "../rutas.js";
 import { rutaDeRetorno } from "../router.js";
 import { crearValidadorFormato } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
@@ -16,7 +16,7 @@ export const MENSAJES = Object.freeze({
     tipoRequerido: "Selecciona el tipo de documento.",
     numeroRequerido: "Escribe tu número de documento.",
     numeroLargo: `El número no puede tener más de ${MAX_NUMERO_DOCUMENTO} caracteres.`,
-    soloPersonal: "Este acceso es solo para personal médico y administrativo.",
+    soloPersonal: "Este acceso es solo para el personal de la clínica.",
     sesionFinalizada: "Inicia sesión con tu documento para continuar.",
 });
 
@@ -98,7 +98,7 @@ export class ControladorLogin {
         this.#actualizar({ enviando: true, errores, mensaje: null });
         try {
             const sesion = await this.#servicio.iniciarSesion(datos.idTipoDocumento, datos.numeroDocumento.trim());
-            if (!ROLES_EMPLEADO.includes(sesion?.rolActivo?.codigo)) {
+            if (!esEmpleado(sesion)) {
                 // La sesión ya existe en el servidor: se cierra para no dejarla abierta.
                 try { await this.#servicio.cerrarSesion(sesion?.csrfToken); } catch { /* Se informa el rechazo igual. */ }
                 this.#actualizar({ enviando: false, mensaje: MENSAJES.soloPersonal });

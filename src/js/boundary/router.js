@@ -65,6 +65,7 @@ export class Router {
      * @param {string} opciones.porDefecto ruta usada para '#', '#/' o hash vacío
      * @param {string} opciones.login ruta del login
      * @param {(sesion) => string|null} opciones.inicioPorRol
+     * @param {(sesion) => boolean} [opciones.esEmpleado] decide si una sesión entra a las rutas `empleado`
      * @param {{ location: { hash: string, replace(url: string): void }, addEventListener: Function, removeEventListener: Function }} opciones.ventana
      * @param {() => Promise<object>} opciones.autenticar resuelve la sesión o rechaza con { status }
      * @param {(tag: string, contexto: object) => void} opciones.montar
@@ -74,7 +75,7 @@ export class Router {
      * @param {object} [opciones.sinConexion] definición montada en una ruta protegida sin red y sin sesión en memoria
      */
     constructor(opciones) {
-        this.#opciones = { mostrarError: () => {}, esErrorDeRed: () => false, sesionSinRed: () => null, sinConexion: null, ...opciones };
+        this.#opciones = { mostrarError: () => {}, esEmpleado: () => false, esErrorDeRed: () => false, sesionSinRed: () => null, sinConexion: null, ...opciones };
         this.pendiente = Promise.resolve();
     }
 
@@ -118,12 +119,12 @@ export class Router {
         const ruta = resultado.ruta ?? o.noEncontrada;
         const contexto = { ruta, path, params, query, sesion: null, soloLectura: false };
 
-        if (ruta.roles || ruta.soloInvitados) {
+        if (ruta.empleado || ruta.soloInvitados) {
             try {
                 contexto.sesion = await o.autenticar();
             } catch (error) {
                 if (!vigente()) return;
-                if (ruta.roles) {
+                if (ruta.empleado) {
                     if (error?.status === 401) {
                         const volver = query.size ? `${path}?${query}` : path;
                         return this.#redirigir(`${o.login}?sesion=finalizada&volver=${encodeURIComponent(volver)}`);
@@ -132,7 +133,7 @@ export class Router {
                     // Sin red: con una sesión de empleado en memoria se entra en solo lectura;
                     // sin ella, se explica que falta la red en vez de mandar al login.
                     const respaldo = o.sesionSinRed();
-                    if (respaldo && ruta.roles.includes(respaldo.rolActivo?.codigo)) {
+                    if (respaldo && o.esEmpleado(respaldo)) {
                         contexto.sesion = respaldo;
                         contexto.soloLectura = true;
                     } else if (o.sinConexion) {
@@ -147,7 +148,7 @@ export class Router {
             if (contexto.sesion) {
                 const inicio = o.inicioPorRol(contexto.sesion);
                 if (ruta.soloInvitados && inicio) return this.#redirigir(inicio);
-                if (ruta.roles && !ruta.roles.includes(contexto.sesion.rolActivo?.codigo)) {
+                if (ruta.empleado && !o.esEmpleado(contexto.sesion)) {
                     return this.#redirigir(inicio ?? o.porDefecto);
                 }
             }

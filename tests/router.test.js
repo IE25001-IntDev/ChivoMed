@@ -4,7 +4,10 @@ import { normalizarHash, resolverRuta, rutaDeRetorno, Router } from '../src/js/b
 
 const UUID = '10000000-0000-4000-8000-000000000001';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const EMPLEADO = ['DOCTOR', 'ADMINISTRACION'];
+import { esEmpleado } from '../src/js/control/auth_service.js';
+
+// B8: cualquier rol activo excepto PACIENTE, incluso sin código (null).
+const EMPLEADO = ['DOCTOR', 'ADMINISTRACION', 'ENFERMERA', null];
 
 // Rutas de prueba con la misma forma que rutas.js, sin cargar módulos reales.
 function crearRutas(cargas = []) {
@@ -12,8 +15,8 @@ function crearRutas(cargas = []) {
     return [
         { patron: '/citas', tag: 'vista-citas', cargar: cargar('vista-citas') },
         { patron: '/login', tag: 'vista-login', soloInvitados: true, cargar: cargar('vista-login') },
-        { patron: '/dashboard', tag: 'vista-dashboard', roles: EMPLEADO, cargar: cargar('vista-dashboard') },
-        { patron: '/consulta/:id', tag: 'vista-consulta', roles: EMPLEADO, restricciones: { id: UUID_RE }, cargar: cargar('vista-consulta') },
+        { patron: '/dashboard', tag: 'vista-dashboard', empleado: true, cargar: cargar('vista-dashboard') },
+        { patron: '/consulta/:id', tag: 'vista-consulta', empleado: true, restricciones: { id: UUID_RE }, cargar: cargar('vista-consulta') },
     ];
 }
 const NO_ENCONTRADA = { patron: null, tag: 'vista-no-encontrada' };
@@ -55,7 +58,8 @@ function preparar({ hash = '', autenticar = async () => { throw error(401); }, s
         noEncontrada: NO_ENCONTRADA,
         porDefecto: '/citas',
         login: '/login',
-        inicioPorRol: s => (EMPLEADO.includes(s?.rolActivo?.codigo) ? '/dashboard' : null),
+        inicioPorRol: s => (esEmpleado(s) ? '/dashboard' : null),
+        esEmpleado,
         ventana,
         autenticar: (...args) => { llamadasAuth++; return autenticar(...args); },
         montar: (tag, contexto) => montajes.push({ tag, contexto }),

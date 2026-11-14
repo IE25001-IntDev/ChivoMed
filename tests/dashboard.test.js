@@ -162,8 +162,18 @@ describe('normalizarAsignaciones', () => {
         assert.deepEqual(normalizarAsignaciones(datos).map(a => a.idPersonaRol), [DOC_NORTE.idPersonaRol]);
     });
 
-    test('sin nombreRol usa el nombre conocido del código; una respuesta que no es lista da []', () => {
-        assert.equal(normalizarAsignaciones([{ ...ADM_NORTE, nombreRol: null }])[0].nombreRol, 'Administración');
+    test('B8: acepta Enfermera y un rol sin código; descarta un código que no es texto', () => {
+        const datos = [
+            { ...DOC_SUR, idPersonaRol: UUID(40), codigoRol: 'ENFERMERA', nombreRol: 'Enfermera' },
+            { ...DOC_SUR, idPersonaRol: UUID(41), codigoRol: null, nombreRol: 'Recepción' },
+            { ...DOC_SUR, idPersonaRol: UUID(42), codigoRol: 7, nombreRol: 'Raro' },
+        ];
+        const roles = normalizarAsignaciones(datos);
+        assert.deepEqual(roles.map(a => [a.codigoRol, a.nombreRol]), [['ENFERMERA', 'Enfermera'], [null, 'Recepción']]);
+    });
+
+    test('sin nombreRol muestra un texto neutro, nunca el código; una respuesta que no es lista da []', () => {
+        assert.equal(normalizarAsignaciones([{ ...ADM_NORTE, nombreRol: null }])[0].nombreRol, 'Rol sin nombre');
         assert.deepEqual(normalizarAsignaciones({ data: [] }), []);
     });
 });

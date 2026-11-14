@@ -3,7 +3,7 @@
  * Recibe la sesión por la propiedad `sesion` (la pone <app-shell>).
  * Emite 'sesion-cerrada' (bubbles, composed) al cerrar sesión o si el servidor ya la había cerrado.
  */
-import { cerrarSesion, ROLES } from "../../control/auth_service.js";
+import { cerrarSesion, nombreDeRol } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { conexion } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
@@ -54,7 +54,7 @@ class SessionBar extends HTMLElement {
         const raiz = this.shadowRoot;
         const { usuario, rolActivo } = this.#sesion ?? {};
         raiz.getElementById("nombre").textContent = usuario ? `${usuario.nombres} ${usuario.apellidos}`.trim() : "";
-        raiz.getElementById("rol").textContent = rolActivo ? ROLES[rolActivo.codigo] ?? "" : "";
+        raiz.getElementById("rol").textContent = rolActivo ? nombreDeRol(rolActivo) : "";
         raiz.getElementById("clinica").textContent = rolActivo?.nombreClinica ?? "";
         raiz.getElementById("error").hidden = true;
         this.#pintarRed();

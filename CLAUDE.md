@@ -54,4 +54,6 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend:
 
 
 ## Login (HU2)
-- El login es con tipo de documento y número de documento, sin contraseña. Contrato: POST /api/auth/login con { idTipoDocumento, numeroDocumento }. Solo DOCTOR y ADMINISTRACION.
+- El login es con tipo de documento y número de documento, sin contraseña. Contrato: POST /api/auth/login con { idTipoDocumento, numeroDocumento }.
+- Entra cualquier empleado: un rol activo excepto PACIENTE, incluso un rol sin código (regla B8 del backend). `/auth/me` puede devolver `codigo: null` y trae `nombreRol`: se muestra `nombreRol` y el código solo se usa para reconocer PACIENTE (`esEmpleado` en `auth_service.js`). Nunca fijar listas de roles en el frontend.
+- Cada paso de una consulta lo atiende quien tiene su rol responsable, y la cierra quien completó el paso final; el frontend se guía por `pendienteParaMi` y no compara roles por nombre.

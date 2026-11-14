@@ -13,7 +13,7 @@
  */
 import { Router, normalizarHash } from "../router.js";
 import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
-import { obtenerSesion, fijarSesionVista, CODIGO_SIN_RED } from "../../control/auth_service.js";
+import { obtenerSesion, fijarSesionVista, esEmpleado, CODIGO_SIN_RED } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { registrarServiceWorker } from "../pwa/registro_sw.js";
 import { limpiarCachesDeDatos } from "../pwa/caches_cliente.js";
@@ -54,14 +54,14 @@ class AppShell extends HTMLElement {
     #alActualizarSesion = event => {
         event.stopPropagation();
         const { sesion } = event.detail ?? {};
-        if (!sesion || !this.#rutaActual?.roles) return;
+        if (!sesion || !this.#rutaActual?.empleado) return;
         fijarSesionVista(sesion);
         memoria.recordarSesion(sesion);
         this.shadowRoot.querySelector("session-bar").sesion = sesion;
     };
     // Se difiere: si el 401 vino de la verificación del propio router, este ya redirigió al login.
     #alExpirar = () => setTimeout(() => {
-        if (!this.#rutaActual?.roles) return;
+        if (!this.#rutaActual?.empleado) return;
         if (normalizarHash(location.hash).ruta !== RUTA_LOGIN) this.#irAlLogin(true);
         else limpiarCachesDeDatos();
     }, 0);
@@ -87,6 +87,7 @@ class AppShell extends HTMLElement {
             porDefecto: RUTA_POR_DEFECTO,
             login: RUTA_LOGIN,
             inicioPorRol,
+            esEmpleado,
             ventana: window,
             autenticar: obtenerSesion,
             montar: (tag, contexto) => this.#montar(tag, contexto),
@@ -128,7 +129,7 @@ class AppShell extends HTMLElement {
         this.#rutaActual = contexto.ruta;
         this.#montadaSinRed = Boolean(contexto.soloLectura || contexto.ruta === RUTA_SIN_CONEXION);
         // Solo una sesión verificada con el servidor sirve de respaldo para entrar sin red.
-        if (contexto.ruta.roles && contexto.sesion && !contexto.soloLectura) memoria.recordarSesion(contexto.sesion);
+        if (contexto.ruta.empleado && contexto.sesion && !contexto.soloLectura) memoria.recordarSesion(contexto.sesion);
 
         this.#mostrarSesion(contexto);
         raiz.getElementById("contenido").replaceChildren(vista);
@@ -137,7 +138,7 @@ class AppShell extends HTMLElement {
 
     /** La barra de sesión solo se muestra en rutas de empleado con sesión verificada. */
     #mostrarSesion(contexto) {
-        const protegida = Boolean(contexto.ruta.roles && contexto.sesion);
+        const protegida = Boolean(contexto.ruta.empleado && contexto.sesion);
         fijarSesionVista(protegida ? contexto.sesion : null);
         const barra = this.shadowRoot.querySelector("session-bar");
         barra.sesion = protegida ? contexto.sesion : null;

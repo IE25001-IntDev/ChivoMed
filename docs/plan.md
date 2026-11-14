@@ -50,11 +50,11 @@
 ## Decisiones
 - Entrega en 6 días: fecha límite 2026-11-18.
 - Router propio por hash (`#/ruta`); todo se resuelve desde `src/index.html` para que luego lo sirva un service worker.
-- Login (HU2) SOLO con tipo de documento y número de documento, sin contraseña, y solo para DOCTOR y ADMINISTRACION (cambio de alcance por la rúbrica).
+- Login (HU2) SOLO con tipo de documento y número de documento, sin contraseña, y solo para empleados (cambio de alcance por la rúbrica). Desde la B8 del backend (2026-11-13), empleado es cualquier rol activo excepto PACIENTE, incluso un rol sin código.
 - Contrato acordado, pendiente en el backend: `POST /api/auth/login` con `{ idTipoDocumento, numeroDocumento }` y `GET /api/publico/tipos-documento` sin sesión. Hoy el backend solo acepta `identificador` + `password` y exige sesión en toda `/api`. Las llamadas quedan aisladas en `src/js/control/auth_service.js`.
-- El frontend rechaza y cierra una sesión que no sea de DOCTOR o ADMINISTRACION, pero eso no es una barrera de seguridad: el backend debe negar el login a otros roles.
+- El frontend rechaza y cierra una sesión con rol PACIENTE, pero eso no es una barrera de seguridad: el backend niega el login a quien no es empleado. El rol se muestra con `nombreRol` y el código solo se usa para reconocer PACIENTE.
 - Alcance reducido a las 4 HU. Rutas: `#/citas` (HU1, pública, ruta por defecto), `#/login` (HU2), `#/dashboard` (HU3) y `#/consulta/:id` (HU4), más una vista de no encontrada.
-- Las rutas de empleado aceptan los roles DOCTOR y ADMINISTRACION.
+- Las rutas de empleado (`empleado: true` en `rutas.js`) aceptan cualquier rol de empleado (`esEmpleado` de `auth_service.js`). Cada paso de una consulta lo atiende su rol responsable y la consulta la cierra quien completó el paso final (B8); lo decide el backend.
 - Fuera de alcance: portada, administración, vista de cuenta y portal del paciente con login. La HU1 no reutiliza el portal (ver `docs/reportes/hu1-plan.md`, D3); su código se borró en la Fase 4.
 - `npm start` usa `scripts/dev_server.js`, que tiene el proxy a `/galenosv/api`. BrowserSync, Playwright y los e2e (`tests/browser/`) ya no están; `tests/api_proxy.test.js` prueba `dev_server.js`.
 - HU4 "retroceder": reabre el paso anterior en el backend con `PUT /api/consultas-procedimientos-pasos/{id}/retroceso`. Responde 409 si es el primer paso o si el paso actual tiene valor u órdenes; la vista debe mostrar el motivo del 409. Endpoint acordado, pendiente en el backend.

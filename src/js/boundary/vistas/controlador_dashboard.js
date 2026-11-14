@@ -8,8 +8,7 @@
  * Un cambio de rol confirmado se publica en `estado.sesionCambiada`.
  */
 import AtencionService from "../../control/atencion_service.js";
-import { obtenerSesion as obtenerSesionHttp, ROLES } from "../../control/auth_service.js";
-import { ROLES_EMPLEADO } from "../rutas.js";
+import { obtenerSesion as obtenerSesionHttp, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../../control/auth_service.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
@@ -49,7 +48,7 @@ export function mensajeMemoria(fecha) {
 
 /**
  * Valida y limpia el DTO de GET /atencion/asignaciones. Descarta entradas incompletas, repetidas o
- * con un rol que no sea de empleado (defensa: el backend ya filtra DOCTOR y ADMINISTRACION).
+ * de PACIENTE (defensa: el backend ya las excluye). Un rol sin código es de empleado (B8).
  */
 export function normalizarAsignaciones(datos) {
     if (!Array.isArray(datos)) return [];
@@ -58,13 +57,13 @@ export function normalizarAsignaciones(datos) {
     for (const a of datos) {
         if (!a || typeof a.idPersonaRol !== "string" || !UUID.test(a.idPersonaRol)
             || typeof a.idClinica !== "string" || !UUID.test(a.idClinica)
-            || !ROLES_EMPLEADO.includes(a.codigoRol) || !texto(a.nombreClinica)
+            || a.codigoRol === CODIGO_PACIENTE || !(a.codigoRol == null || texto(a.codigoRol)) || !texto(a.nombreClinica)
             || vistos.has(a.idPersonaRol)) continue;
         vistos.add(a.idPersonaRol);
         resultado.push(Object.freeze({
             idPersonaRol: a.idPersonaRol,
-            codigoRol: a.codigoRol,
-            nombreRol: texto(a.nombreRol) ? a.nombreRol.trim() : ROLES[a.codigoRol],
+            codigoRol: texto(a.codigoRol) ? a.codigoRol : null,
+            nombreRol: texto(a.nombreRol) ? a.nombreRol.trim() : ROL_SIN_NOMBRE,
             idClinica: a.idClinica,
             nombreClinica: a.nombreClinica.trim(),
             activa: a.activa === true,

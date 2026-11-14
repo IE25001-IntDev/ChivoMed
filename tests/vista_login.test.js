@@ -5,7 +5,7 @@ import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 // Datos inventados; nunca datos reales.
 const UUID = n => `70000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const DUI = Object.freeze({ idTipoDocumento: UUID(1), nombre: 'DUI', indicaciones: 'Ocho dígitos, guion y dígito verificador.', expresionRegular: '^[0-9]{8}-[0-9]$' });
-const sesion = codigo => ({ usuario: { idUsuario: UUID(9) }, rolActivo: { codigo }, csrfToken: 'csrf-prueba' });
+const sesion = codigo => ({ usuario: { idUsuario: UUID(9) }, rolActivo: { idPersonaRol: UUID(8), codigo }, csrfToken: 'csrf-prueba' });
 const asentar = () => new Promise(resolve => setTimeout(resolve, 0));
 
 let VistaLogin;

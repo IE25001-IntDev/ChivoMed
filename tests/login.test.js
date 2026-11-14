@@ -6,7 +6,7 @@ import { crearValidadorFormato } from '../src/js/control/formato_documento.js';
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const DUI = { idTipoDocumento: UUID(1), nombre: 'DUI', indicaciones: 'Ocho dígitos, guion y dígito verificador.', expresionRegular: '\\d{8}-\\d' };
 const PASAPORTE = { idTipoDocumento: UUID(2), nombre: 'Pasaporte', indicaciones: null, expresionRegular: null };
-const sesion = codigo => ({ usuario: { idUsuario: UUID(9) }, rolActivo: { codigo }, csrfToken: 'csrf-prueba' });
+const sesion = codigo => ({ usuario: { idUsuario: UUID(9) }, rolActivo: { idPersonaRol: UUID(8), codigo }, csrfToken: 'csrf-prueba' });
 
 /** Doble del servicio de autenticación que registra cada llamada. */
 function servicioDoble({ tipos = [DUI, PASAPORTE], login = async () => sesion('DOCTOR'), cierre = async () => {} } = {}) {
@@ -91,7 +91,8 @@ describe('ControladorLogin: validación', () => {
 });
 
 describe('ControladorLogin: envío', () => {
-    for (const rol of ['DOCTOR', 'ADMINISTRACION']) {
+    // B8: Carlos (Doctor), Lucía (Enfermera), Marta (Atención al público) y un rol sin código.
+    for (const rol of ['DOCTOR', 'ENFERMERA', 'ADMINISTRACION', null]) {
         test(`el rol ${rol} entra con el número recortado`, async () => {
             const { controlador, servicio } = await preparar({ login: async () => sesion(rol) });
             const resultado = await controlador.enviar({ idTipoDocumento: DUI.idTipoDocumento, numeroDocumento: ' 12345678-9 ' });
@@ -103,7 +104,7 @@ describe('ControladorLogin: envío', () => {
         });
     }
 
-    for (const rol of ['PACIENTE', 'SUPERUSUARIO', undefined]) {
+    for (const rol of ['PACIENTE']) {
         test(`un rol ${rol} no entra y su sesión se cierra en el servidor`, async () => {
             const { controlador, servicio } = await preparar({ login: async () => sesion(rol) });
             assert.equal(await controlador.enviar({ idTipoDocumento: PASAPORTE.idTipoDocumento, numeroDocumento: 'A1' }), null);

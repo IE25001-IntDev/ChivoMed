@@ -1,6 +1,8 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { iniciarSesion, obtenerSesion, cerrarSesion, listarTiposDocumento, MENSAJES_POR_CODIGO } from "../src/js/control/auth_service.js";
+import {
+    iniciarSesion, obtenerSesion, cerrarSesion, listarTiposDocumento, MENSAJES_POR_CODIGO, esEmpleado, nombreDeRol, ROL_SIN_NOMBRE,
+} from "../src/js/control/auth_service.js";
 
 const TIPO = "10000000-0000-4000-8000-0000000000aa";
 
@@ -15,17 +17,19 @@ function contarExpiraciones() {
     return conteo;
 }
 
-function sesion(codigo = "DOCTOR") {
+const NOMBRES_ROL = { DOCTOR: "Doctor", ENFERMERA: "Enfermera", ADMINISTRACION: "Atención al público", PACIENTE: "Paciente" };
+
+function sesion(codigo = "DOCTOR", nombreRol = NOMBRES_ROL[codigo] ?? "Rol de prueba") {
     return {
         usuario: {
             idUsuario: "10000000-0000-4000-8000-000000000001",
             idPersona: "10000000-0000-4000-8000-000000000002",
-            nombres: "Persona", apellidos: "de prueba",
+            nombres: "Carlos", apellidos: "Gómez",
         },
         rolActivo: {
             idPersonaRol: "10000000-0000-4000-8000-000000000003",
             idClinica: "10000000-0000-4000-8000-000000000004",
-            codigo, nombreClinica: "Clínica de prueba",
+            codigo, nombreRol, nombreClinica: "Clínica Santa Ana",
         },
         csrfToken: "token-sintetico-de-prueba",
     };
@@ -87,11 +91,11 @@ test("un 403 auth.origen del login explica el origen; los demás 403 conservan s
     for (const code of ["auth.csrf", "constructor", null]) {
         globalThis.fetch = error403(code);
         await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
-            status: 403, message: "Este acceso es solo para personal médico y administrativo.",
+            status: 403, message: "Este acceso es solo para el personal de la clínica.",
         });
     }
     globalThis.fetch = async () => new Response("<html>403</html>", { status: 403, headers: { "Content-Type": "text/html" } });
-    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), error => error.code === null && /solo para personal/.test(error.message));
+    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), error => error.code === null && /solo para el personal/.test(error.message));
 });
 
 test("un 401 de /auth/me sí avisa sesión expirada", async () => {
@@ -101,12 +105,28 @@ test("un 401 de /auth/me sí avisa sesión expirada", async () => {
     assert.equal(expiraciones.valor, 1);
 });
 
-for (const codigo of ["DOCTOR", "ADMINISTRACION"]) {
-    test(`acepta la identidad autenticada con rol ${codigo}`, async () => {
+// B8: cualquier rol activo excepto PACIENTE es de empleado, incluso un rol sin código.
+for (const codigo of ["DOCTOR", "ENFERMERA", "ADMINISTRACION", "OTRO_ROL", null]) {
+    test(`acepta la identidad autenticada con código ${codigo}`, async () => {
         globalThis.fetch = async () => Response.json(sesion(codigo));
-        assert.equal((await obtenerSesion()).rolActivo.codigo, codigo);
+        const recibida = await obtenerSesion();
+        assert.equal(recibida.rolActivo.codigo, codigo);
+        assert.ok(esEmpleado(recibida));
     });
 }
+
+test("acepta nombreRol null y lo muestra con un texto neutro, nunca con el código", async () => {
+    globalThis.fetch = async () => Response.json(sesion("ENFERMERA", null));
+    const recibida = await obtenerSesion();
+    assert.equal(nombreDeRol(recibida.rolActivo), ROL_SIN_NOMBRE);
+    assert.equal(nombreDeRol({ nombreRol: "  Enfermera " }), "Enfermera");
+});
+
+test("esEmpleado: rechaza PACIENTE, la falta de rol y un rol sin identificador", () => {
+    assert.equal(esEmpleado(sesion("PACIENTE")), false);
+    assert.equal(esEmpleado({ rolActivo: { codigo: "DOCTOR" } }), false);
+    for (const valor of [null, undefined, {}, { rolActivo: null }]) assert.equal(esEmpleado(valor), false);
+});
 
 test("los tipos de documento se piden sin sesión y solo se devuelven los activos y bien formados", async () => {
     const llamadas = [];
@@ -143,8 +163,8 @@ test("si los tipos de documento fallan se informa sin avisar sesión expirada", 
     assert.equal(expiraciones.valor, 0);
 });
 
-test("rechaza una respuesta de sesión inválida o un rol desconocido", async () => {
-    for (const datos of [null, {}, sesion("SUPERUSUARIO"), sesion("__proto__"),
+test("rechaza una respuesta de sesión inválida o con rol PACIENTE", async () => {
+    for (const datos of [null, {}, sesion("PACIENTE"), sesion(""), sesion(42), sesion("DOCTOR", 7),
         { ...sesion(), usuario: { idUsuario: { toString: "invalido" } } },
         { ...sesion(), csrfToken: "" }, { ...sesion(), csrfToken: "token\r\ninyectado" }]) {
         globalThis.fetch = async () => Response.json(datos);

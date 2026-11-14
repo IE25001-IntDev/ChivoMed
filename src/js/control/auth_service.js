@@ -1,10 +1,22 @@
 import { API_CONFIG } from "./api_config.js";
 
-export const ROLES = Object.freeze({
-    ADMINISTRACION: "Administración",
-    DOCTOR: "Doctor",
-    PACIENTE: "Paciente",
-});
+/**
+ * Regla de empleado (B8): cualquier rol activo excepto Paciente, incluso un rol sin código.
+ * El código solo sirve para reconocer PACIENTE; para mostrar el rol se usa `nombreRol`.
+ */
+export const CODIGO_PACIENTE = "PACIENTE";
+export const ROL_SIN_NOMBRE = "Rol sin nombre";
+
+/** true si la sesión tiene un rol activo que no es PACIENTE. */
+export function esEmpleado(sesion) {
+    const rol = sesion?.rolActivo;
+    return Boolean(rol) && typeof rol.idPersonaRol === "string" && rol.codigo !== CODIGO_PACIENTE;
+}
+
+/** Nombre visible del rol activo; un rol sin nombre muestra un texto neutro, nunca el código. */
+export function nombreDeRol(rolActivo) {
+    return typeof rolActivo?.nombreRol === "string" && rolActivo.nombreRol.trim() ? rolActivo.nombreRol.trim() : ROL_SIN_NOMBRE;
+}
 
 let sesionActual;
 let sesionVista;
@@ -38,7 +50,7 @@ const MENSAJES = Object.freeze({
     login: {
         400: "Revisa el tipo y el número de documento.",
         401: "No reconocemos ese documento como personal activo de una clínica.",
-        403: "Este acceso es solo para personal médico y administrativo.",
+        403: "Este acceso es solo para el personal de la clínica.",
     },
     sesion: {
         400: "No pudimos verificar tu sesión. Inténtalo de nuevo.",
@@ -144,7 +156,9 @@ export async function listarTiposDocumento() {
 
 // Contrato de /auth/me; la identidad y el rol siempre los decide el backend.
 // { usuario: { idUsuario, idPersona, nombres, apellidos },
-//   rolActivo: { idPersonaRol, codigo, idClinica, nombreClinica }, csrfToken }
+//   rolActivo: { idPersonaRol, codigo, nombreRol, idClinica, nombreClinica }, csrfToken }
+// `codigo` es null en un rol creado sin código y `nombreRol` puede ser null (B8); un PACIENTE
+// nunca es rol de sesión.
 export async function obtenerSesion() {
     const sesion = await leerJson(await solicitar("auth/me"), "No pudimos verificar tu sesión. Inténtalo de nuevo.");
     const identificador = valor => typeof valor === "string" && UUID.test(valor);
@@ -153,7 +167,8 @@ export async function obtenerSesion() {
     if (!identificador(usuario?.idUsuario) || !identificador(usuario?.idPersona)
         || !texto(usuario?.nombres) || typeof usuario.apellidos !== "string"
         || !identificador(rolActivo?.idPersonaRol) || !identificador(rolActivo?.idClinica)
-        || typeof rolActivo?.codigo !== "string" || !Object.hasOwn(ROLES, rolActivo.codigo)
+        || !(rolActivo.codigo === null || texto(rolActivo.codigo)) || rolActivo.codigo === CODIGO_PACIENTE
+        || !(rolActivo.nombreRol == null || typeof rolActivo.nombreRol === "string")
         || !texto(rolActivo?.nombreClinica)
         || !texto(csrfToken) || /[\r\n]/.test(csrfToken)) {
         throw new AuthError("No pudimos cargar tu acceso. Comunícate con tu clínica.");

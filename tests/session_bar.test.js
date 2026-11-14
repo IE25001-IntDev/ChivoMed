@@ -7,7 +7,7 @@ import { crearVentana, instalarVentana } from './dobles/ventana_doble.js';
 const UUID = n => `90000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sesion = (cambios = {}) => ({
     usuario: { idUsuario: UUID(1), idPersona: UUID(2), nombres: 'Ana', apellidos: 'Prueba ' },
-    rolActivo: { idPersonaRol: UUID(3), codigo: 'DOCTOR', idClinica: UUID(4), nombreClinica: 'Clínica de prueba' },
+    rolActivo: { idPersonaRol: UUID(3), codigo: 'DOCTOR', nombreRol: 'Doctor', idClinica: UUID(4), nombreClinica: 'Clínica de prueba' },
     csrfToken: 'csrf-prueba',
     ...cambios,
 });
@@ -60,9 +60,11 @@ describe('<session-bar>: identidad', () => {
         assert.equal($('salir').disabled, false);
     });
 
-    test('un rol que no está en ROLES no muestra el código crudo', () => {
-        const { $ } = montar(sesion({ rolActivo: { codigo: 'DESCONOCIDO', nombreClinica: 'Clínica de prueba' } }));
-        assert.equal($('rol').textContent, '');
+    test('muestra nombreRol aunque el código sea null (B8) y nunca el código crudo', () => {
+        const { $ } = montar(sesion({ rolActivo: { codigo: null, nombreRol: 'Enfermera', nombreClinica: 'Clínica Santa Ana' } }));
+        assert.equal($('rol').textContent, 'Enfermera');
+        const sinNombre = montar(sesion({ rolActivo: { codigo: 'ENFERMERA', nombreRol: null, nombreClinica: 'Clínica Santa Ana' } }));
+        assert.equal(sinNombre.$('rol').textContent, 'Rol sin nombre');
     });
 
     test('sin sesión no hay datos y no se puede cerrar sesión', () => {
@@ -74,9 +76,9 @@ describe('<session-bar>: identidad', () => {
 
     test('asignar otra sesión estando conectada repinta', () => {
         const { barra, $ } = montar(null);
-        barra.sesion = sesion({ rolActivo: { codigo: 'ADMINISTRACION', nombreClinica: 'Clínica Norte de prueba' } });
+        barra.sesion = sesion({ rolActivo: { codigo: 'ADMINISTRACION', nombreRol: 'Atención al público', nombreClinica: 'Clínica Norte de prueba' } });
         assert.equal(barra.sesion.rolActivo.codigo, 'ADMINISTRACION');
-        assert.equal($('rol').textContent, 'Administración');
+        assert.equal($('rol').textContent, 'Atención al público');
         assert.equal($('clinica').textContent, 'Clínica Norte de prueba');
         assert.equal($('salir').disabled, false);
     });

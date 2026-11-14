@@ -11,7 +11,7 @@
  * Emite 'sesion-actualizada' { sesion } (bubbles, composed) cuando el estado publica `sesionCambiada`.
  */
 import { ControladorDashboard, mensajeMemoria, MENSAJES } from "./controlador_dashboard.js";
-import { ROLES } from "../../control/auth_service.js";
+import { nombreDeRol } from "../../control/auth_service.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
 import "../components/dashboard/lista_consultas.js";
@@ -110,7 +110,7 @@ class VistaDashboard extends HTMLElement {
 
         const rol = estado.activa
             ? { nombre: estado.activa.nombreRol, clinica: estado.activa.nombreClinica }
-            : { nombre: ROLES[estado.sesion?.rolActivo?.codigo], clinica: estado.sesion?.rolActivo?.nombreClinica };
+            : { nombre: estado.sesion?.rolActivo ? nombreDeRol(estado.sesion.rolActivo) : null, clinica: estado.sesion?.rolActivo?.nombreClinica };
         this.$("activo").textContent = rol.nombre && rol.clinica ? `Estás atendiendo como ${rol.nombre} en ${rol.clinica}.` : "";
 
         const avisoEstado = estado.cargando && !estado.grupos.length ? "Cargando tus roles…"
