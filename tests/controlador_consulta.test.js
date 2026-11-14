@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     MENSAJES, MAX_TEXTO, mensajeDeErrorConsulta, CODIGOS_POR_ROL, pasosPendientes, elegirPasoActual,
-    motivoBloqueo, puedeOfrecerRetroceso, motivoNoRetroceder, puedeCerrar, nombreDeOrden, validarOrden, servicioConsulta,
+    motivoBloqueo, puedeOfrecerRetroceso, motivoNoRetroceder, puedeCerrar, nombreDeOrden, servicioConsulta,
     normalizarAsignables, categoriasDe, examenesVisibles, idsOrdenados, validarAsignacion,
 } from '../src/js/boundary/vistas/controlador_consulta.js';
 import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
@@ -122,15 +122,6 @@ describe('motivos y reglas de las acciones', () => {
         assert.equal(nombreDeOrden({ idExamen: UUID(301) }, asignables), 'Examen 1');
         assert.equal(nombreDeOrden({ idExamen: UUID(399) }, asignables), 'Examen ya no disponible');
         assert.equal(nombreDeOrden({ idExamen: null }, asignables), 'Orden sin examen asociado');
-    });
-    test('validarOrden: examen de la lista obligatorio; indicaciones opcionales hasta 255', () => {
-        const asignables = [examen(1)];
-        assert.equal(validarOrden({ idExamen: UUID(301) }, asignables), null);
-        assert.equal(validarOrden({ idExamen: UUID(301), indicaciones: '' }, asignables), null);
-        assert.equal(validarOrden({ idExamen: '' }, asignables), MENSAJES.examenRequerido);
-        assert.equal(validarOrden({ idExamen: UUID(399) }, asignables), MENSAJES.examenRequerido);
-        assert.equal(validarOrden({ idExamen: UUID(301), indicaciones: 'x'.repeat(MAX_TEXTO) }, asignables), null);
-        assert.match(validarOrden({ idExamen: UUID(301), indicaciones: 'x'.repeat(MAX_TEXTO + 1) }, asignables), /255/);
     });
 });
 

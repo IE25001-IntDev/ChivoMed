@@ -18,7 +18,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-14.2";
+    const VERSION = "2026-11-14.3";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;

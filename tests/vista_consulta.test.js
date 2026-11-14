@@ -66,9 +66,12 @@ describe('<vista-consulta>', () => {
         const { paso: panelPaso, examenes } = vista.paneles;
         panelPaso.dispatchEvent(new CustomEvent('cambiar-borrador', { detail: { valor: 'Atención' } }));
         assert.equal(controlador.estado.borrador, 'Atención');
-        examenes.dispatchEvent(new CustomEvent('emitir-orden', { detail: { idExamen: UUID(301), indicaciones: '' } }));
+        examenes.dispatchEvent(new CustomEvent('cambiar-categoria', { detail: { idTipoExamen: '' } }));
+        examenes.dispatchEvent(new CustomEvent('alternar-examen', { detail: { idExamen: UUID(301), marcado: true } }));
+        assert.deepEqual(controlador.estado.seleccionExamenes, [UUID(301)]);
+        examenes.dispatchEvent(new CustomEvent('asignar-examenes', { detail: { indicaciones: '' } }));
         await asentar(); await asentar();
-        assert.ok(nombres().includes('ordenar'));
+        assert.deepEqual(llamadas.filter(l => l[0] === 'ordenar'), [['ordenar', UUID(102), { idExamen: UUID(301), indicaciones: '' }]]);
         panelPaso.dispatchEvent(new CustomEvent('avanzar'));
         await asentar(); await asentar();
         assert.deepEqual(llamadas.find(l => l[0] === 'completar'), ['completar', UUID(102), 'Atención']);
@@ -110,13 +113,48 @@ describe('<vista-consulta>', () => {
         assert.equal(vista.shadowRoot.activeElement, $('error-accion'));
     });
 
-    test('un error de orden se muestra en el panel de exámenes, no arriba', async () => {
+    test('asignar sin selección: el error va al panel de exámenes, no arriba, y recibe el foco', async () => {
         const { vista, $, p } = await montar();
-        vista.paneles.examenes.dispatchEvent(new CustomEvent('emitir-orden', { detail: { idExamen: '' } }));
+        vista.paneles.examenes.dispatchEvent(new CustomEvent('asignar-examenes', { detail: { indicaciones: '' } }));
         await asentar();
         assert.equal($('error-accion').hidden, true);
-        assert.equal(p('examenes', 'error-orden').textContent, MENSAJES.examenRequerido);
-        assert.equal(vista.paneles.examenes.shadowRoot.activeElement, p('examenes', 'examen'));
+        assert.equal(p('examenes', 'error-orden').textContent, MENSAJES.seleccionVacia);
+        assert.equal(vista.paneles.examenes.shadowRoot.activeElement, p('examenes', 'error-orden'));
+    });
+
+    test('al asignar varios exámenes el foco va al resultado y se vacían las indicaciones', async () => {
+        const { vista, p, q = s => vista.paneles.examenes.shadowRoot.querySelectorAll(s) } = await montar();
+        const examenes = vista.paneles.examenes;
+        for (const id of [UUID(301), UUID(302)]) {
+            examenes.dispatchEvent(new CustomEvent('alternar-examen', { detail: { idExamen: id, marcado: true } }));
+        }
+        await asentar();
+        assert.equal(p('examenes', 'seleccionados').textContent, '2 seleccionados');
+        p('examenes', 'indicaciones').value = 'En ayunas';
+        examenes.dispatchEvent(new CustomEvent('asignar-examenes', { detail: { indicaciones: 'En ayunas' } }));
+        await asentar(); await asentar(); await asentar();
+        assert.deepEqual(q('#lista-resultado span.texto-resultado').map(s => s.textContent),
+            ['Examen 1: Orden emitida.', 'Examen 2: Orden emitida.']);
+        assert.equal(examenes.shadowRoot.activeElement, p('examenes', 'resultado'));
+        assert.equal(p('examenes', 'indicaciones').value, '');
+    });
+
+    test('una asignación cortada (500) también enfoca el resultado y conserva las indicaciones', async () => {
+        const { vista, $, p, llamadas } = await montar({ respuestas: { ordenar: errorHttp(500) } });
+        const examenes = vista.paneles.examenes;
+        for (const id of [UUID(301), UUID(302)]) {
+            examenes.dispatchEvent(new CustomEvent('alternar-examen', { detail: { idExamen: id, marcado: true } }));
+        }
+        p('examenes', 'indicaciones').value = 'En ayunas';
+        examenes.dispatchEvent(new CustomEvent('asignar-examenes', { detail: { indicaciones: 'En ayunas' } }));
+        await asentar(); await asentar(); await asentar();
+        assert.equal(llamadas.filter(l => l[0] === 'ordenar').length, 1, 'tras un error que no es del examen no se sigue');
+        assert.deepEqual(examenes.shadowRoot.querySelectorAll('#lista-resultado span.estado-resultado').map(s => s.textContent),
+            ['No emitida', 'No emitida']);
+        assert.equal(p('examenes', 'error-orden').hidden, false);
+        assert.equal($('error-accion').hidden, true);
+        assert.equal(examenes.shadowRoot.activeElement, p('examenes', 'resultado'));
+        assert.equal(p('examenes', 'indicaciones').value, 'En ayunas');
     });
 
     test('pedir el retroceso con algo escrito muestra la confirmación y le pasa el foco', async () => {

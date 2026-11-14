@@ -57,6 +57,34 @@ textarea[readonly] { opacity: .8; }
 .orden-nombre.no-disponible { color: var(--muted); font-style: italic; }
 .orden-indicaciones { white-space: pre-wrap; }
 
+/* F9: casillas de exámenes (dos o más columnas; una a 375 px) y resultado por examen. */
+.grupo-examenes { margin: 0; padding: var(--espacio-3); border: 1px solid var(--border-strong); border-radius: 10px; display: grid; gap: var(--espacio-2); min-width: 0; }
+.grupo-examenes legend { font-weight: 600; padding: 0 var(--espacio-1); }
+.grupo-examenes[aria-invalid="true"] { border-color: var(--error); }
+.casillas { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--espacio-2); }
+.casilla {
+  display: grid; grid-template-columns: auto 1fr; column-gap: var(--espacio-2); row-gap: 2px; align-items: center;
+  min-height: 44px; padding: var(--espacio-2) var(--espacio-3); border: 1px solid var(--border-strong); border-radius: 10px; cursor: pointer;
+}
+.casilla:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.casilla:has(input:disabled) { cursor: default; }
+.casilla input { width: 1.25rem; height: 1.25rem; min-height: 0; margin: 0; accent-color: var(--accent); }
+.casilla .nombre-examen { font-weight: 600; overflow-wrap: anywhere; }
+.casilla .meta, .casilla .insignia { grid-column: 2; justify-self: start; }
+.casilla .insignia { background: var(--campo); color: var(--muted); border: 1px solid var(--border-strong); }
+.resultado-examenes:focus { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; }
+.resultado-examenes h3 { margin: 0 0 var(--espacio-2); }
+.lista-resultado { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--espacio-2); }
+.lista-resultado li {
+  display: flex; flex-wrap: wrap; gap: var(--espacio-2); align-items: baseline;
+  padding: var(--espacio-2) var(--espacio-3); border-radius: 10px; border: 1px solid var(--border-strong); overflow-wrap: anywhere;
+}
+.estado-resultado { font-weight: 700; white-space: nowrap; }
+.resultado-ok { background: var(--mint-soft); }
+.resultado-ok .estado-resultado { color: var(--accent-text); }
+.resultado-fallo { background: var(--error-fondo); border-color: var(--error); }
+.resultado-fallo .estado-resultado { color: var(--error); }
+
 /* Recorrido del procedimiento: pasos anidados por nivel; el actual resaltado. */
 .procedimiento { display: grid; gap: var(--espacio-2); }
 .arbol-pasos, .arbol-pasos ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--espacio-2); }
@@ -74,6 +102,8 @@ textarea[readonly] { opacity: .8; }
 @media (max-width: 480px) {
   .panel { padding: var(--espacio-3); }
   .acciones-paso .boton { width: 100%; }
+  .casillas { grid-template-columns: 1fr; }
+  .formulario-orden .boton { width: 100%; }
 }
 
 /* F8: "Salir de la consulta" bajo el título, con su explicación al lado. */

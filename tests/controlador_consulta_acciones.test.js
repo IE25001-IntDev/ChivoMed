@@ -193,47 +193,6 @@ describe('ControladorConsulta: retroceder', () => {
     });
 });
 
-describe('ControladorConsulta: órdenes', () => {
-    test('emite { idExamen, indicaciones } sobre el paso actual y solo recarga las órdenes', async () => {
-        let ordenes = [];
-        const { controlador, llamadas, nombres, iniciar } = flujo({ respuestas: {
-            ordenes: () => ordenes,
-            ordenar: (id, datos) => { ordenes = [{ idOrdenExamen: UUID(600), idExamen: datos.idExamen, indicaciones: datos.indicaciones ?? null }]; return ordenes[0]; },
-        } });
-        await iniciar();
-        const antes = nombres().length;
-        assert.equal(await controlador.emitirOrden({ idExamen: UUID(301), indicaciones: 'En ayunas' }), true);
-        assert.deepEqual(llamadas.find(l => l[0] === 'ordenar'), ['ordenar', UUID(102), { idExamen: UUID(301), indicaciones: 'En ayunas' }]);
-        assert.deepEqual(nombres().slice(antes), ['ordenar', 'ordenes']);
-        assert.equal(controlador.estado.detalle.ordenes.length, 1);
-        assert.equal(controlador.motivoNoRetroceder, MENSAJES.retrocesoConOrdenes, 'con una orden ya no se puede retroceder');
-        assert.deepEqual(controlador.estado.acabado, { accion: 'orden', ok: true });
-    });
-
-    test('sin examen de la lista o con indicaciones de más de 255 no se envía', async () => {
-        const { controlador, nombres, iniciar } = flujo();
-        await iniciar();
-        assert.equal(await controlador.emitirOrden({ idExamen: '' }), false);
-        assert.equal(controlador.estado.errorAccion, MENSAJES.examenRequerido);
-        assert.equal(await controlador.emitirOrden({ idExamen: UUID(399) }), false);
-        assert.equal(await controlador.emitirOrden({ idExamen: UUID(301), indicaciones: 'x'.repeat(MAX_TEXTO + 1) }), false);
-        assert.match(controlador.estado.errorAccion, /255/);
-        assert.equal(nombres().includes('ordenar'), false);
-    });
-
-    test('400 examenNoAsignable: muestra el motivo y actualiza la lista de asignables', async () => {
-        let asignables = [examen(1), examen(2)];
-        const { controlador, iniciar } = flujo({ respuestas: {
-            asignables: () => asignables,
-            ordenar: () => { asignables = [examen(2)]; return errorHttp(400, 'consulta.examenNoAsignable', 'x'); },
-        } });
-        await iniciar();
-        assert.equal(await controlador.emitirOrden({ idExamen: UUID(301) }), false);
-        assert.match(controlador.estado.errorAccion, /ya no se puede asignar/);
-        assert.deepEqual(controlador.estado.detalle.asignables.map(e => e.nombre), ['Examen 2']);
-    });
-});
-
 describe('ControladorConsulta: asignar varios exámenes (F9)', () => {
     const LAB = { idTipoExamen: UUID(501), nombre: 'Laboratorio clínico' };
     const IMG = { idTipoExamen: UUID(502), nombre: 'Imagenología' };
@@ -311,6 +270,7 @@ describe('ControladorConsulta: asignar varios exámenes (F9)', () => {
         assert.ok(Object.isFrozen(controlador.estado.resultadoExamenes));
         assert.deepEqual(controlador.estado.seleccionExamenes, []);
         assert.equal(controlador.estado.detalle.ordenes.length, 2);
+        assert.equal(controlador.motivoNoRetroceder, MENSAJES.retrocesoConOrdenes, 'con órdenes ya no se puede retroceder');
         assert.deepEqual(controlador.estado.acabado, { accion: 'orden', ok: true });
     });
 
@@ -491,7 +451,8 @@ describe('ControladorConsulta: acciones y cambios de contexto', () => {
             ordenes: () => ordenes, ordenar: () => { ordenes = [{ idOrdenExamen: UUID(600), idExamen: UUID(301) }]; return ordenes[0]; },
         } });
         await iniciar();
-        await controlador.emitirOrden({ idExamen: UUID(301) });
+        controlador.alternarExamen(UUID(301), true);
+        await controlador.asignarExamenes({ indicaciones: '' });
         const guardado = memoria.leer(`${UUID(801)}:consulta:${ID_CONSULTA}`);
         assert.equal(guardado.detalle.ordenes.length, 1);
     });

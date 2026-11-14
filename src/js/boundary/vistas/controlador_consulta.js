@@ -184,13 +184,6 @@ export function nombreDeOrden(orden, asignables) {
     return asignables.find(e => e.idExamen === orden.idExamen)?.nombre ?? MENSAJES.examenNoDisponible;
 }
 
-/** Valida una orden antes de enviarla. Devuelve el mensaje o null. */
-export function validarOrden({ idExamen, indicaciones } = {}, asignables = NINGUNA) {
-    if (!idExamen || !asignables.some(e => e.idExamen === idExamen)) return MENSAJES.examenRequerido;
-    if (typeof indicaciones === "string" && indicaciones.trim().length > MAX_TEXTO) return `Las indicaciones admiten hasta ${MAX_TEXTO} caracteres.`;
-    return null;
-}
-
 /** Tipos de examen activos de un examen asignable (B8): válidos, sin repetir y congelados. */
 function normalizarTipos(datos) {
     if (!Array.isArray(datos)) return NINGUNA;
@@ -789,24 +782,6 @@ export class ControladorConsulta {
     cancelar() {
         this.estado.confirmando = null;
         this.#observaciones = "";
-    }
-
-    /** Emite una orden de un examen asignable del paso actual; solo recarga las órdenes. */
-    emitirOrden({ idExamen, indicaciones } = {}) {
-        if (this.motivoNoActuar) return Promise.resolve(false);
-        const invalida = validarOrden({ idExamen, indicaciones }, this.estado.detalle.asignables);
-        if (invalida) {
-            this.estado.errorAccion = invalida;
-            return Promise.resolve(false);
-        }
-        const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
-        const actualizar = campos => this.#actualizarListas(idPaso, campos);
-        return this.#ejecutar("orden", () => this.#servicio.ordenar(idPaso, { idExamen, indicaciones }), {
-            recargarTras: RECARGAR_TRAS_ORDEN,
-            alTerminar: () => actualizar(["ordenes"]).catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
-            // Un examen que dejó de ser asignable: se actualiza la lista para que no se vuelva a elegir.
-            alFallar: error => (error?.code === "consulta.examenNoAsignable" ? actualizar(["asignables"]).catch(() => {}) : null),
-        });
     }
 
     /** Vuelve a pedir, en paralelo, las órdenes y/o los asignables del paso, sin recargar la consulta. */

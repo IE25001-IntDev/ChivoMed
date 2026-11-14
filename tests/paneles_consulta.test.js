@@ -133,34 +133,134 @@ describe('<panel-paso-actual>', () => {
 });
 
 const orden = (n, extra = {}) => ({ idOrdenExamen: UUID(600 + n), idExamen: UUID(301), indicaciones: null, fechaCreacion: '2026-11-13T08:30:00-06:00', ...extra });
-const modeloExamenes = (extra = {}) => ({ asignables: [examen(1), examen(2)], ordenes: [], motivo: null, accion: null, error: null, ...extra });
+const LAB = Object.freeze({ idTipoExamen: UUID(501), nombre: 'Laboratorio clínico' });
+const IMG = Object.freeze({ idTipoExamen: UUID(502), nombre: 'Imagenología' });
+const conTipo = (n, ...tipos) => Object.freeze({ ...examen(n), tiposExamen: Object.freeze(tipos) });
+const ASIGNABLES = Object.freeze([conTipo(1, LAB), conTipo(2, IMG), conTipo(3, IMG, LAB)]);
+/** Modelo como lo arma <vista-consulta> a partir del controlador. */
+const modeloExamenes = (extra = {}) => ({
+    asignables: ASIGNABLES, ordenes: [], categorias: [IMG, LAB], filtro: '', visibles: ASIGNABLES, seleccion: [], ordenados: [],
+    textoSeleccion: 'Ningún examen seleccionado', resultado: null, motivo: null, accion: null, error: null, ...extra,
+});
+const EVENTOS_EXAMENES = ['cambiar-categoria', 'alternar-examen', 'asignar-examenes'];
+const casillas = q => q('input[type="checkbox"]');
 
 describe('<panel-examenes-paso>', () => {
-    test('lista los asignables por nombre, con una opción vacía primero', () => {
-        const { q } = montar('panel-examenes-paso', modeloExamenes(), ['emitir-orden']);
-        assert.deepEqual(q('option').map(o => [o.value, o.textContent]), [['', 'Elige un examen'], [UUID(301), 'Examen 1'], [UUID(302), 'Examen 2']]);
+    test('filtro "Categoría" con "Todas" más las categorías; una casilla con su nombre y sus tipos por examen visible', () => {
+        const { $, q } = montar('panel-examenes-paso', modeloExamenes(), EVENTOS_EXAMENES);
+        assert.equal($('campo-categoria').hidden, false);
+        assert.deepEqual(q('option').map(o => [o.value, o.textContent]), [['', 'Todas'], [UUID(502), 'Imagenología'], [UUID(501), 'Laboratorio clínico']]);
+        assert.deepEqual(casillas(q).map(c => c.value), [UUID(301), UUID(302), UUID(303)]);
+        assert.deepEqual(q('label.casilla span.nombre-examen').map(s => s.textContent), ['Examen 1', 'Examen 2', 'Examen 3']);
+        assert.equal(q('label.casilla span.meta')[2].textContent, 'Imagenología · Laboratorio clínico');
+        assert.equal($('asignar').textContent, 'Asignar exámenes seleccionados');
+        assert.equal($('seleccionados').textContent, 'Ningún examen seleccionado');
     });
 
-    test('enviar emite el examen y las indicaciones; limpiar() vacía el formulario y enfoca el examen', () => {
-        const { $, eventos, el } = montar('panel-examenes-paso', modeloExamenes(), ['emitir-orden']);
-        $('examen').value = UUID(302);
+    test('sin tiposExamen (sin categorías) el filtro se oculta y las casillas siguen', () => {
+        const sinTipos = Object.freeze([examen(1), examen(2)].map(e => ({ ...e, tiposExamen: [] })));
+        const { $, q } = montar('panel-examenes-paso', modeloExamenes({ asignables: sinTipos, visibles: sinTipos, categorias: [] }), EVENTOS_EXAMENES);
+        assert.equal($('campo-categoria').hidden, true);
+        assert.equal(casillas(q).length, 2);
+        assert.equal(q('label.casilla span.meta').length, 0);
+    });
+
+    test('cambiar la categoría y marcar una casilla emiten sus eventos; no deciden nada', () => {
+        const { $, q, eventos } = montar('panel-examenes-paso', modeloExamenes(), EVENTOS_EXAMENES);
+        $('categoria').value = UUID(501);
+        $('categoria').dispatchEvent(new Event('change'));
+        const [, segunda] = casillas(q);
+        segunda.checked = true;
+        segunda.dispatchEvent(new Event('change'));
+        assert.deepEqual(eventos.map(e => [e.type, e.detail]), [
+            ['cambiar-categoria', { idTipoExamen: UUID(501) }], ['alternar-examen', { idExamen: UUID(302), marcado: true }]]);
+        assert.ok(eventos.every(e => e.bubbles && e.composed));
+    });
+
+    test('la selección viene del modelo; cambiarla no reconstruye las casillas (el foco no se pierde)', () => {
+        const { el, q, $ } = montar('panel-examenes-paso', modeloExamenes(), EVENTOS_EXAMENES);
+        const antes = casillas(q);
+        el.modelo = Object.freeze(modeloExamenes({ seleccion: [UUID(301), UUID(303)], textoSeleccion: '2 seleccionados' }));
+        assert.deepEqual(casillas(q), antes, 'mismas casillas');
+        assert.deepEqual(casillas(q).map(c => c.checked), [true, false, true]);
+        assert.equal($('seleccionados').textContent, '2 seleccionados');
+    });
+
+    test('un examen ya ordenado sale marcado, deshabilitado y con "Ya ordenado"', () => {
+        const { q } = montar('panel-examenes-paso', modeloExamenes({ ordenados: [UUID(302)], ordenes: [orden(1, { idExamen: UUID(302) })] }), EVENTOS_EXAMENES);
+        const [, ordenada] = casillas(q);
+        assert.equal(ordenada.checked, true);
+        assert.equal(ordenada.disabled, true);
+        assert.deepEqual(q('label.casilla span.insignia').map(s => s.textContent), ['Ya ordenado']);
+        assert.equal(casillas(q)[0].disabled, false);
+    });
+
+    test('el filtro muestra solo los visibles; si no hay, lo dice', () => {
+        const { el, q, $ } = montar('panel-examenes-paso', modeloExamenes({ filtro: UUID(502), visibles: [ASIGNABLES[1], ASIGNABLES[2]] }), EVENTOS_EXAMENES);
+        assert.equal($('categoria').value, UUID(502));
+        assert.deepEqual(casillas(q).map(c => c.value), [UUID(302), UUID(303)]);
+        el.modelo = Object.freeze(modeloExamenes({ filtro: UUID(502), visibles: [] }));
+        assert.equal($('sin-visibles').hidden, false);
+    });
+
+    test('enviar emite asignar-examenes con las indicaciones comunes; limpiar() las vacía sin mover el foco', () => {
+        const { $, eventos, el } = montar('panel-examenes-paso', modeloExamenes(), EVENTOS_EXAMENES);
         $('indicaciones').value = 'En ayunas';
         $('indicaciones').dispatchEvent(new Event('input'));
         assert.equal($('contador-indicaciones').textContent, '9/255 caracteres');
         const envio = new Event('submit', { cancelable: true });
         $('formulario').dispatchEvent(envio);
         assert.equal(envio.defaultPrevented, true);
-        assert.deepEqual(eventos[0].detail, { idExamen: UUID(302), indicaciones: 'En ayunas' });
+        assert.deepEqual(eventos.map(e => [e.type, e.detail]), [['asignar-examenes', { indicaciones: 'En ayunas' }]]);
         el.limpiar();
-        assert.equal($('examen').value, '');
         assert.equal($('indicaciones').value, '');
-        assert.equal(el.shadowRoot.activeElement, $('examen'));
+        assert.equal($('contador-indicaciones').textContent, '0/255 caracteres');
+        assert.equal(el.shadowRoot.activeElement, null);
+    });
+
+    test('mientras asigna dice "Asignando…" y las casillas se deshabilitan; con motivo no se puede asignar', () => {
+        const { el, $, q } = montar('panel-examenes-paso', modeloExamenes({ accion: 'orden' }), EVENTOS_EXAMENES);
+        assert.equal($('asignar').textContent, 'Asignando…');
+        assert.ok(casillas(q).every(c => c.disabled));
+        assert.equal($('formulario').getAttribute('aria-busy'), 'true');
+        el.modelo = Object.freeze(modeloExamenes({ motivo: MENSAJES.sinRed }));
+        assert.equal($('asignar').disabled, true);
+        assert.equal($('motivo-orden').textContent, MENSAJES.sinRed);
+    });
+
+    test('el resultado por examen va en una región role="status" siempre presente, con texto y no solo color', () => {
+        const { el, $, q } = montar('panel-examenes-paso', modeloExamenes(), EVENTOS_EXAMENES);
+        assert.equal($('resultado').getAttribute('role'), 'status');
+        assert.equal($('resultado').hidden, false);
+        assert.equal($('resultado-contenido').hidden, true);
+        el.modelo = Object.freeze(modeloExamenes({ resultado: [
+            { idExamen: UUID(301), nombre: 'Examen <b>1</b>', ok: true, mensaje: 'Orden emitida.' },
+            { idExamen: UUID(302), nombre: 'Examen 2', ok: false, mensaje: 'No se envió.' }] }));
+        assert.equal($('resultado-contenido').hidden, false);
+        const items = q('#lista-resultado li');
+        assert.deepEqual(items.map(li => li.className), ['resultado-ok', 'resultado-fallo']);
+        assert.deepEqual(q('#lista-resultado span.texto-resultado').map(s => s.textContent),
+            ['Examen <b>1</b>: Orden emitida.', 'Examen 2: No se envió.']);
+        assert.deepEqual(q('#lista-resultado span.estado-resultado').map(s => s.textContent), ['Emitida', 'No emitida']);
+        assert.equal(q('b').length, 0);
+        el.enfocarResultados();
+        assert.equal(el.shadowRoot.activeElement, $('resultado'));
+        assert.equal($('resultado').getAttribute('tabindex'), '-1');
+    });
+
+    test('un error se anuncia y enfocarError() lo enfoca', () => {
+        const { el, $ } = montar('panel-examenes-paso', modeloExamenes({ error: MENSAJES.seleccionVacia }), EVENTOS_EXAMENES);
+        assert.equal($('error-orden').hidden, false);
+        assert.equal($('error-orden').getAttribute('role'), 'alert');
+        assert.equal($('examenes').getAttribute('aria-invalid'), 'true');
+        el.enfocarError();
+        assert.equal(el.shadowRoot.activeElement, $('error-orden'));
     });
 
     test('las órdenes muestran el nombre del examen, o "Examen ya no disponible", o "Orden sin examen asociado"', () => {
         const { q } = montar('panel-examenes-paso', modeloExamenes({ ordenes: [
             orden(1, { indicaciones: 'Indicación <b>de prueba</b>' }), orden(2, { idExamen: UUID(399) }), orden(3, { idExamen: null }),
-        ] }), ['emitir-orden']);
+        ] }), EVENTOS_EXAMENES);
         const nombres = q('p.orden-nombre').map(p => p.textContent);
         assert.deepEqual(nombres, ['Examen 1', 'Examen ya no disponible', 'Orden sin examen asociado']);
         assert.equal(q('p.orden-indicaciones')[0].textContent, 'Indicación <b>de prueba</b>');
@@ -169,30 +269,10 @@ describe('<panel-examenes-paso>', () => {
     });
 
     test('sin asignables oculta el formulario; sin órdenes lo dice', () => {
-        const { $ } = montar('panel-examenes-paso', modeloExamenes({ asignables: [] }), ['emitir-orden']);
+        const { $ } = montar('panel-examenes-paso', modeloExamenes({ asignables: [], visibles: [], categorias: [] }), EVENTOS_EXAMENES);
         assert.equal($('formulario').hidden, true);
         assert.equal($('sin-asignables').hidden, false);
         assert.equal($('sin-ordenes').hidden, false);
-    });
-
-    test('con motivo no se puede emitir; un error marca el examen y se anuncia', () => {
-        const { $, el } = montar('panel-examenes-paso', modeloExamenes({ motivo: MENSAJES.sinRed }), ['emitir-orden']);
-        assert.equal($('emitir').disabled, true);
-        assert.equal($('motivo-orden').textContent, MENSAJES.sinRed);
-        el.modelo = Object.freeze(modeloExamenes({ error: MENSAJES.examenRequerido }));
-        assert.equal($('error-orden').hidden, false);
-        assert.equal($('error-orden').getAttribute('role'), 'alert');
-        assert.equal($('examen').getAttribute('aria-invalid'), 'true');
-    });
-
-    test('un cambio de órdenes no reconstruye la lista de exámenes (conserva la elección)', () => {
-        const asignables = Object.freeze([examen(1), examen(2)]);
-        const { $, el } = montar('panel-examenes-paso', modeloExamenes({ asignables }), ['emitir-orden']);
-        $('examen').value = UUID(302);
-        const opcion = $('examen').children[1];
-        el.modelo = Object.freeze(modeloExamenes({ asignables, ordenes: [orden(1)] }));
-        assert.equal($('examen').children[1], opcion);
-        assert.equal($('examen').value, UUID(302));
     });
 });
 

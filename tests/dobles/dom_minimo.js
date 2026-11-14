@@ -3,7 +3,7 @@
  * Solo modela lo que usan las vistas: elementos con atributos y propiedades reflejadas
  * (id, className, hidden, disabled, checked, type, name, value), texto, eventos (EventTarget),
  * <template> con innerHTML y content.cloneNode, Shadow DOM abierto, getElementById,
- * querySelector(All) con selectores simples compuestos (tag, #id, .clase, [attr="v"], :checked)
+ * querySelector(All) con selectores compuestos (tag, #id, .clase, [attr="v"], :checked) y el combinador descendiente,
  * dataset (refleja los atributos data-*), foco, click() y remove(), y creación de Web Components registrados con
  * document.createElement. Los eventos no burbujean por el árbol, y agregar un elemento no llama a connectedCallback
  * (usar conectar()). El documento tiene documentElement (<html> con dataset), un <meta name="theme-color">,
@@ -159,8 +159,26 @@ function raizDe(nodo) {
     return actual;
 }
 
-/** Selector simple compuesto: tag#id.clase[attr="valor"]:checked (sin combinadores ni listas). */
+/**
+ * Selectores compuestos tag#id.clase[attr="valor"]:checked unidos por el combinador descendiente
+ * (espacio), p. ej. `label.casilla span.meta`. Sin otros combinadores ni listas.
+ */
 function compilar(selector) {
+    const partes = selector.trim().match(/(?:\[[^\]]*\]|[^\s[])+/g).map(compilarSimple);
+    const ultima = partes.pop();
+    return e => {
+        if (!ultima(e)) return false;
+        let ancestro = e.parentNode;
+        for (let i = partes.length - 1; i >= 0; i--) {
+            while (ancestro && !(ancestro instanceof Elemento && partes[i](ancestro))) ancestro = ancestro.parentNode;
+            if (!ancestro) return false;
+            ancestro = ancestro.parentNode;
+        }
+        return true;
+    };
+}
+
+function compilarSimple(selector) {
     const tag = /^[a-z][a-z0-9-]*/i.exec(selector)?.[0]?.toLowerCase();
     const id = /#([\w-]+)/.exec(selector)?.[1];
     const clases = [...selector.matchAll(/\.([\w-]+)/g)].map(m => m[1]);

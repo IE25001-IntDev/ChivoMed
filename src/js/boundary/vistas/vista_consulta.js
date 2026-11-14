@@ -17,6 +17,7 @@
  */
 import {
     ControladorConsulta, MENSAJES, motivoNoRetroceder, puedeOfrecerRetroceso, puedeCerrar,
+    categoriasDe, examenesVisibles, textoSeleccion,
 } from "./controlador_consulta.js";
 import { arbolDePasos, etiquetaEstado } from "./controlador_consultas.js";
 import { hojaDeEstilos } from "./estilos.js";
@@ -93,6 +94,8 @@ class VistaConsulta extends HTMLElement {
     /** Última acción que pidió el usuario: decide dónde se muestra `errorAccion`. */
     #ultimaPedida = null;
     #manejadores = [];
+    /** Categorías de los últimos asignables: el mismo arreglo mientras no cambien (el <select> no se rehace). */
+    #memoCategorias = { asignables: null, categorias: null };
     /** Contexto del router: { params: { id }, sesion, soloLectura, ... }. */
     contexto = null;
 
@@ -126,7 +129,9 @@ class VistaConsulta extends HTMLElement {
         this.#escuchar(paso, "avanzar", () => this.#pedir("avanzar", () => c().avanzar()));
         this.#escuchar(paso, "retroceder", () => this.#pedir("retroceder", () => c().pedirRetroceso()));
         this.#escuchar(paso, "elegir-paso", e => c().elegirPaso(e.detail.idPaso));
-        this.#escuchar(examenes, "emitir-orden", e => this.#pedir("orden", () => c().emitirOrden(e.detail)));
+        this.#escuchar(examenes, "cambiar-categoria", e => c().elegirCategoria(e.detail.idTipoExamen));
+        this.#escuchar(examenes, "alternar-examen", e => c().alternarExamen(e.detail.idExamen, e.detail.marcado));
+        this.#escuchar(examenes, "asignar-examenes", e => this.#pedir("orden", () => c().asignarExamenes(e.detail)));
         this.#escuchar(cierre, "cerrar", e => this.#pedir("cierre", () => c().pedirCierre(e.detail.observaciones)));
         for (const panel of [paso, cierre]) {
             this.#escuchar(panel, "confirmar", () => c().confirmar());
@@ -311,8 +316,13 @@ class VistaConsulta extends HTMLElement {
         const conExamenes = abierta && atiende && Boolean(paso) && detalle.idPaso === paso?.idConsultaProcedimientoPaso && !detalle.cargando && !detalle.error;
         panelExamenes.hidden = !conExamenes;
         if (conExamenes) {
+            const seleccion = estado.seleccionExamenes;
             panelExamenes.modelo = Object.freeze({
-                asignables: detalle.asignables, ordenes: detalle.ordenes, motivo, accion,
+                asignables: detalle.asignables, ordenes: detalle.ordenes,
+                categorias: this.#categorias(detalle.asignables), filtro: estado.filtroExamenes,
+                visibles: examenesVisibles(detalle.asignables, estado.filtroExamenes), seleccion,
+                ordenados: ctrl.examenesOrdenados, textoSeleccion: textoSeleccion(seleccion.length),
+                resultado: estado.resultadoExamenes, motivo, accion,
                 error: this.#ultimaPedida === "orden" ? estado.errorAccion : null,
             });
         }
@@ -323,6 +333,11 @@ class VistaConsulta extends HTMLElement {
             const motivoCierre = ctrl.bloqueo ?? (accion ? MENSAJES.accionEnCurso : null);
             panelCierre.modelo = Object.freeze({ motivo: motivoCierre, confirmando: confirmando === "cierre", accion });
         }
+    }
+
+    #categorias(asignables) {
+        if (this.#memoCategorias.asignables !== asignables) this.#memoCategorias = { asignables, categorias: categoriasDe(asignables) };
+        return this.#memoCategorias.categorias;
     }
 
     #pintarErrores(estado, cambio) {
@@ -345,16 +360,26 @@ class VistaConsulta extends HTMLElement {
             (estado.confirmando === "cierre" ? cierre : paso).enfocar?.("confirmacion");
             return;
         }
+        // Al terminar una asignación (bien, con fallos por examen o cortada) el foco va al resultado;
+        // las indicaciones se vacían solo si salió alguna orden.
+        if (cambios.has("acabado") && estado.acabado?.accion === "orden") {
+            const resultado = estado.resultadoExamenes;
+            if (resultado?.some(r => r.ok)) examenes.limpiar?.();
+            if (resultado) examenes.enfocarResultados?.();
+            else if (estado.errorAccion) examenes.enfocarError?.();
+            return;
+        }
         if (cambios.has("errorAccion") && estado.errorAccion) {
-            if (this.#ultimaPedida === "orden") examenes.enfocarError?.();
-            else this.$("error-accion").focus();
+            // Un error a mitad de la asignación espera a 'acabado'; uno de validación se enfoca ya.
+            if (this.#ultimaPedida === "orden") {
+                if (estado.accion !== "orden") examenes.enfocarError?.();
+            } else this.$("error-accion").focus();
             return;
         }
         if (cambios.has("acabado") && estado.acabado?.ok) {
             const { accion } = estado.acabado;
             if (accion === "salir") return; // se navega al dashboard
-            if (accion === "orden") examenes.limpiar?.();
-            else if (accion === "cierre") this.$("aviso").focus();
+            if (accion === "cierre") this.$("aviso").focus();
             else paso.enfocar?.("titulo");
             return;
         }
