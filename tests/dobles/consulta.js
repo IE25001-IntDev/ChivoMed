@@ -60,6 +60,8 @@ export function servicioDoble(respuestas = {}) {
         retroceder: () => ({ idConsultaProcedimientoPaso: UUID(101), estado: 'PENDIENTE', valor: 'Registro anterior' }),
         ordenar: (id, datos) => ({ idOrdenExamen: UUID(600), idConsultaProcedimientoPaso: id, ...datos }),
         cerrar: id => ({ idConsulta: id, fechaFin: '2026-11-13T10:00:00-06:00' }),
+        /** F8: DELETE /atencion/consulta responde 204 sin cuerpo. */
+        salirDeConsulta: () => null,
         ...respuestas,
     };
     const servicio = {};

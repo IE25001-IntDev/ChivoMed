@@ -197,3 +197,92 @@ describe('<vista-consulta>', () => {
         assert.equal(controlador.estado.borrador, 'después');
     });
 });
+
+describe('<vista-consulta>: salir de la consulta (F8)', () => {
+    test('atendiendo: "Salir de la consulta" hace el DELETE y emite navegar a /dashboard', async () => {
+        const { vista, $, nombres } = await montar();
+        const navegaciones = [];
+        vista.addEventListener('navegar', e => navegaciones.push(e));
+        assert.equal($('acciones-salir').hidden, false);
+        assert.equal($('salir').textContent, 'Salir de la consulta');
+        assert.equal($('salir').getAttribute('aria-describedby'), 'salir-ayuda');
+        $('salir').dispatchEvent(new Event('click'));
+        await asentar(); await asentar();
+        assert.ok(nombres().includes('salirDeConsulta'));
+        assert.equal(navegaciones.length, 1);
+        assert.deepEqual(navegaciones[0].detail, { ruta: '/dashboard' });
+        assert.equal(navegaciones[0].bubbles && navegaciones[0].composed, true);
+    });
+
+    test('en solo lectura (no le toca) no se ofrece salir', async () => {
+        const { $ } = await montar({ respuestas: { consulta: () => consultaB6({ pendienteParaMi: false }) } });
+        assert.equal($('acciones-salir').hidden, true);
+    });
+
+    test('si salir falla (401), el motivo se muestra junto a los paneles, recibe el foco y no navega', async () => {
+        const { vista, $ } = await montar({ respuestas: { salirDeConsulta: errorHttp(401, 'auth.sesion') } });
+        const navegaciones = [];
+        vista.addEventListener('navegar', e => navegaciones.push(e));
+        $('salir').dispatchEvent(new Event('click'));
+        await asentar(); await asentar();
+        assert.equal($('error-accion').hidden, false);
+        assert.equal($('error-accion-texto').textContent, MENSAJES.sesionFinalizada);
+        assert.equal(vista.shadowRoot.activeElement, $('error-accion'));
+        assert.equal(navegaciones.length, 0);
+        assert.equal($('acciones-salir').hidden, false);
+    });
+
+    const conflicto = extra => ({
+        retomar: errorHttp(409, 'consulta.cerrarAntesRetomar', 'Cierre la consulta en curso antes de retomar otra.'),
+        contexto: () => ({ idConsulta: UUID(2) }),
+        ...extra,
+    });
+
+    test('409 cerrarAntesRetomar: texto propio, el enlace y "Salir de esa consulta y atender esta"', async () => {
+        const { $ } = await montar({ respuestas: conflicto() });
+        assert.equal($('error-texto').textContent, 'Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.');
+        assert.equal($('en-curso').getAttribute('href'), `#/consulta/${UUID(2)}`);
+        assert.equal($('salir-y-atender').hidden, false);
+        assert.equal($('salir-y-atender').textContent, 'Salir de esa consulta y atender esta');
+        assert.equal($('acciones-salir').hidden, true, 'esta consulta no está seleccionada');
+    });
+
+    test('"Salir de esa consulta y atender esta": DELETE, vuelve a cargar y muestra esta consulta para atenderla', async () => {
+        let enCurso = true;
+        const { vista, $, p, nombres } = await montar({ respuestas: conflicto({
+            retomar: () => (enCurso ? errorHttp(409, 'consulta.cerrarAntesRetomar') : { idConsulta: ID_CONSULTA }),
+            salirDeConsulta: () => { enCurso = false; return null; },
+        }) });
+        $('salir-y-atender').dispatchEvent(new Event('click'));
+        for (let i = 0; i < 4; i++) await asentar();
+        assert.deepEqual(nombres().slice(0, 6), ['consulta', 'retomar', 'contexto', 'salirDeConsulta', 'consulta', 'retomar']);
+        assert.equal($('error').hidden, true);
+        assert.equal($('salir-y-atender').hidden, true);
+        assert.equal($('distribucion').hidden, false);
+        assert.equal(p('paso', 'avanzar').disabled, false);
+        assert.equal($('acciones-salir').hidden, false);
+        assert.equal(vista.shadowRoot.querySelectorAll('div[aria-current="step"]').length, 1);
+    });
+
+    test('mientras sale, "Salir de esa consulta y atender esta" dice "Saliendo…" y se deshabilita', async () => {
+        let soltar;
+        const { $ } = await montar({ respuestas: conflicto({ salirDeConsulta: () => new Promise(r => { soltar = r; }) }) });
+        $('salir-y-atender').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal($('salir-y-atender').disabled, true);
+        assert.equal($('salir-y-atender').textContent, 'Saliendo…');
+        soltar(null);
+        await asentar(); await asentar();
+    });
+
+    test('si "Salir de esa consulta y atender esta" falla (red), el motivo recibe el foco y el enlace sigue', async () => {
+        const { vista, $ } = await montar({ respuestas: conflicto({ salirDeConsulta: errorHttp(0, 'conexion.error') }) });
+        $('salir-y-atender').dispatchEvent(new Event('click'));
+        await asentar(); await asentar();
+        assert.equal($('error-texto').textContent, MENSAJES.conexion);
+        assert.equal($('en-curso').getAttribute('href'), `#/consulta/${UUID(2)}`);
+        assert.equal($('salir-y-atender').hidden, false);
+        assert.equal($('salir-y-atender').disabled, false);
+        assert.equal(vista.shadowRoot.activeElement, $('error'));
+    });
+});

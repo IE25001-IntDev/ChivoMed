@@ -8,6 +8,10 @@
  * (<panel-examenes-paso>) y `cierre` (<panel-cierre-consulta>). Traduce sus eventos a métodos del
  * controlador y, cuando termina una acción, mueve el foco.
  *
+ * F8: con la consulta seleccionada en la sesión ofrece "Salir de la consulta" (DELETE y luego
+ * emite 'navegar' { ruta: "/dashboard" }, bubbles y composed); ante otra consulta en curso, además
+ * del enlace, "Salir de esa consulta y atender esta".
+ *
  * Recibe del router `contexto` = { params: { id }, sesion, soloLectura }. Acepta `controlador`
  * asignado antes de conectarse (pruebas).
  */
@@ -24,16 +28,28 @@ import "../components/consulta/panel_cierre_consulta.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** F8: textos fijos de los botones para salir de una consulta. */
+const TEXTOS = Object.freeze({
+    salir: "Salir de la consulta",
+    salirYAtender: "Salir de esa consulta y atender esta",
+    saliendo: "Saliendo…",
+});
+
 const PLANTILLA = plantilla(`
 <section class="tarjeta cabecera-consulta" aria-labelledby="titulo">
   <div class="fila">
     <h1 id="titulo" tabindex="-1">Consulta</h1>
     <a class="volver" href="#/dashboard">Volver al dashboard</a>
   </div>
+  <div class="acciones-salir" id="acciones-salir" hidden>
+    <button class="boton boton-secundario" id="salir" type="button" aria-describedby="salir-ayuda"></button>
+    <p class="indicaciones" id="salir-ayuda">La consulta queda abierta: puedes retomarla desde el dashboard.</p>
+  </div>
   <p class="aviso" id="estado" role="status" hidden></p>
   <div class="mensaje-error" id="error" role="alert" tabindex="-1" hidden>
     <p id="error-texto"></p>
     <a id="en-curso" hidden>Ir a la consulta en curso</a>
+    <button class="boton boton-secundario" id="salir-y-atender" type="button" hidden></button>
     <button class="boton boton-secundario" id="reintentar" type="button">Volver a intentar</button>
   </div>
   <div id="datos" hidden>
@@ -103,6 +119,8 @@ class VistaConsulta extends HTMLElement {
         const c = () => this.#controlador;
         this.#escuchar(this.$("reintentar"), "click", () => c().reintentar());
         this.#escuchar(this.$("reintentar-detalle"), "click", () => c().reintentarDetalle());
+        this.#escuchar(this.$("salir"), "click", () => this.#pedir("salir", () => c().salirDeConsulta()));
+        this.#escuchar(this.$("salir-y-atender"), "click", () => c().salirYAtender());
         const { paso, examenes, cierre } = this.#paneles;
         this.#escuchar(paso, "cambiar-borrador", e => c().cambiarBorrador(e.detail.valor));
         this.#escuchar(paso, "avanzar", () => this.#pedir("avanzar", () => c().avanzar()));
@@ -166,6 +184,9 @@ class VistaConsulta extends HTMLElement {
     #pintar(estado, cambios) {
         const cambio = (...claves) => !cambios || claves.some(c => cambios.has(c));
         const ctrl = this.#controlador;
+        if (cambios?.has("navegarA") && estado.navegarA) {
+            this.dispatchEvent(new CustomEvent("navegar", { bubbles: true, composed: true, detail: { ruta: estado.navegarA.ruta } }));
+        }
         this.#pintarCabecera(estado, ctrl, cambio);
         if (cambio("consulta", "idElegido", "sesion")) this.#pintarRecorrido(estado, ctrl);
         this.#pintarPaneles(estado, ctrl);
@@ -188,6 +209,14 @@ class VistaConsulta extends HTMLElement {
         else this.$("en-curso").removeAttribute("href");
         this.$("reintentar").hidden = Boolean(enCurso);
         this.$("reintentar").disabled = !estado.enLinea || estado.cargando;
+        // F8: con otra consulta en curso, salir de ella y atender esta; con esta seleccionada, salir.
+        const salirYAtender = this.$("salir-y-atender");
+        salirYAtender.hidden = !enCurso;
+        salirYAtender.disabled = estado.saliendo || estado.cargando;
+        salirYAtender.textContent = estado.saliendo ? TEXTOS.saliendo : TEXTOS.salirYAtender;
+        this.$("acciones-salir").hidden = !ctrl.puedeSalir;
+        this.$("salir").disabled = Boolean(estado.accion);
+        this.$("salir").textContent = estado.accion === "salir" ? TEXTOS.saliendo : TEXTOS.salir;
 
         this.$("datos").hidden = !consulta;
         this.$("distribucion").hidden = !consulta;
@@ -323,6 +352,7 @@ class VistaConsulta extends HTMLElement {
         }
         if (cambios.has("acabado") && estado.acabado?.ok) {
             const { accion } = estado.acabado;
+            if (accion === "salir") return; // se navega al dashboard
             if (accion === "orden") examenes.limpiar?.();
             else if (accion === "cierre") this.$("aviso").focus();
             else paso.enfocar?.("titulo");

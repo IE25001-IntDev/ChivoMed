@@ -6,6 +6,7 @@ import {
 } from '../src/js/boundary/vistas/controlador_consulta.js';
 import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import AtencionService from '../src/js/control/atencion_service.js';
 import {
     UUID, ID_CONSULTA, ID_ROL_DOCTOR, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
 } from './dobles/consulta.js';
@@ -137,7 +138,7 @@ describe('servicioConsulta', () => {
         const hechas = [];
         const espia = nombre => (...args) => { hechas.push([nombre, ...args]); return { listar: () => hechas.push(['listar']) }; };
         const s = servicioConsulta({
-            atencion: { contexto: espia('contexto'), consulta: espia('consulta') },
+            atencion: { contexto: espia('contexto'), consulta: espia('consulta'), salirDeConsulta: espia('salirDeConsulta') },
             consultas: { retomar: espia('retomar'), cerrar: espia('cerrar') },
             pasos: { buscarPorId: espia('paso'), ordenesExamen: espia('ordenesExamen'), examenesAsignables: espia('asignables'),
                 completar: espia('completar'), retroceder: espia('retroceder'), ordenar: espia('ordenar') },
@@ -145,9 +146,21 @@ describe('servicioConsulta', () => {
         });
         s.retomar('c'); s.contexto(); s.consulta('c'); s.paso('p'); s.definicion('d'); s.ordenes('p'); s.asignables('p');
         s.completar('p', 'v'); s.retroceder('p'); s.ordenar('p', { idExamen: 'e' }); s.cerrar('c', { observaciones: 'o' });
+        s.salirDeConsulta();
         assert.deepEqual(hechas, [['retomar', 'c'], ['contexto'], ['consulta', 'c'], ['paso', 'p'], ['definicion', 'd'],
             ['ordenesExamen', 'p'], ['listar'], ['asignables', 'p'], ['completar', 'p', 'v'], ['retroceder', 'p'],
-            ['ordenar', 'p', { idExamen: 'e' }], ['cerrar', 'c', { observaciones: 'o' }]]);
+            ['ordenar', 'p', { idExamen: 'e' }], ['cerrar', 'c', { observaciones: 'o' }], ['salirDeConsulta']]);
+    });
+
+    test('F8: salirDeConsulta usa AtencionService real: DELETE /atencion/consulta con X-CSRF-Token', async () => {
+        const peticiones = [];
+        const fetchImpl = async (url, opciones) => { peticiones.push({ url, opciones }); return new Response(null, { status: 204 }); };
+        const atencion = new AtencionService({ baseUrl: 'http://api.prueba/galenosv/api', fetchImpl, autenticar: async () => ({ csrfToken: 'csrf-prueba' }) });
+        const respuesta = await servicioConsulta({ atencion }).salirDeConsulta();
+        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/consulta');
+        assert.equal(peticiones[0].opciones.method, 'DELETE');
+        assert.equal(peticiones[0].opciones.headers.get('X-CSRF-Token'), 'csrf-prueba');
+        assert.equal(respuesta.data, null);
     });
 });
 
@@ -407,5 +420,151 @@ describe('ControladorConsulta: sin conexión', () => {
         assert.equal(controlador.estado.consulta, null);
         conexion.emitir(false);
         assert.equal(controlador.estado.enLinea, true, 'ya no escucha la red');
+    });
+});
+
+// ------------------------------------------------------------------------------ F8: salir de la consulta
+
+describe('ControladorConsulta: salir de la consulta (F8)', () => {
+    test('cerrarAntesRetomar tiene texto propio y no usa el message del backend', () => {
+        assert.equal(MENSAJES.enCurso, 'Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.');
+        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'consulta.cerrarAntesRetomar', 'Cierre la consulta en curso antes de retomar otra.')),
+            MENSAJES.enCurso);
+    });
+
+    test('atendiendo: hace el DELETE y publica navegarA al dashboard, sin cerrar ni tocar los pasos', async () => {
+        const { controlador, nombres, iniciar } = preparar();
+        await iniciar();
+        assert.equal(controlador.puedeSalir, true);
+        const antes = nombres().length;
+        assert.equal(await controlador.salirDeConsulta(), true);
+        assert.deepEqual(nombres().slice(antes), ['salirDeConsulta']);
+        assert.deepEqual(controlador.estado.navegarA, { ruta: '/dashboard' });
+        assert.equal(Object.isFrozen(controlador.estado.navegarA), true);
+        assert.equal(controlador.estado.atendiendo, false);
+        assert.equal(controlador.estado.errorAccion, null);
+        assert.equal(controlador.estado.accion, null);
+    });
+
+    test('sin atender (solo lectura) o con la consulta cerrada no se ofrece ni hace el DELETE', async () => {
+        for (const consulta of [() => consultaB6({ pendienteParaMi: false }), () => consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00' })]) {
+            const { controlador, nombres, iniciar } = preparar({ respuestas: { consulta } });
+            await iniciar();
+            assert.equal(controlador.puedeSalir, false);
+            assert.equal(await controlador.salirDeConsulta(), false);
+            assert.equal(nombres().includes('salirDeConsulta'), false);
+            assert.equal(controlador.estado.navegarA, null);
+        }
+    });
+
+    test('sin red no hace el DELETE y explica que hace falta conexión', async () => {
+        const { controlador, nombres, conexion, iniciar } = preparar();
+        await iniciar();
+        conexion.emitir(false);
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(nombres().includes('salirDeConsulta'), false);
+        assert.equal(controlador.estado.errorAccion, MENSAJES.sinRedSalir);
+        assert.equal(controlador.estado.navegarA, null);
+    });
+
+    for (const [nombre, falla, mensaje] of [['401', errorHttp(401, 'auth.sesion'), MENSAJES.sesionFinalizada],
+        ['red', errorHttp(0, 'conexion.error'), MENSAJES.conexion]]) {
+        test(`un ${nombre} al salir deja el motivo, sigue atendiendo y no navega`, async () => {
+            const { controlador, iniciar } = preparar({ respuestas: { salirDeConsulta: falla } });
+            await iniciar();
+            assert.equal(await controlador.salirDeConsulta(), false);
+            assert.equal(controlador.estado.errorAccion, mensaje);
+            assert.equal(controlador.estado.atendiendo, true);
+            assert.equal(controlador.estado.navegarA, null);
+        });
+    }
+
+    const conflicto = (extra = {}) => ({
+        retomar: errorHttp(409, 'consulta.cerrarAntesRetomar', 'Cierre la consulta en curso antes de retomar otra.'),
+        contexto: () => ({ idPersonaRol: UUID(900), idConsulta: UUID(2) }),
+        ...extra,
+    });
+
+    test('"Salir de esa consulta y atender esta": DELETE y luego vuelve a cargar esta (lee, y retoma porque le toca)', async () => {
+        let enCurso = true;
+        const { controlador, nombres, iniciar } = preparar({ respuestas: conflicto({
+            retomar: () => (enCurso ? errorHttp(409, 'consulta.cerrarAntesRetomar') : { idConsulta: ID_CONSULTA }),
+            salirDeConsulta: () => { enCurso = false; return null; },
+        }) });
+        await iniciar();
+        assert.equal(controlador.estado.enCurso, UUID(2));
+        assert.equal(await controlador.salirYAtender(), true);
+        assert.deepEqual(nombres(), ['consulta', 'retomar', 'contexto', 'salirDeConsulta', 'consulta', 'retomar',
+            'paso', 'ordenes', 'asignables', 'definicion']);
+        assert.equal(controlador.estado.atendiendo, true);
+        assert.equal(controlador.estado.error, null);
+        assert.equal(controlador.estado.enCurso, null);
+        assert.equal(controlador.estado.saliendo, false);
+    });
+
+    test('si tras salir esta consulta ya no es pendienteParaMi, queda en solo lectura y no hay PUT sesion', async () => {
+        let lecturas = 0;
+        const { controlador, nombres, iniciar } = preparar({ respuestas: conflicto({
+            consulta: () => consultaB6({ pendienteParaMi: ++lecturas === 1 }),
+        }) });
+        await iniciar();
+        assert.equal(await controlador.salirYAtender(), true);
+        assert.deepEqual(nombres(), ['consulta', 'retomar', 'contexto', 'salirDeConsulta', 'consulta']);
+        assert.equal(nombres().filter(n => n === 'retomar').length, 1, 'solo el PUT del primer intento');
+        assert.equal(controlador.estado.atendiendo, false);
+        assert.equal(controlador.estado.error, null);
+        assert.equal(controlador.bloqueo, 'Le corresponde a Persona Responsable.');
+    });
+
+    test('si tras salir esta consulta ya está cerrada, queda en solo lectura y no hay PUT sesion', async () => {
+        let lecturas = 0;
+        const { controlador, nombres, iniciar } = preparar({ respuestas: conflicto({
+            consulta: () => consultaB6(++lecturas === 1 ? {} : { fechaFin: '2026-11-13T10:00:00-06:00' }),
+        }) });
+        await iniciar();
+        await controlador.salirYAtender();
+        assert.deepEqual(nombres(), ['consulta', 'retomar', 'contexto', 'salirDeConsulta', 'consulta']);
+        assert.equal(controlador.estado.atendiendo, false);
+        assert.equal(controlador.bloqueo, MENSAJES.cerrada);
+    });
+
+    for (const [nombre, falla, mensaje] of [['401', errorHttp(401, 'auth.sesion'), MENSAJES.sesionFinalizada],
+        ['red', errorHttp(0, 'conexion.error'), MENSAJES.conexion]]) {
+        test(`"Salir de esa consulta y atender esta" con ${nombre}: muestra el motivo, conserva el enlace y no recarga`, async () => {
+            const { controlador, nombres, iniciar } = preparar({ respuestas: conflicto({ salirDeConsulta: falla }) });
+            await iniciar();
+            assert.equal(await controlador.salirYAtender(), false);
+            assert.deepEqual(nombres(), ['consulta', 'retomar', 'contexto', 'salirDeConsulta']);
+            assert.equal(controlador.estado.error, mensaje);
+            assert.equal(controlador.estado.enCurso, UUID(2));
+            assert.equal(controlador.estado.saliendo, false);
+        });
+    }
+
+    test('"Salir de esa consulta y atender esta" sin red no hace el DELETE', async () => {
+        const { controlador, nombres, conexion, iniciar } = preparar({ respuestas: conflicto() });
+        await iniciar();
+        conexion.emitir(false);
+        assert.equal(await controlador.salirYAtender(), false);
+        assert.equal(nombres().includes('salirDeConsulta'), false);
+        assert.equal(controlador.estado.error, MENSAJES.sinRedSalir);
+        assert.equal(controlador.estado.enCurso, UUID(2));
+    });
+
+    test('sin consulta en curso no hace nada; un segundo clic mientras sale se ignora', async () => {
+        const sinConflicto = preparar();
+        await sinConflicto.iniciar();
+        assert.equal(await sinConflicto.controlador.salirYAtender(), false);
+        assert.equal(sinConflicto.nombres().includes('salirDeConsulta'), false);
+
+        let soltar;
+        const { controlador, nombres, iniciar } = preparar({ respuestas: conflicto({ salirDeConsulta: () => new Promise(r => { soltar = r; }) }) });
+        await iniciar();
+        const primera = controlador.salirYAtender();
+        assert.equal(controlador.estado.saliendo, true);
+        assert.equal(await controlador.salirYAtender(), false);
+        soltar(null);
+        await primera;
+        assert.equal(nombres().filter(n => n === 'salirDeConsulta').length, 1);
     });
 });

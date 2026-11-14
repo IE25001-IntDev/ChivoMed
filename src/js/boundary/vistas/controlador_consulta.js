@@ -43,7 +43,9 @@ export const MENSAJES = Object.freeze({
     sinRed: "Sin conexión: necesitas red para registrar la atención.",
     sinRedCarga: "Necesitas conexión para abrir esta consulta.",
     desdeMemoria: hora => `Sin conexión. Mostrando la consulta guardada a las ${hora}.`,
-    enCurso: "Tienes otra consulta en curso. Ciérrala antes de atender esta.",
+    /** F8: texto propio para consulta.cerrarAntesRetomar; se ignora el message del backend. */
+    enCurso: "Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.",
+    sinRedSalir: "Sin conexión: necesitas red para salir de la consulta.",
     noEncontrada: "No encontramos esta consulta en tu clínica.",
     sinPermiso: "No tienes permiso para atender esta consulta.",
     sesionFinalizada: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
@@ -214,6 +216,7 @@ export function servicioConsulta({
         retroceder: id => pasos.retroceder(id),
         ordenar: (id, datos) => pasos.ordenar(id, datos),
         cerrar: (id, notas) => consultas.cerrar(id, notas),
+        salirDeConsulta: () => atencion.salirDeConsulta(),
     };
 }
 
@@ -270,7 +273,10 @@ export class ControladorConsulta {
             actualizadoEn: null,
             /** Cambia (objeto nuevo) cuando una acción termina, para que la vista mueva el foco. */
             acabado: null,
+            /** { ruta } nuevo cuando hay que ir a otra vista (F8: al dashboard tras salir de la consulta). */
             navegarA: null,
+            /** F8: true mientras "Salir de esa consulta y atender esta" espera el DELETE. */
+            saliendo: false,
         });
         this.estado = estado;
         this.suscribir = suscribir;
@@ -284,6 +290,15 @@ export class ControladorConsulta {
     get atiende() {
         const { consulta, atendiendo } = this.estado;
         return atendiendo && Boolean(consulta) && !consulta.fechaFin && consulta.pendienteParaMi;
+    }
+
+    /**
+     * F8: true si esta consulta está seleccionada en la sesión y sigue abierta. No exige
+     * `pendienteParaMi`: quien completó su paso y ya no tiene nada pendiente también debe poder salir.
+     */
+    get puedeSalir() {
+        const { consulta, atendiendo } = this.estado;
+        return atendiendo && Boolean(consulta) && !consulta.fechaFin;
     }
 
     get pendientes() { return pasosPendientes(this.estado.consulta); }
@@ -498,6 +513,52 @@ export class ControladorConsulta {
         if (!this.estado.idConsulta) return Promise.resolve();
         Object.assign(this.estado, { error: null, enCurso: null, errorAccion: null });
         return this.#cargar({ retomar: true });
+    }
+
+    /**
+     * F8: sale de esta consulta sin cerrarla (DELETE /atencion/consulta) y publica la navegación al
+     * dashboard. Pasos, registros y órdenes quedan igual; el borrador sigue en memoria.
+     */
+    salirDeConsulta() {
+        if (!this.puedeSalir || this.estado.accion) return Promise.resolve(false);
+        if (!this.#conexion.enLinea || this.estado.soloLectura || this.estado.desdeMemoria) {
+            this.estado.errorAccion = MENSAJES.sinRedSalir;
+            return Promise.resolve(false);
+        }
+        return this.#ejecutar("salir", () => this.#servicio.salirDeConsulta(), {
+            recargarTras: new Set(),
+            alTerminar: () => {
+                Object.assign(this.estado, { atendiendo: false, navegarA: congelar({ ruta: "/dashboard" }) });
+            },
+        });
+    }
+
+    /**
+     * F8: ante consulta.cerrarAntesRetomar, sale de la otra consulta (DELETE) y vuelve a cargar esta
+     * con #cargar, que la lee y solo pide PUT …/sesion si sigue abierta y `pendienteParaMi`; si no,
+     * queda en solo lectura. Devuelve true si el DELETE se hizo.
+     */
+    async salirYAtender() {
+        const { enCurso, saliendo, cargando } = this.estado;
+        if (!enCurso || saliendo || cargando) return false;
+        if (!this.#conexion.enLinea || this.estado.soloLectura) {
+            this.estado.error = MENSAJES.sinRedSalir;
+            return false;
+        }
+        const id = this.#secuencia;
+        this.estado.saliendo = true;
+        try {
+            await this.#servicio.salirDeConsulta();
+        } catch (error) {
+            if (id !== this.#secuencia) return false;
+            // El enlace a la consulta en curso se conserva: sigue en la sesión.
+            Object.assign(this.estado, { saliendo: false, error: mensajeDeErrorConsulta(error) });
+            return false;
+        }
+        if (id !== this.#secuencia) return false;
+        Object.assign(this.estado, { saliendo: false, error: null, enCurso: null, errorAccion: null });
+        await this.#cargar({ retomar: true });
+        return true;
     }
 
     /** null si se puede pedir el retroceso; si no, su motivo. Solo se ofrece si el paso no es el primero. */

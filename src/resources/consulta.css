@@ -75,3 +75,8 @@ textarea[readonly] { opacity: .8; }
   .panel { padding: var(--espacio-3); }
   .acciones-paso .boton { width: 100%; }
 }
+
+/* F8: "Salir de la consulta" bajo el título, con su explicación al lado. */
+.acciones-salir { display: flex; flex-wrap: wrap; gap: var(--espacio-2) var(--espacio-3); align-items: center; margin: var(--espacio-3) 0; }
+.acciones-salir .indicaciones { flex: 1 1 16rem; }
+#error .boton { justify-self: start; }
