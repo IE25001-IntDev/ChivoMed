@@ -48,6 +48,11 @@ class VistaDashboard extends HTMLElement {
     #cancelar = null;
     #lista = null;
     #alEnviar = event => this.#enviar(event);
+    /** <lista-consultas> avisa el rango mostrado: "Consultas de hoy" o "Consultas del … al …". */
+    #alTitular = event => {
+        event.stopPropagation();
+        if (typeof event.detail?.titulo === "string") this.$("titulo-consultas").textContent = event.detail.titulo;
+    };
     #alElegir = () => this.#pintarBoton(this.#controlador.estado);
     #alReintentar = () => this.#controlador.cargar();
     /** Contexto del router: { sesion, soloLectura, ... }. */
@@ -75,6 +80,7 @@ class VistaDashboard extends HTMLElement {
         this.$("selector").addEventListener("submit", this.#alEnviar);
         this.$("selector").addEventListener("change", this.#alElegir);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
+        this.addEventListener("titulo-consultas", this.#alTitular);
         if (!this.#lista) {
             this.#lista = document.createElement("lista-consultas");
             this.#lista.slot = "consultas";
@@ -93,6 +99,7 @@ class VistaDashboard extends HTMLElement {
         this.$("selector").removeEventListener("submit", this.#alEnviar);
         this.$("selector").removeEventListener("change", this.#alElegir);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
+        this.removeEventListener("titulo-consultas", this.#alTitular);
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();

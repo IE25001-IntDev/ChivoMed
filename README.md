@@ -66,7 +66,8 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
 - **HU3, dashboard** (`#/dashboard`).
   - Con Carlos: elige rol y clínica ("Doctor · Clínica San Salvador" y vuelve a Santa Ana).
   - Por defecto se ven las consultas de hoy; se puede filtrar otro rango de fechas (31 días
-    como máximo).
+    como máximo). El título de la lista refleja el rango ("Consultas de hoy", "Consultas del … al
+    …"). "Buscar paciente" filtra por nombre o número de documento las consultas ya cargadas.
   - Cada tarjeta muestra los generales del paciente, el inicio y los pasos en jerarquía, con
     quién y cuándo. "Ver registro" muestra lo registrado en un paso.
   - "Atender" se habilita solo en las consultas con un paso pendiente para tu rol. En las demás,

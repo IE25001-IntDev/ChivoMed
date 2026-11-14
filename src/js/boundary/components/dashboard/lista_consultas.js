@@ -5,7 +5,9 @@
  *
  * Propiedades: `contexto` = { sesion, soloLectura } antes de conectarse; `sesion` después de un
  * cambio de rol; `controlador` inyectable antes de conectarse (pruebas).
- * Emite 'navegar' { ruta } (bubbles, composed) cuando el estado publica `navegarA`.
+ * Emite 'navegar' { ruta } (bubbles, composed) cuando el estado publica `navegarA`, y
+ * 'titulo-consultas' { titulo } (bubbles) cuando cambia el rango mostrado, para el encabezado de
+ * la sección de <vista-dashboard>. "Buscar paciente" filtra lo cargado sin pedir nada al backend.
  */
 import { ControladorConsultas, motivoNoAtender, resumenResultado } from "../../vistas/controlador_consultas.js";
 import { hojaDeEstilos } from "../../vistas/estilos.js";
@@ -29,6 +31,11 @@ const PLANTILLA = plantilla(`
   </div>
   <p class="error-campo" id="error-rango" role="alert" hidden></p>
 </form>
+<div class="campo campo-busqueda">
+  <label for="busqueda">Buscar paciente</label>
+  <input id="busqueda" name="busqueda" type="search" maxlength="100" autocomplete="off"
+    placeholder="Nombre o número de documento" aria-describedby="resumen" />
+</div>
 <p class="aviso" id="estado" role="status" hidden></p>
 <div class="mensaje-error" id="error" role="alert" hidden>
   <p id="error-texto"></p>
@@ -55,6 +62,7 @@ class ListaConsultas extends HTMLElement {
         this.$("hasta").value = this.#controlador.estado.hasta;
     };
     #alReintentar = () => this.#controlador.buscar();
+    #alBuscarPaciente = () => this.#controlador.buscarPaciente(this.$("busqueda").value);
     contexto = null;
 
     constructor() {
@@ -84,6 +92,7 @@ class ListaConsultas extends HTMLElement {
         this.$("hasta").addEventListener("change", this.#alCambiarFecha);
         this.$("hoy").addEventListener("click", this.#alHoy);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
+        this.$("busqueda").addEventListener("input", this.#alBuscarPaciente);
         this.#controlador ??= new ControladorConsultas();
         this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         this.#tarjetas = new Map();
@@ -97,6 +106,7 @@ class ListaConsultas extends HTMLElement {
         this.$("hasta").removeEventListener("change", this.#alCambiarFecha);
         this.$("hoy").removeEventListener("click", this.#alHoy);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
+        this.$("busqueda").removeEventListener("input", this.#alBuscarPaciente);
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();
@@ -126,11 +136,15 @@ class ListaConsultas extends HTMLElement {
         this.$("error-texto").textContent = estado.error ?? "";
         this.$("reintentar").disabled = !estado.enLinea || estado.cargando;
         this.$("filtro").setAttribute("aria-busy", String(estado.cargando));
-        if (cambio("consultas") || cambio("consultado") || cambio("cargando")) {
-            this.$("resumen").textContent = estado.cargando ? "" : resumenResultado(estado.consultas, estado.consultado);
+        if (cambio("busqueda") && this.$("busqueda").value !== estado.busqueda) this.$("busqueda").value = estado.busqueda;
+        if (cambio("consultas") || cambio("consultado") || cambio("cargando") || cambio("busqueda")) {
+            this.$("resumen").textContent = estado.cargando ? "" : resumenResultado(estado.consultas, estado.consultado, estado.busqueda);
+        }
+        if (cambio("consultado")) {
+            this.dispatchEvent(new CustomEvent("titulo-consultas", { bubbles: true, detail: { titulo: this.#controlador.titulo } }));
         }
 
-        if (cambio("consultas")) this.#pintarTarjetas(estado);
+        if (cambio("consultas") || cambio("busqueda")) this.#pintarTarjetas(estado);
         else {
             if (cambio("enLinea") || cambio("soloLectura")) this.#pintarMotivos(estado);
             if (cambio("valores")) for (const t of this.#tarjetas.values()) t.valores = estado.valores;
@@ -143,7 +157,7 @@ class ListaConsultas extends HTMLElement {
 
     #pintarTarjetas(estado) {
         this.#tarjetas = new Map();
-        const tarjetas = estado.consultas.map(consulta => {
+        const tarjetas = this.#controlador.consultasVisibles.map(consulta => {
             const tarjeta = document.createElement("tarjeta-consulta-dashboard");
             tarjeta.consulta = consulta;
             tarjeta.valores = estado.valores;

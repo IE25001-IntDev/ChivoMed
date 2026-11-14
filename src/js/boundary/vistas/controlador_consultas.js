@@ -2,7 +2,8 @@
  * Lógica de las consultas del dashboard (HU3, parte 2) sin DOM.
  * Filtra por fechas de El Salvador (hoy por defecto, máximo 31 días contando ambos extremos),
  * carga GET /atencion/dashboard, arma la jerarquía de pasos por `nivel`, pide bajo demanda lo
- * registrado en un paso y decide si una consulta se puede atender y, si no, por qué.
+ * registrado en un paso y decide si una consulta se puede atender y, si no, por qué. "Buscar
+ * paciente" filtra en el cliente las consultas ya cargadas, sin pedir nada al backend.
  * Quién atiende lo decide el backend (`pendienteParaMi`): cada paso lo atiende su rol responsable
  * y cierra quien completó el paso final (B8). El frontend no fija roles ni los compara por nombre.
  *
@@ -185,10 +186,45 @@ export function etiquetaEstado(estado) {
     return estado ?? "Sin estado";
 }
 
-/** Resumen para el aria-live: "3 consultas del 13 nov 2026" o "… del 1 nov 2026 al 15 nov 2026". */
-export function resumenResultado(consultas, consultado) {
+/** Texto comparable: sin acentos, sin mayúsculas y sin espacios de más. */
+function plano(valor) {
+    return String(valor ?? "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+const soloAlfanumerico = valor => plano(valor).replace(/[^a-z0-9]/g, "");
+
+/**
+ * Consultas cuyo paciente coincide con la búsqueda: por nombre (sin acentos ni mayúsculas) o por
+ * número de documento (sin guiones ni espacios). Una búsqueda vacía devuelve la misma lista.
+ */
+export function filtrarConsultas(consultas, busqueda) {
+    const termino = plano(busqueda);
+    if (!termino) return consultas;
+    const documento = soloAlfanumerico(busqueda);
+    return congelar(consultas.filter(c => plano(c.paciente.nombre).includes(termino)
+        || (documento.length > 0 && c.paciente.documentos.some(d => soloAlfanumerico(d.numero).includes(documento)))));
+}
+
+/** Título de la lista según el rango mostrado: "Consultas de hoy", "… del 13 nov 2026" o "… del 1 nov 2026 al 15 nov 2026". */
+export function tituloConsultas(consultado, hoy) {
+    if (!consultado) return "Consultas";
+    const { desde, hasta } = consultado;
+    if (desde === hasta) return desde === hoy ? "Consultas de hoy" : `Consultas del ${formatearFecha(desde)}`;
+    return `Consultas del ${formatearFecha(desde)} al ${formatearFecha(hasta)}`;
+}
+
+/**
+ * Resumen para el aria-live: "3 consultas del 13 nov 2026" o "… del 1 nov 2026 al 15 nov 2026".
+ * Con una búsqueda de paciente: "2 de 5 consultas coinciden con «ana»".
+ */
+export function resumenResultado(consultas, consultado, busqueda = "") {
     if (!consultado) return "";
     if (!consultas.length) return MENSAJES.sinConsultas;
+    const termino = typeof busqueda === "string" ? busqueda.trim() : "";
+    if (termino) {
+        const visibles = filtrarConsultas(consultas, termino).length;
+        if (!visibles) return `Ninguna de las ${consultas.length === 1 ? "1 consulta" : `${consultas.length} consultas`} coincide con «${termino}».`;
+        return `${visibles} de ${consultas.length} ${consultas.length === 1 ? "consulta coincide" : "consultas coinciden"} con «${termino}».`;
+    }
     const cuantas = consultas.length === 1 ? "1 consulta" : `${consultas.length} consultas`;
     return consultado.desde === consultado.hasta
         ? `${cuantas} del ${formatearFecha(consultado.desde)}`
@@ -254,6 +290,8 @@ export class ControladorConsultas {
             valores: VACIO,
             /** { ruta } nuevo cada vez que se pide atender una consulta. */
             navegarA: null,
+            /** Texto de "Buscar paciente": filtra en el cliente las consultas cargadas. */
+            busqueda: "",
         });
         this.estado = estado;
         this.suscribir = suscribir;
@@ -322,6 +360,21 @@ export class ControladorConsultas {
     #alCambiarRed(enLinea) {
         this.estado.enLinea = enLinea;
         if (enLinea && (this.estado.desdeMemoria || this.estado.error)) this.buscar();
+    }
+
+    /** Consultas que se muestran: las cargadas filtradas por "Buscar paciente". */
+    get consultasVisibles() {
+        return filtrarConsultas(this.estado.consultas, this.estado.busqueda);
+    }
+
+    /** Título de la lista según el rango mostrado. */
+    get titulo() {
+        return tituloConsultas(this.estado.consultado, hoySV(this.#reloj));
+    }
+
+    /** "Buscar paciente": solo filtra lo cargado, sin pedir nada al backend. */
+    buscarPaciente(texto) {
+        this.estado.busqueda = typeof texto === "string" ? texto.slice(0, 100) : "";
     }
 
     /** Actualiza el filtro y su validación; no busca. */

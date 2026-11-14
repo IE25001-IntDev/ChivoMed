@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     ControladorConsultas, MENSAJES, MAX_DIAS, validarRango, normalizarConsultas, arbolDePasos, motivoNoAtender,
-    etiquetaEstado, resumenResultado, mensajeDeError, accionAtender, esPasoDeMiRol,
+    etiquetaEstado, resumenResultado, mensajeDeError, accionAtender, esPasoDeMiRol, filtrarConsultas, tituloConsultas,
 } from '../src/js/boundary/vistas/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
@@ -441,5 +441,57 @@ describe('ControladorConsultas: sin conexión', () => {
         soltar();
         await busqueda;
         assert.deepEqual(controlador.estado.consultas, []);
+    });
+});
+
+describe('Buscar paciente y título según el rango', () => {
+    // Pacientes demo del guion (inventados): Ana Martínez y Julia Flores.
+    const [ana, julia] = normalizarConsultas([
+        consulta(1, { paciente: { nombres: 'Ana', apellidos: 'Martínez', documentos: [{ tipoDocumento: 'DUI', numero: '01000004-4' }, { tipoDocumento: 'Pasaporte', numero: 'B10000004' }] } }),
+        consulta(2, { paciente: { nombres: 'Julia', apellidos: 'Flores', documentos: [{ tipoDocumento: 'DUI', numero: '01000008-8' }] } }),
+    ]);
+    const todas = Object.freeze([ana, julia]);
+
+    test('filtra por nombre sin acentos ni mayúsculas, o por documento sin guiones', () => {
+        assert.deepEqual(filtrarConsultas(todas, '  MARTINEZ ').map(c => c.paciente.nombre), ['Ana Martínez']);
+        assert.deepEqual(filtrarConsultas(todas, 'julia f').map(c => c.paciente.nombre), ['Julia Flores']);
+        assert.deepEqual(filtrarConsultas(todas, '010000088').map(c => c.paciente.nombre), ['Julia Flores']);
+        assert.deepEqual(filtrarConsultas(todas, 'b1000').map(c => c.paciente.nombre), ['Ana Martínez']);
+        assert.deepEqual(filtrarConsultas(todas, 'Pedro'), []);
+        assert.equal(filtrarConsultas(todas, '   '), todas, 'vacía: la misma lista');
+        assert.ok(Object.isFrozen(filtrarConsultas(todas, 'ana')));
+    });
+
+    test('el resumen dice cuántas coinciden', () => {
+        const hoy = { desde: '2026-11-13', hasta: '2026-11-13' };
+        assert.equal(resumenResultado(todas, hoy, 'ana'), '1 de 2 consultas coinciden con «ana».');
+        assert.equal(resumenResultado(todas, hoy, 'Pedro'), 'Ninguna de las 2 consultas coincide con «Pedro».');
+        assert.equal(resumenResultado([ana], hoy, 'ana'), '1 de 1 consulta coincide con «ana».');
+        assert.match(resumenResultado(todas, hoy, ''), /^2 consultas del 13 nov/);
+    });
+
+    test('el título refleja el rango mostrado', () => {
+        assert.equal(tituloConsultas({ desde: '2026-11-13', hasta: '2026-11-13' }, '2026-11-13'), 'Consultas de hoy');
+        assert.match(tituloConsultas({ desde: '2026-11-12', hasta: '2026-11-12' }, '2026-11-13'), /^Consultas del 12 nov.? 2026$/);
+        assert.match(tituloConsultas({ desde: '2026-10-21', hasta: '2026-11-20' }, '2026-11-13'), /^Consultas del 21 oct.? 2026 al 20 nov.? 2026$/);
+        assert.equal(tituloConsultas(null, '2026-11-13'), 'Consultas');
+    });
+
+    test('el controlador filtra sin pedir nada al backend y conserva la búsqueda al cambiar de fechas', async () => {
+        const { controlador, llamadas } = preparar({ dashboard: async () => [
+            consulta(1, { paciente: { nombres: 'Ana', apellidos: 'Martínez', documentos: [] } }),
+            consulta(2, { paciente: { nombres: 'Julia', apellidos: 'Flores', documentos: [] } }),
+        ] });
+        await controlador.iniciar(sesionCon());
+        assert.equal(controlador.titulo, 'Consultas de hoy');
+        controlador.buscarPaciente('julia');
+        assert.equal(llamadas.dashboard.length, 1);
+        assert.deepEqual(controlador.consultasVisibles.map(c => c.paciente.nombre), ['Julia Flores']);
+        controlador.cambiarFechas('2026-11-01', '2026-11-20');
+        await controlador.buscar();
+        assert.equal(controlador.estado.busqueda, 'julia');
+        assert.match(controlador.titulo, /^Consultas del 1 nov.? 2026 al 20 nov.? 2026$/);
+        controlador.buscarPaciente(null);
+        assert.equal(controlador.consultasVisibles.length, 2);
     });
 });

@@ -345,4 +345,34 @@ describe('<lista-consultas>', () => {
         assert.equal(controlador.estado.sesion.rolActivo.idPersonaRol, UUID(902));
         assert.equal(llamadas.dashboard.length, 3);
     });
+
+    test('"Buscar paciente" filtra las tarjetas y el resumen sin pedir nada al backend', async () => {
+        const { lista, $, tarjetas, llamadas } = montarLista({ dashboard: async () => [
+            consultaCruda(1, { paciente: { nombres: 'Ana', apellidos: 'Martínez', documentos: [] } }),
+            consultaCruda(2, { paciente: { nombres: 'Julia', apellidos: 'Flores', documentos: [] } }),
+        ] });
+        conectar(lista);
+        await asentar();
+        assert.equal(tarjetas().length, 2);
+        $('busqueda').value = 'flores';
+        $('busqueda').dispatchEvent(new Event('input'));
+        await asentar();
+        assert.equal(tarjetas().length, 1);
+        assert.equal(tarjetas()[0].consulta.paciente.nombre, 'Julia Flores');
+        assert.equal($('resumen').textContent, '1 de 2 consultas coinciden con «flores».');
+        assert.equal(llamadas.dashboard.length, 1);
+    });
+
+    test('avisa el título del rango mostrado con "titulo-consultas"', async () => {
+        const { lista, controlador } = montarLista();
+        const titulos = [];
+        lista.addEventListener('titulo-consultas', e => titulos.push(e.detail.titulo));
+        conectar(lista);
+        await asentar();
+        assert.equal(titulos.at(-1), 'Consultas de hoy');
+        controlador.cambiarFechas('2026-11-12', '2026-11-12');
+        await controlador.buscar();
+        await asentar();
+        assert.match(titulos.at(-1), /^Consultas del 12 nov.? 2026$/);
+    });
 });

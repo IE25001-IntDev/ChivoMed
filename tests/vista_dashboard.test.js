@@ -77,6 +77,17 @@ describe('<vista-dashboard>: suscripción y pintado', () => {
         assert.equal($('usar').disabled, true, 'la selección es el rol actual');
     });
 
+    test('el encabezado de las consultas toma el título que avisa <lista-consultas>', async () => {
+        const { vista, $ } = montar();
+        conectar(vista);
+        assert.equal($('titulo-consultas').textContent, 'Consultas de hoy');
+        vista.dispatchEvent(new CustomEvent('titulo-consultas', { detail: { titulo: 'Consultas del 21 oct 2026 al 20 nov 2026' } }));
+        assert.equal($('titulo-consultas').textContent, 'Consultas del 21 oct 2026 al 20 nov 2026');
+        desconectar(vista);
+        vista.dispatchEvent(new CustomEvent('titulo-consultas', { detail: { titulo: 'Otro' } }));
+        assert.equal($('titulo-consultas').textContent, 'Consultas del 21 oct 2026 al 20 nov 2026', 'desconectada no escucha');
+    });
+
     test('un cambio de estado hecho en el controlador repinta la vista en el siguiente microtask', async () => {
         const { vista, controlador, $ } = montar();
         conectar(vista);

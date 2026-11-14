@@ -8,6 +8,9 @@
 }
 .filtro-fechas .acciones-filtro { display: flex; gap: var(--espacio-2); flex-wrap: wrap; }
 .filtro-fechas .error-campo { grid-column: 1 / -1; }
+/* "Buscar paciente": filtra lo cargado; ocupa una fila propia bajo el filtro de fechas. */
+.campo-busqueda { max-width: 32rem; margin-bottom: var(--espacio-4); }
+.campo-busqueda input { width: 100%; }
 .resumen { margin: 0 0 var(--espacio-3); color: var(--muted); font-weight: 600; }
 
 /* Cuadrícula de tarjetas: una columna en teléfono, dos o tres en escritorio. */
