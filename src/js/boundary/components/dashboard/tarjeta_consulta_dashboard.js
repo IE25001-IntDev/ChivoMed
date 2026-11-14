@@ -5,6 +5,7 @@
  *  - valores:  { [idPaso]: { abierto, cargando, cargado, valor, fechaFin, error } } (solo actualiza
  *              los paneles de registro que cambiaron).
  *  - motivo:   null si se puede atender; si no, el texto que explica por qué no.
+ *  - enCurso:  true si es la consulta en curso en la sesión (insignia "En curso", F8).
  * Emite (bubbles, composed): 'ver-registro' { idPaso }, 'reintentar-registro' { idPaso },
  * 'atender' { idConsulta }. El botón dice "Cerrar consulta" si al rol activo solo le falta cerrarla.
  * Todos los datos se pintan con textContent; la plantilla es fija.
@@ -22,7 +23,10 @@ const PLANTILLA = plantilla(`
       <p class="generales" id="generales"></p>
       <p class="generales" id="documentos"></p>
     </div>
-    <p class="insignia insignia-pendiente" id="pendiente" hidden>Pendiente para ti</p>
+    <div class="insignias">
+      <p class="insignia insignia-pendiente" id="pendiente" hidden>Pendiente para ti</p>
+      <p class="insignia insignia-en-curso" id="en-curso" hidden>En curso</p>
+    </div>
   </header>
   <dl class="datos-consulta">
     <div><dt>Inicio</dt><dd id="inicio"></dd></div>
@@ -39,6 +43,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
     #consulta = null;
     #valores = {};
     #motivo = null;
+    #enCurso = false;
     /** idPaso → { boton, panel, pintado } de los pasos con registro. */
     #registros = new Map();
     #alAtender = () => this.#emitir("atender", { idConsulta: this.#consulta?.idConsulta });
@@ -69,6 +74,14 @@ class TarjetaConsultaDashboard extends HTMLElement {
 
     get motivo() { return this.#motivo; }
 
+    /** F8: true si es la consulta en curso en la sesión (insignia "En curso"). */
+    set enCurso(valor) {
+        this.#enCurso = valor === true;
+        if (this.isConnected) this.$("en-curso").hidden = !this.#enCurso;
+    }
+
+    get enCurso() { return this.#enCurso; }
+
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
@@ -98,6 +111,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
         this.$("inicio").textContent = formatearFechaHora(c.fechaInicio);
         this.$("estado").textContent = c.fechaFin ? `Cerrada el ${formatearFechaHora(c.fechaFin)}` : "Abierta";
         this.$("pendiente").hidden = !c.pendienteParaMi;
+        this.$("en-curso").hidden = !this.#enCurso;
         const cerrar = accionAtender(c) === "cerrar";
         this.$("atender").textContent = cerrar ? "Cerrar consulta" : "Atender";
         // Nombre accesible único: varias tarjetas tienen el mismo botón visible.

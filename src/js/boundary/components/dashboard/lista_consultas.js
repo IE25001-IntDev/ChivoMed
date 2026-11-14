@@ -4,7 +4,8 @@
  * la lista se suscribe a su estado al conectarse, cancela al desconectarse y repinta por claves.
  *
  * Propiedades: `contexto` = { sesion, soloLectura } antes de conectarse; `sesion` después de un
- * cambio de rol; `controlador` inyectable antes de conectarse (pruebas).
+ * cambio de rol; `enCurso` (idConsulta o null, F8) para la insignia "En curso"; `controlador`
+ * inyectable antes de conectarse (pruebas).
  * Emite 'navegar' { ruta } (bubbles, composed) cuando el estado publica `navegarA`, y
  * 'titulo-consultas' { titulo } (bubbles) cuando cambia el rango mostrado, para el encabezado de
  * la sección de <vista-dashboard>. "Buscar paciente" filtra lo cargado sin pedir nada al backend.
@@ -77,6 +78,14 @@ class ListaConsultas extends HTMLElement {
 
     get controlador() { return this.#controlador; }
 
+    /** F8: idConsulta en curso que conoce <vista-dashboard>; marca la insignia de su tarjeta. */
+    set enCurso(valor) {
+        this.contexto = { ...this.contexto, enCurso: valor ?? null };
+        if (this.#cancelar) this.#controlador.marcarEnCurso(valor);
+    }
+
+    get enCurso() { return this.contexto?.enCurso ?? null; }
+
     /** Cambio de rol hecho en el selector (parte 1): otra clínica, así que se vuelve a buscar. */
     set sesion(valor) {
         this.contexto = { ...this.contexto, sesion: valor };
@@ -96,6 +105,7 @@ class ListaConsultas extends HTMLElement {
         this.#controlador ??= new ControladorConsultas();
         this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         this.#tarjetas = new Map();
+        this.#controlador.marcarEnCurso(this.contexto?.enCurso ?? null);
         this.#controlador.iniciar(this.contexto?.sesion ?? null, { soloLectura: Boolean(this.contexto?.soloLectura) });
         this.#pintar(this.#controlador.estado, null);
     }
@@ -148,6 +158,7 @@ class ListaConsultas extends HTMLElement {
         else {
             if (cambio("enLinea") || cambio("soloLectura")) this.#pintarMotivos(estado);
             if (cambio("valores")) for (const t of this.#tarjetas.values()) t.valores = estado.valores;
+            if (cambio("enCurso")) for (const t of this.#tarjetas.values()) t.enCurso = this.#controlador.estaEnCurso(t.consulta);
         }
     }
 
@@ -162,6 +173,7 @@ class ListaConsultas extends HTMLElement {
             tarjeta.consulta = consulta;
             tarjeta.valores = estado.valores;
             tarjeta.motivo = this.#motivo(consulta);
+            tarjeta.enCurso = this.#controlador.estaEnCurso(consulta);
             tarjeta.addEventListener("ver-registro", e => { e.stopPropagation(); this.#controlador.alternarRegistro(e.detail.idPaso); });
             tarjeta.addEventListener("reintentar-registro", e => { e.stopPropagation(); this.#controlador.cargarRegistro(e.detail.idPaso); });
             tarjeta.addEventListener("atender", e => { e.stopPropagation(); this.#controlador.atender(e.detail.idConsulta); });

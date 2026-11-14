@@ -74,3 +74,7 @@ h4 { margin: 0; font-size: 1rem; }
   .tarjeta-consulta { padding: var(--espacio-3); }
   .pie-consulta .boton { justify-self: stretch; }
 }
+
+/* F8: insignias de la tarjeta; "En curso" lleva texto y borde, no solo color. */
+.insignias { display: flex; flex-wrap: wrap; gap: var(--espacio-1); justify-content: end; }
+.insignia-en-curso { margin: 0; background: var(--blue-soft); color: var(--blue-text); border: 1px solid var(--blue-text); }

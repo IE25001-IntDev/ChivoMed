@@ -292,6 +292,8 @@ export class ControladorConsultas {
             navegarA: null,
             /** Texto de "Buscar paciente": filtra en el cliente las consultas cargadas. */
             busqueda: "",
+            /** F8: idConsulta en curso (lo conoce el dashboard por GET /atencion), o null. No se guarda. */
+            enCurso: null,
         });
         this.estado = estado;
         this.suscribir = suscribir;
@@ -491,6 +493,16 @@ export class ControladorConsultas {
     contextoAtender() {
         const { enLinea, soloLectura } = this.estado;
         return { enLinea, soloLectura };
+    }
+
+    /** F8: marca la consulta en curso para su insignia. Solo un UUID; cualquier otra cosa es null. */
+    marcarEnCurso(idConsulta) {
+        this.estado.enCurso = typeof idConsulta === "string" && UUID.test(idConsulta) ? idConsulta : null;
+    }
+
+    /** F8: true si la consulta es la que está en curso en la sesión. */
+    estaEnCurso(consulta) {
+        return Boolean(this.estado.enCurso) && consulta?.idConsulta === this.estado.enCurso;
     }
 
     /** Publica la ruta de la consulta solo si se puede atender. Devuelve true si la publicó. */

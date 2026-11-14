@@ -33,12 +33,15 @@ before(async () => {
  * Vista conectada a un controlador real con servicios dobles. Cuenta cuántas notificaciones
  * llegan a la vista (cada una es un repintado) envolviendo `suscribir`.
  */
-function montar({ cambiarRol = async () => ({}), enLinea = true } = {}) {
+function montar({ cambiarRol = async () => ({}), enLinea = true, idConsulta = null, salirDeConsulta = async () => null } = {}) {
     let ultimo = null;
+    const llamadas = { salirDeConsulta: 0 };
     const controlador = new ControladorDashboard({
         servicio: {
             asignaciones: async () => ({ data: ASIGNACIONES }),
             cambiarRol: async id => { ultimo = id; return { data: await cambiarRol(id) }; },
+            contexto: async () => ({ data: { idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta } }),
+            salirDeConsulta: async () => { llamadas.salirDeConsulta++; return { status: 204, data: await salirDeConsulta() }; },
         },
         obtenerSesion: async () => sesionCon(ASIGNACIONES.find(a => a.idPersonaRol === ultimo)),
         conexion: { enLinea, suscribir: () => () => {} },
@@ -57,7 +60,7 @@ function montar({ cambiarRol = async () => ({}), enLinea = true } = {}) {
     const eventos = [];
     vista.addEventListener('sesion-actualizada', e => eventos.push(e));
     const $ = id => vista.shadowRoot.getElementById(id);
-    return { vista, controlador, espia, eventos, $ };
+    return { vista, controlador, espia, eventos, $, llamadas };
 }
 
 const radios = vista => vista.shadowRoot.querySelectorAll('input[name="asignacion"]');
@@ -194,6 +197,117 @@ describe('<vista-dashboard>: cambio de rol', () => {
         assert.equal(vista.shadowRoot.activeElement, $('aviso'));
         assert.equal(vista.shadowRoot.querySelector('input:checked').value, DOC_NORTE.idPersonaRol);
         assert.equal(eventos.length, 0);
+    });
+});
+
+describe('<vista-dashboard>: consulta en curso (F8)', () => {
+    const EN_CURSO = UUID(500);
+
+    test('la región role="status" está siempre en el DOM y visible; sin consulta en curso su contenido se oculta', async () => {
+        const { vista, $ } = montar();
+        conectar(vista);
+        await asentar();
+        assert.equal($('region-en-curso').getAttribute('role'), 'status');
+        assert.equal($('region-en-curso').hidden, false);
+        assert.equal($('en-curso').hidden, true);
+        assert.equal($('confirmacion').hidden, true);
+        assert.equal($('ir-en-curso').hasAttribute('href'), false);
+    });
+
+    test('con consulta en curso: aviso, enlace #/consulta/{id} con su texto y botón "Salir de la consulta"', async () => {
+        const { vista, $ } = montar({ idConsulta: EN_CURSO });
+        conectar(vista);
+        await asentar();
+        assert.equal($('region-en-curso').hidden, false);
+        assert.equal($('en-curso').hidden, false);
+        assert.equal($('en-curso-texto').textContent, 'Tienes una consulta en curso.');
+        assert.equal($('ir-en-curso').getAttribute('href'), `#/consulta/${EN_CURSO}`);
+        assert.equal($('ir-en-curso').textContent, 'Ir a la consulta en curso');
+        assert.equal($('salir').textContent, 'Salir de la consulta');
+        assert.equal($('salir').disabled, false);
+    });
+
+    test('pasa enCurso a <lista-consultas> para la insignia de la tarjeta', async () => {
+        const { vista } = montar({ idConsulta: EN_CURSO });
+        conectar(vista);
+        await asentar();
+        const [lista] = vista.children;
+        assert.equal(lista.enCurso, EN_CURSO);
+    });
+
+    test('"Salir de la consulta" hace el DELETE, oculta el aviso, quita el enlace y enfoca la confirmación', async () => {
+        const { vista, $, llamadas } = montar({ idConsulta: EN_CURSO });
+        conectar(vista);
+        await asentar();
+        $('salir').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal(llamadas.salirDeConsulta, 1);
+        assert.equal($('region-en-curso').hidden, false, 'la región no se oculta');
+        assert.equal($('en-curso').hidden, true);
+        assert.equal($('ir-en-curso').hasAttribute('href'), false);
+        assert.equal($('confirmacion').hidden, false);
+        assert.equal($('confirmacion').textContent, 'Saliste de la consulta. Ya puedes cambiar de rol.');
+        assert.equal(vista.shadowRoot.activeElement, $('confirmacion'));
+        assert.equal(vista.children[0].enCurso, null);
+    });
+
+    test('mientras sale, el botón dice "Saliendo…" y se deshabilita', async () => {
+        let soltar;
+        const { vista, $ } = montar({ idConsulta: EN_CURSO, salirDeConsulta: () => new Promise(r => { soltar = r; }) });
+        conectar(vista);
+        await asentar();
+        $('salir').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal($('salir').disabled, true);
+        assert.equal($('salir').textContent, 'Saliendo…');
+        soltar(null);
+        await asentar();
+        assert.equal($('en-curso').hidden, true);
+    });
+
+    test('si salir falla (401), el error se muestra y enfoca, y el aviso con el enlace sigue', async () => {
+        const { vista, $ } = montar({ idConsulta: EN_CURSO,
+            salirDeConsulta: async () => { throw new DefaultError({ status: 401, code: 'auth.sesion', message: 'Vuelva a iniciar sesión.' }); } });
+        conectar(vista);
+        await asentar();
+        $('salir').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal($('error').hidden, false);
+        assert.equal($('error-texto').textContent, 'Tu sesión ha finalizado. Vuelve a iniciar sesión.');
+        assert.equal(vista.shadowRoot.activeElement, $('error'));
+        assert.equal($('en-curso').hidden, false);
+        assert.equal($('ir-en-curso').getAttribute('href'), `#/consulta/${EN_CURSO}`);
+    });
+
+    test('409 → Salir → Usar este rol: termina con el rol cambiado y sin mensajes de la salida', async () => {
+        let enConsulta = true;
+        const { vista, $, eventos } = montar({
+            idConsulta: EN_CURSO,
+            cambiarRol: async () => {
+                if (enConsulta) throw new DefaultError({ status: 409, code: 'rolCambio.cerrarAntesCambiar', message: 'Cierre la consulta antes de cambiar de médico o rol.' });
+                return {};
+            },
+            salirDeConsulta: async () => { enConsulta = false; return null; },
+        });
+        conectar(vista);
+        await asentar();
+        const elegir = () => {
+            radios(vista).find(r => r.value === ADM_NORTE.idPersonaRol).checked = true;
+            $('selector').dispatchEvent(new Event('submit', { cancelable: true }));
+        };
+        elegir();
+        await asentar();
+        assert.equal($('aviso').hidden, false);
+        assert.equal($('en-curso').hidden, false);
+        $('salir').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal($('aviso').hidden, true);
+        elegir();
+        await asentar();
+        assert.equal(eventos.length, 1, 'sesion-actualizada');
+        assert.equal($('confirmacion').hidden, true);
+        assert.equal($('confirmacion').textContent, '');
+        assert.equal($('activo').textContent, 'Estás atendiendo como Administración en Clínica Prueba Norte.');
     });
 });
 

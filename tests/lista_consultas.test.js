@@ -55,6 +55,18 @@ describe('<tarjeta-consulta-dashboard>', () => {
         assert.match($('estado').textContent, /^Cerrada el 13 nov 2026/);
     });
 
+    test('F8: la insignia "En curso" se muestra solo con enCurso y cambia sin reconstruir la tarjeta', () => {
+        const { el, $ } = tarjeta(normal(1));
+        assert.equal($('en-curso').hidden, true);
+        assert.equal($('en-curso').textContent, 'En curso');
+        const procedimientos = $('procedimientos').children[0];
+        el.enCurso = true;
+        assert.equal($('en-curso').hidden, false);
+        assert.equal($('procedimientos').children[0], procedimientos, 'no reconstruye los pasos');
+        el.enCurso = false;
+        assert.equal($('en-curso').hidden, true);
+    });
+
     test('resalta pendienteParaMi con insignia de texto y clase, no solo con color', () => {
         const si = tarjeta(normal(1));
         assert.equal(si.$('pendiente').hidden, false);
@@ -376,5 +388,46 @@ describe('<lista-consultas>', () => {
         await controlador.buscar();
         await asentar();
         assert.match(titulos.at(-1), /^Consultas del 12 nov.? 2026$/);
+    });
+
+    test('F8: enCurso antes de conectar marca la insignia de esa tarjeta al cargar', async () => {
+        const { lista, tarjetas, controlador } = montarLista();
+        lista.enCurso = UUID(2);
+        conectar(lista);
+        await asentar();
+        const [una, otra] = tarjetas();
+        assert.equal(controlador.estado.enCurso, UUID(2));
+        assert.deepEqual([una.enCurso, otra.enCurso], [false, true]);
+    });
+
+    test('F8: cambiar enCurso conectada actualiza las insignias sin reconstruir ni volver a pedir', async () => {
+        const { lista, tarjetas, llamadas } = montarLista();
+        conectar(lista);
+        await asentar();
+        const antes = [...tarjetas()];
+        lista.enCurso = UUID(1);
+        await asentar();
+        assert.deepEqual([...tarjetas()].map(t => t.enCurso), [true, false]);
+        assert.equal(tarjetas()[0], antes[0], 'misma tarjeta');
+        lista.enCurso = null;
+        await asentar();
+        assert.deepEqual([...tarjetas()].map(t => t.enCurso), [false, false]);
+        assert.equal(llamadas.dashboard.length, 1);
+    });
+});
+
+describe('ControladorConsultas.marcarEnCurso (F8)', () => {
+    test('acepta un UUID o null; cualquier otra cosa queda null', () => {
+        const controlador = new ControladorConsultas({ servicio: {}, conexion: { enLinea: true }, memoria: new MemoriaVistas() });
+        assert.equal(controlador.estado.enCurso, null);
+        controlador.marcarEnCurso(UUID(3));
+        assert.equal(controlador.estado.enCurso, UUID(3));
+        assert.equal(controlador.estaEnCurso(normal(3)), true);
+        assert.equal(controlador.estaEnCurso(normal(4)), false);
+        for (const invalido of ['no-es-uuid', 7, undefined]) {
+            controlador.marcarEnCurso(invalido);
+            assert.equal(controlador.estado.enCurso, null);
+        }
+        assert.equal(controlador.estaEnCurso(normal(3)), false);
     });
 });

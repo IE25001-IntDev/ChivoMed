@@ -9,6 +9,8 @@
  * Slot `consultas`: al conectarse agrega <lista-consultas slot="consultas"> (parte 2) como hijo y,
  * tras un cambio de rol, le pasa la sesión nueva para que vuelva a buscar.
  * Emite 'sesion-actualizada' { sesion } (bubbles, composed) cuando el estado publica `sesionCambiada`.
+ * F8: con una consulta en curso (estado.enCurso) muestra "Tienes una consulta en curso", el enlace
+ * "Ir a la consulta en curso" y "Salir de la consulta", y le pasa `enCurso` a <lista-consultas>.
  */
 import { ControladorDashboard, mensajeMemoria, MENSAJES } from "./controlador_dashboard.js";
 import { nombreDeRol } from "../../control/auth_service.js";
@@ -16,6 +18,14 @@ import { hojaDeEstilos } from "./estilos.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
 import "../components/dashboard/lista_consultas.js";
 import { plantilla } from "../plantilla.js";
+
+/** F8: textos fijos del aviso de consulta en curso. */
+const TEXTOS = Object.freeze({
+    enCurso: "Tienes una consulta en curso.",
+    irEnCurso: "Ir a la consulta en curso",
+    salir: "Salir de la consulta",
+    saliendo: "Saliendo…",
+});
 
 const PLANTILLA = plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
@@ -29,6 +39,16 @@ const PLANTILLA = plantilla(`
     <button class="boton boton-secundario" id="reintentar" type="button">Volver a intentar</button>
   </div>
   <p class="aviso aviso-motivo" id="aviso" role="alert" tabindex="-1" hidden></p>
+  <div class="region-en-curso" id="region-en-curso" role="status">
+    <div class="en-curso" id="en-curso" hidden>
+      <p id="en-curso-texto"></p>
+      <div class="acciones-en-curso">
+        <a class="boton boton-secundario" id="ir-en-curso"></a>
+        <button class="boton boton-secundario" id="salir" type="button"></button>
+      </div>
+    </div>
+    <p class="aviso aviso-exito" id="confirmacion" tabindex="-1" hidden></p>
+  </div>
   <form id="selector" aria-labelledby="titulo-roles" novalidate>
     <div class="grupos-clinica" id="grupos"></div>
     <p class="aviso aviso-red" id="sin-red" hidden></p>
@@ -55,6 +75,7 @@ class VistaDashboard extends HTMLElement {
     };
     #alElegir = () => this.#pintarBoton(this.#controlador.estado);
     #alReintentar = () => this.#controlador.cargar();
+    #alSalir = () => this.#salir();
     /** Contexto del router: { sesion, soloLectura, ... }. */
     contexto = null;
 
@@ -80,11 +101,12 @@ class VistaDashboard extends HTMLElement {
         this.$("selector").addEventListener("submit", this.#alEnviar);
         this.$("selector").addEventListener("change", this.#alElegir);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
+        this.$("salir").addEventListener("click", this.#alSalir);
         this.addEventListener("titulo-consultas", this.#alTitular);
         if (!this.#lista) {
             this.#lista = document.createElement("lista-consultas");
             this.#lista.slot = "consultas";
-            this.#lista.contexto = { sesion: this.contexto?.sesion ?? null, soloLectura: Boolean(this.contexto?.soloLectura) };
+            this.#lista.contexto = { sesion: this.contexto?.sesion ?? null, soloLectura: Boolean(this.contexto?.soloLectura), enCurso: null };
             this.append(this.#lista);
         }
         this.#controlador ??= new ControladorDashboard();
@@ -99,6 +121,7 @@ class VistaDashboard extends HTMLElement {
         this.$("selector").removeEventListener("submit", this.#alEnviar);
         this.$("selector").removeEventListener("change", this.#alElegir);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
+        this.$("salir").removeEventListener("click", this.#alSalir);
         this.removeEventListener("titulo-consultas", this.#alTitular);
         this.#cancelar?.();
         this.#cancelar = null;
@@ -132,6 +155,7 @@ class VistaDashboard extends HTMLElement {
         this.$("reintentar").disabled = !estado.enLinea || estado.cargando;
         this.$("aviso").hidden = !estado.aviso;
         this.$("aviso").textContent = estado.aviso ?? "";
+        this.#pintarEnCurso(estado, cambio);
 
         if (cambio("grupos")) this.#pintarGrupos(estado);
         this.$("selector").hidden = !estado.grupos.length;
@@ -140,6 +164,26 @@ class VistaDashboard extends HTMLElement {
         this.$("sin-red").hidden = !sinRed;
         this.$("sin-red").textContent = sinRed ? MENSAJE_SIN_RED : "";
         this.#pintarBoton(estado);
+    }
+
+    /**
+     * F8: la región role="status" nunca se oculta; solo su contenido. Con consulta en curso muestra
+     * el aviso, el enlace a #/consulta/{id} y "Salir de la consulta"; al salir, la confirmación.
+     */
+    #pintarEnCurso(estado, cambio) {
+        const enCurso = estado.enCurso;
+        this.$("en-curso").hidden = !enCurso;
+        this.$("en-curso-texto").textContent = enCurso ? TEXTOS.enCurso : "";
+        const enlace = this.$("ir-en-curso");
+        enlace.textContent = TEXTOS.irEnCurso;
+        if (enCurso) enlace.setAttribute("href", `#/consulta/${enCurso}`);
+        else enlace.removeAttribute("href");
+        const salir = this.$("salir");
+        salir.disabled = estado.saliendo || Boolean(estado.cambiando);
+        salir.textContent = estado.saliendo ? TEXTOS.saliendo : TEXTOS.salir;
+        this.$("confirmacion").hidden = !estado.confirmacion;
+        this.$("confirmacion").textContent = estado.confirmacion ?? "";
+        if (cambio("enCurso") && this.#lista) this.#lista.enCurso = enCurso;
     }
 
     /** Un <fieldset> por clínica con un radio por rol; la activa queda marcada. */
@@ -184,6 +228,16 @@ class VistaDashboard extends HTMLElement {
         boton.disabled = Boolean(estado.cambiando) || estado.soloLectura || !estado.enLinea
             || !seleccion || seleccion === estado.activa?.idPersonaRol;
         boton.textContent = estado.cambiando ? "Cambiando de rol…" : "Usar este rol";
+    }
+
+    /** F8: "Salir de la consulta". El foco va a la confirmación o al motivo del fallo. */
+    async #salir() {
+        const salio = await this.#controlador.salirDeConsulta();
+        if (!this.isConnected) return;
+        const { aviso, error } = this.#controlador.estado;
+        if (salio) this.$("confirmacion").focus();
+        else if (aviso) this.$("aviso").focus();
+        else if (error) this.$("error").focus();
     }
 
     async #enviar(event) {
