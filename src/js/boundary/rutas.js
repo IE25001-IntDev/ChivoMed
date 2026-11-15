@@ -3,7 +3,7 @@ import { esEmpleado } from "../control/auth_service.js";
 /**
  * Tabla de rutas de la SPA. Cada ruta monta un Web Component cargado bajo demanda.
  * `modulo` también sirve como lista de archivos a precargar en el service worker.
- * `empleado: true` exige una sesión de empleado (cualquier rol activo excepto Paciente).
+ * `empleado: true` exige una sesión con rol activo de empleado (cualquier rol excepto Paciente).
  */
 
 export const RUTA_POR_DEFECTO = "/citas";

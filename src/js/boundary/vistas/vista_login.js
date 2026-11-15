@@ -176,7 +176,7 @@ class VistaLogin extends HTMLElement {
         if (!this.isConnected) return;
         if (sesion) {
             this.dispatchEvent(new CustomEvent("navegar", {
-                bubbles: true, composed: true, detail: { ruta: destinoTrasLogin(this.contexto?.query) },
+                bubbles: true, composed: true, detail: { ruta: destinoTrasLogin(this.contexto?.query, sesion) },
             }));
             return;
         }

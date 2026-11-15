@@ -130,7 +130,7 @@ describe('<vista-login>: envío', () => {
     });
 
     test('un error del servicio se muestra y el foco va al número', async () => {
-        const ctx = montar({ login: async () => { throw new Error('No reconocemos ese documento como personal activo de una clínica.'); } });
+        const ctx = montar({ login: async () => { throw new Error('No encontramos una persona con ese documento activo.'); } });
         conectar(ctx.vista);
         await asentar();
         ctx.$('tipo').value = DUI.idTipoDocumento;
@@ -138,7 +138,7 @@ describe('<vista-login>: envío', () => {
         ctx.enviar();
         await asentar();
         assert.equal(ctx.$('mensaje').hidden, false);
-        assert.equal(ctx.$('mensaje-texto').textContent, 'No reconocemos ese documento como personal activo de una clínica.');
+        assert.equal(ctx.$('mensaje-texto').textContent, 'No encontramos una persona con ese documento activo.');
         assert.equal(ctx.$('reintentar').hidden, true);
         assert.equal(ctx.vista.shadowRoot.activeElement, ctx.$('numero'));
         assert.equal(ctx.eventos.length, 0);

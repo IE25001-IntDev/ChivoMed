@@ -22,7 +22,7 @@ const NOMBRES_ROL = { DOCTOR: "Doctor", ENFERMERA: "Enfermera", ADMINISTRACION: 
 function sesion(codigo = "DOCTOR", nombreRol = NOMBRES_ROL[codigo] ?? "Rol de prueba") {
     return {
         usuario: {
-            idUsuario: "10000000-0000-4000-8000-000000000001",
+            idUsuario: "10000000-0000-4000-8000-000000000002",
             idPersona: "10000000-0000-4000-8000-000000000002",
             nombres: "Carlos", apellidos: "Gómez",
         },
@@ -67,7 +67,7 @@ test("no envía el login con un tipo que no es UUID o un número vacío, largo o
     }
 });
 
-test("un login rechazado no consulta /me, no expone el error interno ni avisa sesión expirada", async () => {
+test("un documento rechazado no consulta /me, no expone el error interno ni avisa sesión expirada", async () => {
     const expiraciones = contarExpiraciones();
     let peticiones = 0;
     globalThis.fetch = async () => {
@@ -75,7 +75,7 @@ test("un login rechazado no consulta /me, no expone el error interno ni avisa se
         return Response.json({ message: "Detalle interno que no debe mostrarse" }, { status: 401 });
     };
     await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
-        status: 401, message: "No reconocemos ese documento como personal activo de una clínica.",
+        status: 401, message: "No encontramos una persona con ese documento activo.",
     });
     assert.equal(peticiones, 1);
     assert.equal(expiraciones.valor, 0);
@@ -163,8 +163,14 @@ test("si los tipos de documento fallan se informa sin avisar sesión expirada", 
     assert.equal(expiraciones.valor, 0);
 });
 
-test("rechaza una respuesta de sesión inválida o con rol PACIENTE", async () => {
-    for (const datos of [null, {}, sesion("PACIENTE"), sesion(""), sesion(42), sesion("DOCTOR", 7),
+test("acepta sesiones con rol PACIENTE o sin rol y rechaza sesiones mal formadas", async () => {
+    for (const datos of [sesion("PACIENTE"), { ...sesion(), rolActivo: null }]) {
+        globalThis.fetch = async () => Response.json(datos);
+        const recibida = await obtenerSesion();
+        assert.equal(recibida.rolActivo?.codigo ?? null, datos.rolActivo?.codigo ?? null);
+        assert.equal(esEmpleado(recibida), false);
+    }
+    for (const datos of [null, {}, sesion(""), sesion(42), sesion("DOCTOR", 7),
         { ...sesion(), usuario: { idUsuario: { toString: "invalido" } } },
         { ...sesion(), csrfToken: "" }, { ...sesion(), csrfToken: "token\r\ninyectado" }]) {
         globalThis.fetch = async () => Response.json(datos);

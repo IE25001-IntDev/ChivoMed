@@ -49,7 +49,7 @@ const MAX_NUMERO_DOCUMENTO = 50;
 const MENSAJES = Object.freeze({
     login: {
         400: "Revisa el tipo y el número de documento.",
-        401: "No reconocemos ese documento como personal activo de una clínica.",
+        401: "No encontramos una persona con ese documento activo.",
         403: "Este acceso es solo para el personal de la clínica.",
     },
     sesion: {
@@ -156,20 +156,22 @@ export async function listarTiposDocumento() {
 
 // Contrato de /auth/me; la identidad y el rol siempre los decide el backend.
 // { usuario: { idUsuario, idPersona, nombres, apellidos },
-//   rolActivo: { idPersonaRol, codigo, nombreRol, idClinica, nombreClinica }, csrfToken }
-// `codigo` es null en un rol creado sin código y `nombreRol` puede ser null (B8); un PACIENTE
-// nunca es rol de sesión.
+//   rolActivo: { idPersonaRol, codigo, nombreRol, idClinica, nombreClinica } | null, csrfToken }
+// `idUsuario` se conserva como alias de `idPersona`; el backend ya no tiene tabla usuario.
+// `codigo` y `rolActivo` pueden ser null; los permisos de páginas dependen del rol.
 export async function obtenerSesion() {
     const sesion = await leerJson(await solicitar("auth/me"), "No pudimos verificar tu sesión. Inténtalo de nuevo.");
     const identificador = valor => typeof valor === "string" && UUID.test(valor);
     const texto = valor => typeof valor === "string" && valor.trim().length > 0;
     const { usuario, rolActivo, csrfToken } = sesion ?? {};
-    if (!identificador(usuario?.idUsuario) || !identificador(usuario?.idPersona)
-        || !texto(usuario?.nombres) || typeof usuario.apellidos !== "string"
-        || !identificador(rolActivo?.idPersonaRol) || !identificador(rolActivo?.idClinica)
-        || !(rolActivo.codigo === null || texto(rolActivo.codigo)) || rolActivo.codigo === CODIGO_PACIENTE
+    const rolInvalido = rolActivo !== null && (rolActivo === undefined || !identificador(rolActivo?.idPersonaRol)
+        || !identificador(rolActivo?.idClinica)
+        || !(rolActivo.codigo === null || texto(rolActivo.codigo))
         || !(rolActivo.nombreRol == null || typeof rolActivo.nombreRol === "string")
-        || !texto(rolActivo?.nombreClinica)
+        || !texto(rolActivo.nombreClinica));
+    if (!identificador(usuario?.idUsuario) || !identificador(usuario?.idPersona)
+        || usuario.idUsuario !== usuario.idPersona || !texto(usuario?.nombres)
+        || typeof usuario.apellidos !== "string" || rolInvalido
         || !texto(csrfToken) || /[\r\n]/.test(csrfToken)) {
         throw new AuthError("No pudimos cargar tu acceso. Comunícate con tu clínica.");
     }
@@ -178,7 +180,7 @@ export async function obtenerSesion() {
 }
 
 /**
- * Login del personal por documento, sin contraseña (contrato acordado, pendiente en el backend):
+ * Login de persona por documento, sin contraseña:
  * POST /auth/login con { idTipoDocumento, numeroDocumento } → 204 y cookie de sesión; luego GET /auth/me.
  */
 export async function iniciarSesion(idTipoDocumento, numeroDocumento) {

@@ -6,7 +6,7 @@ import { crearValidadorFormato } from '../src/js/control/formato_documento.js';
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const DUI = { idTipoDocumento: UUID(1), nombre: 'DUI', indicaciones: 'Ocho dígitos, guion y dígito verificador.', expresionRegular: '\\d{8}-\\d' };
 const PASAPORTE = { idTipoDocumento: UUID(2), nombre: 'Pasaporte', indicaciones: null, expresionRegular: null };
-const sesion = codigo => ({ usuario: { idUsuario: UUID(9) }, rolActivo: { idPersonaRol: UUID(8), codigo }, csrfToken: 'csrf-prueba' });
+const sesion = codigo => ({ usuario: { idUsuario: UUID(9), idPersona: UUID(9) }, rolActivo: codigo === undefined ? null : { idPersonaRol: UUID(8), codigo }, csrfToken: 'csrf-prueba' });
 
 /** Doble del servicio de autenticación que registra cada llamada. */
 function servicioDoble({ tipos = [DUI, PASAPORTE], login = async () => sesion('DOCTOR'), cierre = async () => {} } = {}) {
@@ -91,7 +91,7 @@ describe('ControladorLogin: validación', () => {
 });
 
 describe('ControladorLogin: envío', () => {
-    // B8: Carlos (Doctor), Lucía (Enfermera), Marta (Atención al público) y un rol sin código.
+    // Personas con rol de empleado, rol sin código, rol de paciente o sin rol pueden autenticarse.
     for (const rol of ['DOCTOR', 'ENFERMERA', 'ADMINISTRACION', null]) {
         test(`el rol ${rol} entra con el número recortado`, async () => {
             const { controlador, servicio } = await preparar({ login: async () => sesion(rol) });
@@ -104,22 +104,13 @@ describe('ControladorLogin: envío', () => {
         });
     }
 
-    for (const rol of ['PACIENTE']) {
-        test(`un rol ${rol} no entra y su sesión se cierra en el servidor`, async () => {
-            const { controlador, servicio } = await preparar({ login: async () => sesion(rol) });
-            assert.equal(await controlador.enviar({ idTipoDocumento: PASAPORTE.idTipoDocumento, numeroDocumento: 'A1' }), null);
-            assert.equal(controlador.estado.mensaje, MENSAJES.soloPersonal);
-            assert.deepEqual(servicio.llamadas.cierre, ['csrf-prueba']);
+    for (const rol of ['PACIENTE', undefined]) {
+        test('personas con rol de paciente o sin rol pueden autenticarse', async () => {
+            const { controlador } = await preparar({ login: async () => sesion(rol) });
+            assert.deepEqual(await controlador.enviar({ idTipoDocumento: PASAPORTE.idTipoDocumento, numeroDocumento: 'A1' }), sesion(rol));
+            assert.equal(controlador.estado.mensaje, null);
         });
     }
-
-    test('si cerrar la sesión ajena falla, igual se rechaza el acceso', async () => {
-        const { controlador } = await preparar({
-            login: async () => sesion('PACIENTE'), cierre: async () => { throw new Error('red'); },
-        });
-        assert.equal(await controlador.enviar({ idTipoDocumento: PASAPORTE.idTipoDocumento, numeroDocumento: 'A1' }), null);
-        assert.equal(controlador.estado.mensaje, MENSAJES.soloPersonal);
-    });
 
     test('un error del servicio se muestra tal cual y libera el formulario', async () => {
         const { controlador } = await preparar({
@@ -161,12 +152,18 @@ describe('ControladorLogin: envío', () => {
 
 describe('destinoTrasLogin', () => {
     const query = volver => new URLSearchParams(volver === undefined ? '' : { volver });
-    test('sin volver entra al dashboard', () => assert.equal(destinoTrasLogin(query()), '/dashboard'));
-    test('vuelve a la consulta que se pidió', () => assert.equal(destinoTrasLogin(query(`/consulta/${UUID(5)}`)), `/consulta/${UUID(5)}`));
+    test('sin volver entra al dashboard para empleados', () => assert.equal(destinoTrasLogin(query(), sesion('DOCTOR')), '/dashboard'));
+    test('vuelve a la consulta que se pidió', () => assert.equal(destinoTrasLogin(query(`/consulta/${UUID(5)}`), sesion('DOCTOR')), `/consulta/${UUID(5)}`));
     for (const malo of ['//evil.example', 'https://evil.example', '/login', '/no-existe']) {
-        test(`ignora volver=${malo}`, () => assert.equal(destinoTrasLogin(query(malo)), '/dashboard'));
+        test(`ignora volver=${malo}`, () => assert.equal(destinoTrasLogin(query(malo), sesion('DOCTOR')), '/dashboard'));
     }
-    test('tolera un contexto sin query', () => assert.equal(destinoTrasLogin(undefined), '/dashboard'));
+    test('redirige personas sin rol o pacientes a la ruta pública', () => {
+        assert.equal(destinoTrasLogin(query(), sesion(undefined)), '/citas');
+        assert.equal(destinoTrasLogin(query(), sesion('PACIENTE')), '/citas');
+    });
+    test('no permite volver a una ruta protegida sin rol de empleado', () =>
+        assert.equal(destinoTrasLogin(query('/dashboard'), sesion('PACIENTE')), '/citas'));
+    test('tolera un contexto sin query', () => assert.equal(destinoTrasLogin(undefined, sesion('DOCTOR')), '/dashboard'));
 });
 
 describe('ControladorLogin: estado reactivo', () => {

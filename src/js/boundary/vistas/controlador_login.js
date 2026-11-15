@@ -4,9 +4,9 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  */
-import { listarTiposDocumento, iniciarSesion, cerrarSesion, esEmpleado } from "../../control/auth_service.js";
-import { RUTAS, RUTA_INICIO_EMPLEADO } from "../rutas.js";
-import { rutaDeRetorno } from "../router.js";
+import { listarTiposDocumento, iniciarSesion, esEmpleado } from "../../control/auth_service.js";
+import { RUTAS, RUTA_POR_DEFECTO, inicioPorRol } from "../rutas.js";
+import { rutaDeRetorno, resolverRuta } from "../router.js";
 import { autoformatear, crearValidadorFormato } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 
@@ -16,13 +16,16 @@ export const MENSAJES = Object.freeze({
     tipoRequerido: "Selecciona el tipo de documento.",
     numeroRequerido: "Escribe tu número de documento.",
     numeroLargo: `El número no puede tener más de ${MAX_NUMERO_DOCUMENTO} caracteres.`,
-    soloPersonal: "Este acceso es solo para el personal de la clínica.",
     sesionFinalizada: "Inicia sesión con tu documento para continuar.",
 });
 
-/** Ruta a la que se entra después del login: el `volver` válido o el dashboard. */
-export function destinoTrasLogin(query) {
-    return rutaDeRetorno(query?.get?.("volver") ?? null, RUTAS) ?? RUTA_INICIO_EMPLEADO;
+/** Ruta tras el login: protegida solo si el rol permite páginas de empleado. */
+export function destinoTrasLogin(query, sesion) {
+    const inicio = inicioPorRol(sesion) ?? RUTA_POR_DEFECTO;
+    const volver = rutaDeRetorno(query?.get?.("volver") ?? null, RUTAS);
+    if (!volver) return inicio;
+    const protegida = resolverRuta(volver, RUTAS).ruta?.empleado;
+    return protegida && !esEmpleado(sesion) ? inicio : volver;
 }
 
 const SIN_ERRORES = Object.freeze({ tipo: null, numero: null });
@@ -32,9 +35,9 @@ export class ControladorLogin {
 
     /**
      * @param {object} [opciones]
-     * @param {{ listarTiposDocumento: Function, iniciarSesion: Function, cerrarSesion: Function }} [opciones.servicio]
+     * @param {{ listarTiposDocumento: Function, iniciarSesion: Function }} [opciones.servicio]
      */
-    constructor({ servicio = { listarTiposDocumento, iniciarSesion, cerrarSesion } } = {}) {
+    constructor({ servicio = { listarTiposDocumento, iniciarSesion } } = {}) {
         this.#servicio = servicio;
         const { estado, suscribir } = crearEstado({
             cargandoTipos: false,
@@ -96,7 +99,7 @@ export class ControladorLogin {
         return Object.freeze(errores);
     }
 
-    /** Devuelve la sesión si el personal puede entrar; null si hubo errores (quedan en el estado). */
+    /** Devuelve la sesión si existe la persona y el documento activo. */
     async enviar(datos) {
         if (this.estado.enviando) return null;
         const errores = this.validar(datos);
@@ -107,12 +110,6 @@ export class ControladorLogin {
         this.#actualizar({ enviando: true, errores, mensaje: null });
         try {
             const sesion = await this.#servicio.iniciarSesion(datos.idTipoDocumento, datos.numeroDocumento.trim());
-            if (!esEmpleado(sesion)) {
-                // La sesión ya existe en el servidor: se cierra para no dejarla abierta.
-                try { await this.#servicio.cerrarSesion(sesion?.csrfToken); } catch { /* Se informa el rechazo igual. */ }
-                this.#actualizar({ enviando: false, mensaje: MENSAJES.soloPersonal });
-                return null;
-            }
             this.#actualizar({ enviando: false });
             return sesion;
         } catch (error) {
