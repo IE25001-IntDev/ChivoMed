@@ -485,3 +485,123 @@ describe('ControladorCitas: autoformato del número', () => {
         assert.equal(estado.numeroDocumento, 'A12345678');
     });
 });
+
+describe('ControladorCitas: barra de búsqueda y respuestas tardías', () => {
+    async function barra(opciones = {}) {
+        const ctx = preparar({ clinicas: [NORTE], ...opciones });
+        await ctx.controlador.iniciar();
+        ctx.controlador.elegirTipo(DUI.idTipoDocumento);
+        ctx.controlador.escribirNumero(NUMERO);
+        return ctx;
+    }
+
+    test('buscar encadena clínicas y citas; repetir los criterios no repite POST', async () => {
+        const ctx = await barra();
+        await ctx.controlador.buscar();
+        await ctx.controlador.buscar();
+        assert.equal(ctx.llamadas.clinicas.length, 1);
+        assert.equal(ctx.llamadas.citas.length, 1);
+        assert.equal(ctx.estado.idClinica, NORTE.idClinica);
+        assert.deepEqual(ctx.estado.citas, [CITA]);
+    });
+
+    test('prepararClinicas no cambia de pantalla ni busca citas', async () => {
+        const ctx = await barra();
+        await ctx.controlador.prepararClinicas();
+        assert.equal(ctx.estado.paso, 1);
+        assert.equal(ctx.estado.idClinica, NORTE.idClinica);
+        assert.equal(ctx.llamadas.citas.length, 0);
+    });
+
+    test('dos eventos de preparación no duplican la petición pendiente', async () => {
+        const ctx = await barra();
+        const pendiente = Promise.withResolvers();
+        ctx.respuestas.clinicas = () => pendiente.promise;
+        const primera = ctx.controlador.prepararClinicas();
+        const segunda = ctx.controlador.prepararClinicas();
+        pendiente.resolve([NORTE]);
+        await Promise.all([primera, segunda]);
+        assert.equal(ctx.llamadas.clinicas.length, 1);
+    });
+
+    for (const [clinicas, mensaje] of [[[], MENSAJES.sinClinicas], [[NORTE, SUR], MENSAJES.clinicaRequerida]]) {
+        test(`sin clínica seleccionada: ${mensaje}`, async () => {
+            const ctx = await barra({ clinicas });
+            await ctx.controlador.buscar();
+            assert.equal(ctx.estado.errores.clinica, mensaje);
+            assert.equal(ctx.llamadas.citas.length, 0);
+        });
+    }
+
+    for (const [caso, modificar, campo] of [
+        ['tipo desconocido', c => c.elegirTipo(UUID(99)), 'tipo'],
+        ['documento vacío', c => c.escribirNumero(''), 'numero'],
+        ['rango invertido', c => c.fijarFechas({ desde: '2026-11-20', hasta: '2026-11-01' }), 'rango'],
+    ]) {
+        test(`${caso}: no hace ninguna petición de búsqueda`, async () => {
+            const ctx = await barra();
+            modificar(ctx.controlador);
+            await ctx.controlador.buscar();
+            assert.ok(ctx.estado.errores[campo]);
+            assert.equal(ctx.llamadas.clinicas.length, 0);
+            assert.equal(ctx.llamadas.citas.length, 0);
+        });
+    }
+
+    test('una búsqueda fallida permite reintentar con los mismos criterios', async () => {
+        const ctx = await barra();
+        ctx.respuestas.citas = async () => { throw new DefaultError({ status: 503 }); };
+        await ctx.controlador.buscar();
+        assert.equal(ctx.estado.mensaje, MENSAJES.generico);
+        ctx.respuestas.citas = async () => [CITA];
+        await ctx.controlador.buscar();
+        assert.equal(ctx.llamadas.citas.length, 2);
+        assert.equal(ctx.estado.mensaje, null);
+        assert.deepEqual(ctx.estado.citas, [CITA]);
+    });
+
+    for (const [caso, cambiar] of [
+        ['documento', c => c.escribirNumero('87654321-0')],
+        ['fechas', c => c.fijarFechas({ desde: '2026-11-01' })],
+        ['clínica', c => c.elegirClinica(SUR.idClinica)],
+    ]) {
+        for (const falla of [false, true]) {
+            test(`cambiar ${caso} descarta la ${falla ? 'falla' : 'respuesta'} de citas anterior`, async () => {
+                const ctx = await barra({ clinicas: [NORTE, SUR] });
+                await ctx.controlador.prepararClinicas();
+                ctx.controlador.elegirClinica(NORTE.idClinica);
+                const pendiente = Promise.withResolvers();
+                ctx.respuestas.citas = () => pendiente.promise;
+                const buscando = ctx.controlador.buscar();
+                cambiar(ctx.controlador);
+                if (falla) pendiente.reject(new DefaultError({ status: 503 }));
+                else pendiente.resolve([CITA]);
+                await buscando;
+                assert.equal(ctx.estado.citas, null);
+                assert.equal(ctx.estado.mensaje, null);
+                assert.equal(ctx.estado.cargando, null);
+                assert.equal(ctx.memoria.leer(CLAVE_MEMORIA), null);
+                ctx.respuestas.citas = async () => [];
+                if (caso === 'documento') {
+                    await ctx.controlador.prepararClinicas();
+                    ctx.controlador.elegirClinica(NORTE.idClinica);
+                }
+                await ctx.controlador.buscar();
+                assert.deepEqual(ctx.estado.citas, []);
+            });
+        }
+    }
+
+    test('un ticket pendiente no reaparece después de Nueva búsqueda', async () => {
+        const ctx = await barra();
+        await ctx.controlador.buscar();
+        const pendiente = Promise.withResolvers();
+        ctx.respuestas.ticket = () => pendiente.promise;
+        const descargando = ctx.controlador.descargarTicket(CITA.idConsulta);
+        ctx.controlador.nuevaBusqueda();
+        pendiente.resolve({ blob: new Blob(['%PDF']), nombre: 'ticket.pdf' });
+        await descargando;
+        assert.deepEqual(ctx.estado.tickets, {});
+        assert.equal(ctx.estado.numeroDocumento, '');
+    });
+});

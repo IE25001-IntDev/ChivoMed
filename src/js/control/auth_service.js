@@ -25,8 +25,8 @@ export async function verificarSesionActual() {
     const anterior = sesionVista ?? sesionActual;
     const actual = await obtenerSesion();
     if (anterior && (actual.usuario.idUsuario !== anterior.usuario.idUsuario
-        || actual.rolActivo.idPersonaRol !== anterior.rolActivo.idPersonaRol
-        || actual.rolActivo.idClinica !== anterior.rolActivo.idClinica)) {
+        || actual.rolActivo?.idPersonaRol !== anterior.rolActivo?.idPersonaRol
+        || actual.rolActivo?.idClinica !== anterior.rolActivo?.idClinica)) {
         throw new AuthError("La sesión cambió. Recarga la página antes de guardar.", 409);
     }
     return actual;

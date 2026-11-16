@@ -6,7 +6,7 @@ import { crearVentana, instalarVentana, hasta } from './dobles/ventana_doble.js'
 // Datos inventados; nunca datos reales.
 const UUID = n => `90000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sesion = (codigo = 'DOCTOR') => ({
-    usuario: { idUsuario: UUID(1), idPersona: UUID(2), nombres: 'Ana', apellidos: 'Prueba' },
+    usuario: { idUsuario: UUID(1), idPersona: UUID(1), nombres: 'Ana', apellidos: 'Prueba' },
     rolActivo: { idPersonaRol: UUID(3), codigo, idClinica: UUID(4), nombreClinica: 'Clínica de prueba' },
     csrfToken: 'csrf-prueba',
 });

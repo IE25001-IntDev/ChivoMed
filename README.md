@@ -17,9 +17,16 @@ dependencias de npm. Consume el API REST del backend Jakarta EE
 
 ```bash
 npm start          # http://localhost:3000 (sirve src/ y hace de proxy de /galenosv/api)
-npm test           # pruebas de unidad (node --test)
+npm test           # primero unidad/componentes; después integración del frontend
+npm run test:unit
+npm run test:integration
 npm run cobertura  # pruebas con cobertura, medida solo sobre src/
 ```
+
+Las pruebas usan Node nativo y datos sintéticos: no requieren arrancar GalenoSV, ejecutar
+migraciones ni tocar PostgreSQL. Las de integración abren servidores HTTP locales en puertos
+efímeros. La matriz por historia de usuario, los resultados y los límites están en
+[docs/pruebas.md](docs/pruebas.md).
 
 `npm start` funciona sin `.env`. Por defecto el proxy apunta a
 `http://localhost:9080/galenosv/api`. Para otro backend, crea `.env` con `API_URL=…`.
@@ -114,4 +121,5 @@ Sigue el patrón BCE (Boundary-Control-Entity), igual que el backend:
   (`components/`) y la PWA (`pwa/`: service worker, instalación y conexión).
 - `src/js/control/`: servicios HTTP (`DefaultService`), autenticación y estado reactivo.
 - `src/js/entities/`: modelos de los DTOs.
-- `tests/`: pruebas de unidad con `node --test`, con un DOM mínimo propio (`tests/dobles/`).
+- `tests/`: pruebas de unidad y componentes con `node --test`, con un DOM mínimo propio (`tests/dobles/`).
+- `tests/integracion/`: servicios, autenticación, controladores y proxy HTTP del frontend conectados entre sí.
