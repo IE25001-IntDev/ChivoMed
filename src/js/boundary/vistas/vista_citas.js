@@ -1,129 +1,75 @@
 /**
- * <vista-citas> (HU1): búsqueda pública de citas en un asistente de 5 pasos, sin sesión.
+ * <vista-citas> (HU1): búsqueda pública de citas con filtros en una barra superior, sin sesión.
  * La lógica vive en ControladorCitas; aquí solo se pinta. La vista se suscribe al estado reactivo
  * al conectarse, cancela al desconectarse y repinta según las claves que cambiaron.
  *
- * Slots: <indicador-pasos slot="pasos"> y una <tarjeta-cita slot="resultados"> por cita, como
- * hijos de la vista. Todo el asistente vive en #/citas: los pasos no cambian el hash ni el historial,
- * y el número de documento nunca sale del estado del controlador.
+ * Slot: una <tarjeta-cita slot="resultados"> por cita, como hijo de la vista. El número de documento
+ * nunca sale del estado del controlador.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  */
-import { ControladorCitas, PASOS, MENSAJES, MAX_NUMERO_DOCUMENTO, motivoNoBuscar, formatearHoraSV } from "./controlador_citas.js";
+import { ControladorCitas, MENSAJES, MAX_NUMERO_DOCUMENTO, motivoNoBuscar, formatearHoraSV } from "./controlador_citas.js";
 import { formatearFecha } from "../fechas_sv.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { plantilla } from "../plantilla.js";
-import "../components/citas/indicador_pasos.js";
 import "../components/citas/tarjeta_cita.js";
 
 const PLANTILLA = plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Búsqueda de citas</h1>
   <p class="subtitulo">Consulta tus citas con tu documento, la clínica donde te atienden y un rango de fechas.</p>
-  <slot name="pasos"></slot>
-  <p class="solo-lectores" id="anuncio" role="status"></p>
   <p class="aviso" id="aviso-memoria" role="status" hidden></p>
   <div class="mensaje-error" id="mensaje" role="alert" hidden><p id="mensaje-texto"></p></div>
-
-  <section class="paso-asistente" id="paso-1" aria-labelledby="h-1">
-    <h2 id="h-1" tabindex="-1">Tipo de documento</h2>
-    <form id="form-1" novalidate>
-      <div class="campo">
-        <label for="tipo">¿Con qué documento te registraste?</label>
-        <select id="tipo" name="tipo" required aria-describedby="tipo-error">
-          <option value="">Cargando tipos…</option>
-        </select>
-        <p class="error-campo" id="tipo-error" hidden></p>
-      </div>
-      <div class="mensaje-error" id="error-tipos" role="alert" hidden>
-        <p id="error-tipos-texto"></p>
-        <button class="boton boton-secundario" id="reintentar-tipos" type="button">Volver a intentar</button>
-      </div>
-      <div class="acciones-paso">
-        <button class="boton boton-principal" id="siguiente-1" type="submit">Siguiente</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="paso-asistente" id="paso-2" aria-labelledby="h-2" hidden>
-    <h2 id="h-2" tabindex="-1">Número de documento</h2>
-    <form id="form-2" novalidate>
-      <div class="campo">
-        <label for="numero">Número de documento</label>
-        <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
-               maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones numero-error" />
-        <p class="indicaciones" id="numero-indicaciones" hidden></p>
-        <p class="error-campo" id="numero-error" hidden></p>
-      </div>
-      <p class="aviso aviso-motivo" id="motivo-2" hidden></p>
-      <div class="acciones-paso">
-        <button class="boton boton-secundario" id="atras-2" type="button">Atrás</button>
-        <button class="boton boton-principal" id="siguiente-2" type="submit" aria-describedby="motivo-2">Siguiente</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="paso-asistente" id="paso-3" aria-labelledby="h-3" hidden>
-    <h2 id="h-3" tabindex="-1">Clínica</h2>
-    <form id="form-3" novalidate>
-      <fieldset class="opciones-clinica" id="clinicas" aria-describedby="clinica-error">
-        <legend>¿En qué clínica quieres buscar?</legend>
-      </fieldset>
-      <p class="aviso" id="sin-clinicas" role="status" hidden></p>
+  <form id="form-busqueda" class="barra-busqueda" novalidate>
+    <div class="campo">
+      <label for="tipo">Tipo de documento</label>
+      <select id="tipo" name="tipo" required aria-describedby="tipo-error"><option value="">Cargando tipos…</option></select>
+      <p class="error-campo" id="tipo-error" hidden></p>
+    </div>
+    <div class="campo">
+      <label for="numero">Número de documento</label>
+      <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
+             maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones numero-error" />
+      <p class="indicaciones" id="numero-indicaciones" hidden></p>
+      <p class="error-campo" id="numero-error" hidden></p>
+    </div>
+    <div class="campo">
+      <label for="clinica">Clínica</label>
+      <select id="clinica" name="clinica" required aria-describedby="clinica-error">
+        <option value="">Primero escribe tu documento</option>
+      </select>
       <p class="error-campo" id="clinica-error" hidden></p>
-      <div class="acciones-paso">
-        <button class="boton boton-secundario" id="atras-3" type="button">Atrás</button>
-        <button class="boton boton-principal" id="siguiente-3" type="submit">Siguiente</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="paso-asistente" id="paso-4" aria-labelledby="h-4" hidden>
-    <h2 id="h-4" tabindex="-1">Fechas</h2>
-    <form id="form-4" novalidate>
-      <div class="rango-fechas">
-        <div class="campo">
-          <label for="desde">Desde</label>
-          <input id="desde" name="desde" type="date" required aria-describedby="rango-error" />
-        </div>
-        <div class="campo">
-          <label for="hasta">Hasta</label>
-          <input id="hasta" name="hasta" type="date" required aria-describedby="rango-error" />
-        </div>
-      </div>
+    </div>
+    <div class="rango-fechas">
+      <div class="campo"><label for="desde">Desde</label><input id="desde" name="desde" type="date" required aria-describedby="rango-error" /></div>
+      <div class="campo"><label for="hasta">Hasta</label><input id="hasta" name="hasta" type="date" required aria-describedby="rango-error" /></div>
       <p class="error-campo" id="rango-error" hidden></p>
-      <p class="aviso aviso-motivo" id="motivo-4" hidden></p>
-      <div class="acciones-paso">
-        <button class="boton boton-secundario" id="atras-4" type="button">Atrás</button>
-        <button class="boton boton-principal" id="buscar" type="submit" aria-describedby="motivo-4">Buscar citas</button>
-      </div>
-    </form>
-  </section>
+    </div>
+    <div class="acciones-busqueda">
+      <p class="indicaciones" id="error-tipos" role="alert" hidden></p>
+      <button class="boton boton-secundario" id="reintentar-tipos" type="button" hidden>Volver a cargar tipos</button>
+      <p class="aviso aviso-motivo" id="motivo" hidden></p>
+      <button class="boton boton-principal" id="buscar" type="submit">Buscar citas</button>
+    </div>
+  </form>
 
-  <section class="paso-asistente" id="paso-5" aria-labelledby="h-5" hidden>
-    <h2 id="h-5" tabindex="-1">Resultados</h2>
+  <section class="resultados-citas" aria-labelledby="h-resultados">
+    <h2 id="h-resultados" tabindex="-1">Resultados</h2>
     <p class="resumen-busqueda" id="resumen"></p>
     <div class="cuadricula-citas" id="resultados">
       <slot name="resultados"></slot>
     </div>
-    <div class="aviso" id="sin-citas" hidden>
+  <div class="aviso" id="sin-citas" hidden>
       <p id="sin-citas-texto"></p>
-      <button class="boton boton-secundario" id="cambiar-fechas" type="button">Cambiar fechas</button>
     </div>
-    <div class="acciones-paso">
-      <button class="boton boton-secundario" id="atras-5" type="button">Atrás</button>
-      <button class="boton boton-secundario" id="nueva" type="button">Nueva búsqueda</button>
-    </div>
+    <button class="boton boton-secundario" id="nueva" type="button">Limpiar búsqueda</button>
   </section>
 
   <p class="pie-tarjeta">¿Trabajas en una clínica? <a href="#/login">Acceso del personal</a></p>
 </section>`);
 
-const FOCO_ERROR = Object.freeze({ 1: ["tipo", "tipo"], 2: ["numero", "numero"], 3: ["clinica", "clinicas"], 4: ["rango", "desde"] });
-
 class VistaCitas extends HTMLElement {
     #controlador = null;
     #cancelar = null;
-    #indicador = null;
     /** idConsulta → <tarjeta-cita> de los resultados pintados. */
     #tarjetas = new Map();
     #escuchas = [];
@@ -146,24 +92,20 @@ class VistaCitas extends HTMLElement {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("citas.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
-        if (!this.#indicador) {
-            this.#indicador = document.createElement("indicador-pasos");
-            this.#indicador.slot = "pasos";
-            this.append(this.#indicador);
-        }
         this.#controlador ??= new ControladorCitas();
         const c = this.#controlador;
-        this.#escuchar(this.#indicador, "ir-a-paso", e => c.irA(e.detail?.paso));
-        for (const n of [1, 2, 3, 4]) this.#escuchar(this.$(`form-${n}`), "submit", e => this.#siguiente(e));
-        for (const n of [2, 3, 4, 5]) this.#escuchar(this.$(`atras-${n}`), "click", () => c.atras());
-        this.#escuchar(this.$("tipo"), "change", () => c.elegirTipo(this.$("tipo").value));
+        this.#escuchar(this.$("form-busqueda"), "submit", e => this.#buscar(e));
+        this.#escuchar(this.$("tipo"), "change", () => {
+            c.elegirTipo(this.$("tipo").value);
+            c.prepararClinicas();
+        });
         this.#escuchar(this.$("numero"), "input", () => c.escribirNumero(this.$("numero").value));
-        this.#escuchar(this.$("clinicas"), "change", () => c.elegirClinica(this.#clinicaMarcada()));
+        this.#escuchar(this.$("numero"), "change", () => c.prepararClinicas());
+        this.#escuchar(this.$("clinica"), "change", () => c.elegirClinica(this.$("clinica").value));
         for (const id of ["desde", "hasta"]) {
             this.#escuchar(this.$(id), "change", () => c.fijarFechas({ desde: this.$("desde").value, hasta: this.$("hasta").value }));
         }
         this.#escuchar(this.$("reintentar-tipos"), "click", () => c.cargarTipos());
-        this.#escuchar(this.$("cambiar-fechas"), "click", () => c.irA(4));
         this.#escuchar(this.$("nueva"), "click", () => c.nuevaBusqueda());
         this.#cancelar = c.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         c.iniciar();
@@ -183,33 +125,24 @@ class VistaCitas extends HTMLElement {
         this.#escuchas.push([objetivo, tipo, fn]);
     }
 
-    #clinicaMarcada() {
-        return this.shadowRoot.querySelector('input[name="clinica"]:checked')?.value ?? null;
-    }
-
-    /** Envía el paso; si quedó un error de validación en el mismo paso, el foco va a su campo. */
-    async #siguiente(event) {
+    /** Envía todos los filtros de una vez y enfoca el primer dato que necesite atención. */
+    async #buscar(event) {
         event.preventDefault();
         const c = this.#controlador;
-        const paso = c.estado.paso;
-        await c.siguiente();
-        if (!this.isConnected || c.estado.paso !== paso) return;
-        const [clave, campo] = FOCO_ERROR[paso] ?? [];
-        if (clave && c.estado.errores[clave]) {
-            const destino = campo === "clinicas" ? this.shadowRoot.querySelector('input[name="clinica"]') : this.$(campo);
-            destino?.focus();
-        } else if (c.estado.mensaje) {
-            this.$(`h-${paso}`).focus();
-        }
+        await c.buscar();
+        if (!this.isConnected) return;
+        const error = c.estado.errores;
+        const campo = error.tipo ? "tipo" : error.numero ? "numero" : error.clinica ? "clinica" : error.rango ? "desde" : null;
+        if (campo) this.$(campo).focus();
+        else if (c.estado.citas) this.$("h-resultados").focus();
     }
 
     /** `cambios` es el Set de claves del lote, o null para el pintado completo inicial. */
     #pintar(estado, cambios) {
         const cambio = (...claves) => !cambios || claves.some(k => cambios.has(k));
-        if (cambio("paso", "alcanzado")) this.#pintarPasos(estado, Boolean(cambios?.has("paso")));
         if (cambio("tipos", "cargandoTipos", "errorTipos", "idTipoDocumento")) this.#pintarTipos(estado);
         if (cambio("numeroDocumento") && this.$("numero").value !== estado.numeroDocumento) this.$("numero").value = estado.numeroDocumento;
-        if (cambio("clinicas", "idClinica")) this.#pintarClinicas(estado);
+        if (cambio("clinicas", "idClinica", "cargando")) this.#pintarClinicas(estado);
         if (cambio("desde", "hasta")) {
             if (this.$("desde").value !== estado.desde) this.$("desde").value = estado.desde;
             if (this.$("hasta").value !== estado.hasta) this.$("hasta").value = estado.hasta;
@@ -217,7 +150,7 @@ class VistaCitas extends HTMLElement {
         if (cambio("errores")) {
             this.#errorCampo(this.$("tipo"), "tipo-error", estado.errores.tipo);
             this.#errorCampo(this.$("numero"), "numero-error", estado.errores.numero);
-            this.#errorCampo(this.$("clinicas"), "clinica-error", estado.errores.clinica);
+            this.#errorCampo(this.$("clinica"), "clinica-error", estado.errores.clinica);
             this.#errorCampo(this.$("desde"), "rango-error", estado.errores.rango);
             this.#errorCampo(this.$("hasta"), "rango-error", estado.errores.rango);
         }
@@ -230,15 +163,6 @@ class VistaCitas extends HTMLElement {
         const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn)) : null;
         this.$("aviso-memoria").hidden = !memoria;
         this.$("aviso-memoria").textContent = memoria ?? "";
-    }
-
-    #pintarPasos(estado, moverFoco) {
-        this.#indicador.modelo = Object.freeze({ pasos: PASOS, actual: estado.paso, alcanzado: estado.alcanzado });
-        for (const { numero } of PASOS) this.$(`paso-${numero}`).hidden = numero !== estado.paso;
-        if (!moverFoco) return;
-        const { nombre } = PASOS[estado.paso - 1];
-        this.$("anuncio").textContent = `Paso ${estado.paso} de ${PASOS.length}: ${nombre}`;
-        this.$(`h-${estado.paso}`).focus();
     }
 
     #pintarTipos(estado) {
@@ -254,33 +178,29 @@ class VistaCitas extends HTMLElement {
         select.value = estado.tipos.some(t => t.idTipoDocumento === estado.idTipoDocumento) ? estado.idTipoDocumento : "";
         select.disabled = estado.cargandoTipos || !estado.tipos.length;
         this.$("error-tipos").hidden = !estado.errorTipos;
-        this.$("error-tipos-texto").textContent = estado.errorTipos ?? "";
+        this.$("error-tipos").textContent = estado.errorTipos ?? "";
+        this.$("reintentar-tipos").hidden = !estado.errorTipos;
         const tipo = estado.tipos.find(t => t.idTipoDocumento === estado.idTipoDocumento);
         this.$("numero-indicaciones").hidden = !tipo?.indicaciones;
         this.$("numero-indicaciones").textContent = tipo?.indicaciones ?? "";
     }
 
     #pintarClinicas(estado) {
-        const fieldset = this.$("clinicas");
-        const leyenda = fieldset.querySelector("legend");
+        const select = this.$("clinica");
+        const inicial = estado.cargando === "clinicas" ? "Cargando clínicas…"
+            : estado.clinicas?.length ? "Selecciona una clínica" : "Primero escribe tu documento";
+        const opcion = (texto, valor) => {
+            const o = document.createElement("option");
+            o.value = valor;
+            o.textContent = texto;
+            return o;
+        };
         const opciones = (estado.clinicas ?? []).map(clinica => {
-            const label = document.createElement("label");
-            label.className = "opcion-clinica";
-            const radio = document.createElement("input");
-            radio.type = "radio";
-            radio.name = "clinica";
-            radio.value = clinica.idClinica;
-            const nombre = document.createElement("span");
-            nombre.textContent = clinica.nombre;
-            label.append(radio, nombre);
-            return { label, radio, marcado: clinica.idClinica === estado.idClinica };
+            return opcion(clinica.nombre, clinica.idClinica);
         });
-        fieldset.replaceChildren(leyenda, ...opciones.map(o => o.label));
-        for (const o of opciones) if (o.marcado) o.radio.checked = true;
-        const vacias = Array.isArray(estado.clinicas) && !estado.clinicas.length;
-        fieldset.hidden = vacias;
-        this.$("sin-clinicas").hidden = !vacias;
-        this.$("sin-clinicas").textContent = vacias ? MENSAJES.sinClinicas : "";
+        select.replaceChildren(opcion(inicial, ""), ...opciones);
+        select.value = estado.clinicas?.some(c => c.idClinica === estado.idClinica) ? estado.idClinica : "";
+        select.disabled = estado.cargando === "clinicas" || !opciones.length;
     }
 
     #errorCampo(control, idError, error) {
@@ -344,18 +264,13 @@ class VistaCitas extends HTMLElement {
     #pintarAcciones(estado) {
         const ocupado = Boolean(estado.cargando);
         const motivo = motivoNoBuscar(estado, Date.now());
-        this.$("siguiente-1").disabled = ocupado || !estado.tipos.length;
         this.$("reintentar-tipos").disabled = !estado.enLinea || estado.cargandoTipos;
-        this.$("siguiente-2").disabled = ocupado || Boolean(motivo);
-        this.$("siguiente-2").textContent = estado.cargando === "clinicas" ? "Buscando clínicas…" : "Siguiente";
-        this.$("siguiente-3").disabled = ocupado || !estado.clinicas?.length;
         this.$("buscar").disabled = ocupado || Boolean(motivo);
-        this.$("buscar").textContent = estado.cargando === "citas" ? "Buscando citas…" : "Buscar citas";
-        for (const n of [2, 4]) {
-            this.$(`motivo-${n}`).hidden = !motivo;
-            this.$(`motivo-${n}`).textContent = motivo ?? "";
-            this.$(`form-${n}`).setAttribute("aria-busy", String(ocupado));
-        }
+        this.$("buscar").textContent = estado.cargando === "clinicas" ? "Cargando clínicas…"
+            : estado.cargando === "citas" ? "Buscando citas…" : "Buscar citas";
+        this.$("motivo").hidden = !motivo;
+        this.$("motivo").textContent = motivo ?? "";
+        this.$("form-busqueda").setAttribute("aria-busy", String(ocupado));
     }
 }
 

@@ -284,7 +284,7 @@ export class ControladorCitas {
         const id = typeof idTipoDocumento === "string" ? idTipoDocumento : "";
         if (id === this.estado.idTipoDocumento) return;
         this.#actualizar({ idTipoDocumento: id });
-        this.#errores({ tipo: null, numero: null });
+        this.#errores({ tipo: null, numero: null, clinica: null });
         this.#invalidarDocumento();
     }
 
@@ -294,7 +294,7 @@ export class ControladorCitas {
         const numero = autoformatear(typeof valor === "string" ? valor : "", tipo?.expresionRegular, this.estado.numeroDocumento);
         if (numero === this.estado.numeroDocumento) return;
         this.#actualizar({ numeroDocumento: numero });
-        if (this.estado.errores.numero) this.#errores({ numero: null });
+        if (this.estado.errores.numero || this.estado.errores.clinica) this.#errores({ numero: null, clinica: null });
         this.#invalidarDocumento();
     }
 
@@ -344,20 +344,23 @@ export class ControladorCitas {
         }
     }
 
-    #mostrarClinicas(clinicas) {
+    #mostrarClinicas(clinicas, avanzar = true) {
         this.#parCargado = this.#par();
         const idClinica = clinicas.length === 1 ? clinicas[0].idClinica
             : clinicas.some(c => c.idClinica === this.estado.idClinica) ? this.estado.idClinica : null;
         this.#actualizar({ clinicas, idClinica });
-        this.#avanzar(3);
+        if (avanzar) this.#avanzar(3);
     }
 
-    async #buscarClinicas() {
+    async #buscarClinicas(avanzar = true) {
         const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
         if (error) { this.#errores(this.tipo() ? { numero: error } : { tipo: error }); return; }
-        if (this.#parCargado === this.#par() && this.estado.clinicas) { this.#avanzar(3); return; }
+        if (this.#parCargado === this.#par() && this.estado.clinicas) {
+            if (avanzar) this.#avanzar(3);
+            return;
+        }
         const guardadas = this.#clinicasPorPar.get(this.#par());
-        if (guardadas) { this.#mostrarClinicas(guardadas); return; }
+        if (guardadas) { this.#mostrarClinicas(guardadas, avanzar); return; }
         const motivo = this.#motivo();
         if (motivo) { this.#actualizar({ mensaje: motivo }); return; }
         const id = ++this.#secuencia;
@@ -368,12 +371,35 @@ export class ControladorCitas {
             if (id !== this.#secuencia) return;
             this.#clinicasPorPar.set(par, clinicas);
             this.#actualizar({ cargando: null });
-            if (par === this.#par()) this.#mostrarClinicas(clinicas);
+            if (par === this.#par()) this.#mostrarClinicas(clinicas, avanzar);
         } catch (error) {
             if (id !== this.#secuencia) return;
             this.#actualizar({ cargando: null });
             this.#fallo(error);
         }
+    }
+
+    /** Carga las opciones de clínica al salir del documento, sin mover la pantalla. */
+    prepararClinicas() {
+        if (!this.tipo() || !this.estado.numeroDocumento.trim()) return Promise.resolve();
+        return this.#buscarClinicas(false);
+    }
+
+    /** Valida la barra, carga clínicas si hace falta y luego consulta las citas. */
+    async buscar() {
+        if (this.estado.cargando) return;
+        if (!this.tipo()) { this.#errores({ tipo: MENSAJES.tipoRequerido }); return; }
+        const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
+        if (error) { this.#errores({ numero: error }); return; }
+        const errorRango = validarRango(this.estado.desde, this.estado.hasta);
+        if (errorRango) { this.#errores({ rango: errorRango }); return; }
+        if (!this.estado.clinicas) await this.#buscarClinicas(false);
+        if (!this.estado.clinicas || this.estado.mensaje) return;
+        if (!this.estado.clinicas.some(c => c.idClinica === this.estado.idClinica)) {
+            this.#errores({ clinica: this.estado.clinicas.length ? MENSAJES.clinicaRequerida : MENSAJES.sinClinicas });
+            return;
+        }
+        return this.#buscarCitas();
     }
 
     async #buscarCitas() {

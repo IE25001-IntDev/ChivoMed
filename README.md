@@ -70,8 +70,9 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
     …"). "Buscar paciente" filtra por nombre o número de documento las consultas ya cargadas.
   - Cada tarjeta muestra los generales del paciente, el inicio y los pasos en jerarquía, con
     quién y cuándo. "Ver registro" muestra lo registrado en un paso.
-  - "Atender" se habilita solo en las consultas con un paso pendiente para tu rol. En las demás,
-    la tarjeta dice a quién le corresponde.
+  - "Atender" se habilita solo en consultas de hoy o pasadas con un paso pendiente para tu rol.
+    Las futuras se muestran como citas, con la acción bloqueada hasta el día programado; en las
+    demás, la tarjeta dice a quién le corresponde.
 - **HU4, consulta** (`#/consulta/:id`). Cada paso lo atiende su rol responsable:
   1. **Lucía** atiende el Triaje de SA-5: registra la atención y pulsa "Avanzar".
   2. **Carlos** atiende la Consulta médica de SA-3: registra la atención, ordena exámenes de la

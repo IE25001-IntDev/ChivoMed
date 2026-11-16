@@ -58,7 +58,6 @@
         "./js/boundary/components/consulta/panel_cierre_consulta.js",
         "./js/boundary/components/consulta/panel_examenes_paso.js",
         "./js/boundary/components/consulta/panel_paso_actual.js",
-        "./js/boundary/components/citas/indicador_pasos.js",
         "./js/boundary/components/citas/tarjeta_cita.js",
         "./js/boundary/components/dashboard/lista_consultas.js",
         "./js/boundary/components/dashboard/tarjeta_consulta_dashboard.js",

@@ -6,6 +6,7 @@ import {
 } from '../src/js/boundary/vistas/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
+import { hoySV, sumarDias } from '../src/js/boundary/fechas_sv.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -131,6 +132,13 @@ describe('motivoNoAtender', () => {
     test('cerrada', () => {
         const [c] = normalizarConsultas([consulta(1, { fechaFin: '2026-11-13T10:00:00-06:00' })]);
         assert.equal(motivoNoAtender(c), MENSAJES.cerrada);
+    });
+    test('una consulta futura queda como cita hasta que llegue el día, según la zona de El Salvador', () => {
+        const hoy = hoySV();
+        const [futura] = normalizarConsultas([consulta(1, { fechaInicio: `${sumarDias(hoy, 1)}T12:00:00Z` })]);
+        const [hoyMismo] = normalizarConsultas([consulta(1, { fechaInicio: `${hoy}T08:00:00-06:00` })]);
+        assert.equal(motivoNoAtender(futura, { hoy }), MENSAJES.futura);
+        assert.equal(motivoNoAtender(hoyMismo, { hoy }), null);
     });
     // Demo del guion: SA-4 (Toma de presión de Julia) está pendiente para Lucía, Enfermera.
     const ajena = (pendiente, extra = {}) => normalizarConsultas([consulta(1, { pendienteParaMi: false, ...extra,

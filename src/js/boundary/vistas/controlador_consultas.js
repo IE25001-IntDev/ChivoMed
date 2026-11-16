@@ -40,6 +40,7 @@ export const MENSAJES = Object.freeze({
     cerrada: "Esta consulta ya está cerrada.",
     sinPendiente: "No tienes pasos pendientes en esta consulta.",
     sinRedAtender: "Sin conexión: para atender una consulta necesitas red.",
+    futura: "Esta consulta está programada para una fecha futura. Podrás atenderla el día indicado.",
     otroRol: "Este paso lo atiende otro rol.",
     soloFinalizador: "Cierra la consulta quien completó el paso de finalización.",
     sinConsultas: "No hay consultas en estas fechas.",
@@ -48,6 +49,14 @@ export const MENSAJES = Object.freeze({
 const texto = valor => typeof valor === "string" && valor.trim().length > 0;
 const textoONull = valor => (texto(valor) ? valor.trim() : null);
 const congelar = Object.freeze;
+const formatoDiaSV = new Intl.DateTimeFormat("en-CA", { timeZone: "America/El_Salvador", year: "numeric", month: "2-digit", day: "2-digit" });
+
+function diaConsulta(fechaInicio) {
+    const instante = Date.parse(fechaInicio);
+    if (!Number.isFinite(instante)) return null;
+    const partes = Object.fromEntries(formatoDiaSV.formatToParts(instante).map(p => [p.type, p.value]));
+    return `${partes.year}-${partes.month}-${partes.day}`;
+}
 
 /** Valida el filtro igual que el backend. Devuelve el mensaje o null si es válido. */
 export function validarRango(desde, hasta) {
@@ -169,9 +178,10 @@ export function accionAtender(consulta) {
  * Se decide por los datos del backend, nunca por el rol activo: `pendienteParaMi` dice si me toca
  * un paso o cerrarla; si no, el motivo dice a quién le corresponde el paso pendiente.
  */
-export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false } = {}) {
+export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false, hoy = hoySV() } = {}) {
     if (!consulta) return MENSAJES.sinPendiente;
     if (consulta.fechaFin) return MENSAJES.cerrada;
+    if (diaConsulta(consulta.fechaInicio) > hoy) return MENSAJES.futura;
     if (!consulta.pendienteParaMi) {
         const [pendiente] = pendientesDe(consulta);
         return pendiente ? motivoOtroRol(pendiente) : MENSAJES.soloFinalizador;
