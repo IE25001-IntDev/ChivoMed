@@ -266,18 +266,22 @@ export class ControladorCitas {
 
     /** Tipo o número cambiaron: se invalidan clínicas, clínica elegida y resultados. */
     #invalidarDocumento() {
-        if (this.#parCargado === null || this.#parCargado === this.#par()) return;
+        if (this.#parCargado === this.#par()) return;
+        this.#secuencia++;
         this.#parCargado = null;
         this.#criteriosCargados = null;
-        this.#actualizar({ clinicas: null, idClinica: null, citas: null, tickets: VACIO,
+        this.#actualizar({ clinicas: null, idClinica: null, citas: null, tickets: VACIO, cargando: null,
             alcanzado: Math.min(this.estado.alcanzado, 2), desdeMemoria: false });
     }
 
     /** Clínica o fechas cambiaron: se invalidan solo los resultados. */
     #invalidarResultados() {
-        if (this.#criteriosCargados === null || this.#criteriosCargados === JSON.stringify(this.#criterios())) return;
+        if (this.#criteriosCargados === JSON.stringify(this.#criterios())) return;
+        // Las fechas no invalidan una carga de clínicas, que depende solo del documento.
+        if (this.estado.cargando !== "clinicas") this.#secuencia++;
         this.#criteriosCargados = null;
-        this.#actualizar({ citas: null, tickets: VACIO, alcanzado: Math.min(this.estado.alcanzado, 4), desdeMemoria: false });
+        this.#actualizar({ citas: null, tickets: VACIO, cargando: this.estado.cargando === "clinicas" ? "clinicas" : null,
+            alcanzado: Math.min(this.estado.alcanzado, 4), desdeMemoria: false });
     }
 
     elegirTipo(idTipoDocumento) {
@@ -293,9 +297,10 @@ export class ControladorCitas {
         const tipo = this.tipo(this.estado.idTipoDocumento);
         const numero = autoformatear(typeof valor === "string" ? valor : "", tipo?.expresionRegular, this.estado.numeroDocumento);
         if (numero === this.estado.numeroDocumento) return;
+        const cambio = numero.trim() !== this.estado.numeroDocumento.trim();
         this.#actualizar({ numeroDocumento: numero });
         if (this.estado.errores.numero || this.estado.errores.clinica) this.#errores({ numero: null, clinica: null });
-        this.#invalidarDocumento();
+        if (cambio) this.#invalidarDocumento();
     }
 
     elegirClinica(idClinica) {
@@ -306,7 +311,10 @@ export class ControladorCitas {
     }
 
     fijarFechas({ desde = this.estado.desde, hasta = this.estado.hasta } = {}) {
-        this.#actualizar({ desde: String(desde ?? ""), hasta: String(hasta ?? "") });
+        desde = String(desde ?? "");
+        hasta = String(hasta ?? "");
+        if (desde === this.estado.desde && hasta === this.estado.hasta) return;
+        this.#actualizar({ desde, hasta });
         if (this.estado.errores.rango) this.#errores({ rango: null });
         this.#invalidarResultados();
     }
@@ -381,19 +389,22 @@ export class ControladorCitas {
 
     /** Carga las opciones de clínica al salir del documento, sin mover la pantalla. */
     prepararClinicas() {
-        if (!this.tipo() || !this.estado.numeroDocumento.trim()) return Promise.resolve();
+        if (this.estado.cargando || !this.tipo() || !this.estado.numeroDocumento.trim()) return Promise.resolve();
         return this.#buscarClinicas(false);
     }
 
     /** Valida la barra, carga clínicas si hace falta y luego consulta las citas. */
     async buscar() {
         if (this.estado.cargando) return;
+        this.#actualizar({ mensaje: null });
         if (!this.tipo()) { this.#errores({ tipo: MENSAJES.tipoRequerido }); return; }
         const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
         if (error) { this.#errores({ numero: error }); return; }
         const errorRango = validarRango(this.estado.desde, this.estado.hasta);
         if (errorRango) { this.#errores({ rango: errorRango }); return; }
+        const par = this.#par();
         if (!this.estado.clinicas) await this.#buscarClinicas(false);
+        if (par !== this.#par()) return;
         if (!this.estado.clinicas || this.estado.mensaje) return;
         if (!this.estado.clinicas.some(c => c.idClinica === this.estado.idClinica)) {
             this.#errores({ clinica: this.estado.clinicas.length ? MENSAJES.clinicaRequerida : MENSAJES.sinClinicas });
@@ -452,10 +463,13 @@ export class ControladorCitas {
         if (!this.estado.citas?.some(c => c.idConsulta === idConsulta)) return;
         if (this.estado.tickets[idConsulta]?.estado === "descargando" || this.#motivo()) return;
         this.#ticket(idConsulta, { estado: "descargando" });
+        const pendiente = this.estado.tickets[idConsulta];
         try {
             const archivo = await this.#servicio.ticket(idConsulta, this.#documento());
+            if (this.estado.tickets[idConsulta] !== pendiente) return;
             this.#ticket(idConsulta, { estado: "listo", archivo });
         } catch (error) {
+            if (this.estado.tickets[idConsulta] !== pendiente) return;
             if (error?.status === 429) {
                 this.#fallo(error);
                 this.#ticket(idConsulta, { estado: "error", error: this.estado.mensaje });
