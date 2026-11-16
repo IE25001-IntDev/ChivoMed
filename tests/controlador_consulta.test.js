@@ -458,6 +458,17 @@ describe('ControladorConsulta: sin conexión', () => {
         assert.equal(controlador.estado.error, MENSAJES.sinRedCarga);
     });
 
+    test('lo guardado para una asignación no se muestra al cambiar de rol dentro de la misma cuenta', async () => {
+        const memoria = new MemoriaVistas();
+        const sesionAnterior = sesionCon('DOCTOR', 1);
+        await preparar({ memoria, sesion: sesionAnterior }).iniciar();
+        const sesionNueva = { ...sesionAnterior, rolActivo: { ...sesionAnterior.rolActivo, idPersonaRol: UUID(901) } };
+        const { controlador, iniciar } = preparar({ memoria, sesion: sesionNueva, enLinea: false });
+        await iniciar();
+        assert.equal(controlador.estado.consulta, null);
+        assert.equal(controlador.estado.error, MENSAJES.sinRedCarga);
+    });
+
     test('detener() cancela la suscripción a la red y descarta respuestas pendientes', async () => {
         let liberar;
         const { controlador, conexion, iniciar } = preparar({ respuestas: { consulta: () => new Promise(r => { liberar = () => r(consultaB6()); }) } });

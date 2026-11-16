@@ -453,7 +453,7 @@ describe('ControladorConsulta: acciones y cambios de contexto', () => {
         await iniciar();
         controlador.alternarExamen(UUID(301), true);
         await controlador.asignarExamenes({ indicaciones: '' });
-        const guardado = memoria.leer(`${UUID(801)}:consulta:${ID_CONSULTA}`);
+        const guardado = memoria.leer(`${UUID(801)}:consulta:${UUID(900)}:${ID_CONSULTA}`);
         assert.equal(guardado.detalle.ordenes.length, 1);
     });
 });

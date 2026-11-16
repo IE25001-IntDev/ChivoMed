@@ -377,7 +377,10 @@ export class ControladorConsulta {
     // ---------------------------------------------------------------- memoria
 
     #claveConsulta(id = this.estado.idConsulta) {
-        return MemoriaVistas.clave(this.estado.sesion, `consulta:${id}`);
+        const idPersonaRol = this.estado.sesion?.rolActivo?.idPersonaRol;
+        return idPersonaRol
+            ? MemoriaVistas.clave(this.estado.sesion, `consulta:${idPersonaRol}:${id}`)
+            : null;
     }
 
     #claveBorrador(idPaso) {
