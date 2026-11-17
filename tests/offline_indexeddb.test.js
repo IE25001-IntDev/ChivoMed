@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { crearAlmacenOffline, NOMBRE_BASE, ALMACEN } from '../src/js/boundary/pwa/almacen_offline.js';
 import { MemoriaVistas, VIGENCIA_MS, RANURA_SESION, ranuraDe } from '../src/js/boundary/vistas/memoria_vistas.js';
 import { ControladorConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
+import * as memoriaVistas from '../src/js/boundary/vistas/memoria_vistas.js';
+import { ControladorCitas, CLAVE_MEMORIA as CLAVE_CITAS, MENSAJES as MENSAJES_CITAS, formatearHoraSV } from '../src/js/boundary/vistas/controlador_citas.js';
 import { crearIndexedDbDoble } from './dobles/indexeddb_doble.js';
 
 // Datos inventados (demo del guion): Carlos Gómez, Doctor en Clínica Santa Ana; Lucía Pérez, Enfermera.
@@ -99,10 +101,9 @@ describe('MemoriaVistas con copia en disco', () => {
         assert.equal(verificadaEn.getTime(), AHORA.getTime());
     });
 
-    test('los borradores, los registros de "Ver registro" y la búsqueda pública nunca van a disco', async () => {
+    test('los borradores y los registros de "Ver registro" nunca van a disco', async () => {
         const fabrica = crearIndexedDbDoble();
         const m = nuevaMemoria(fabrica);
-        m.guardar('citas.busqueda', { numeroDocumento: '01000004-4' });
         const sesion = sesionDe(CARLOS);
         m.recordarSesion(sesion);
         m.guardar(MemoriaVistas.clave(sesion, `consulta.borrador:${UUID(22)}`), 'texto a medio escribir');
@@ -242,5 +243,130 @@ describe('Dashboard sin red después de recargar', () => {
         await controlador.iniciar(sesion, { soloLectura: true });
         assert.equal(controlador.estado.consultas.length, 0);
         assert.ok(controlador.estado.error);
+    });
+});
+
+// Punto 5: la búsqueda pública de citas (HU1) va a disco con su número, 8 horas.
+describe('búsqueda de citas sin conexión (IndexedDB)', () => {
+    const DUI = Object.freeze({ idTipoDocumento: UUID(40), nombre: 'DUI', indicaciones: null, expresionRegular: '^[0-9]{8}-[0-9]$' });
+    const NORTE = Object.freeze({ idClinica: UUID(41), nombre: 'Clínica Prueba Norte' });
+    const CITA = Object.freeze({ idConsulta: UUID(42), fechaInicio: '2026-11-12T08:00:00-06:00', nombreClinica: NORTE.nombre, procedimientos: Object.freeze(['Consulta general']) });
+    const NUMERO = '01000004-4';
+
+    function citas(memoria, { enLinea = true, desfase = 0 } = {}) {
+        const llamadas = { clinicas: 0, citas: 0 };
+        const controlador = new ControladorCitas({
+            servicio: {
+                clinicas: async () => { llamadas.clinicas++; return [NORTE]; },
+                citas: async () => { llamadas.citas++; return [CITA]; },
+                ticket: async () => { throw new Error('no se usa'); },
+            },
+            listarTiposDocumento: async () => [DUI],
+            conexion: conexionDoble(enLinea), memoria, reloj: reloj(desfase),
+            temporizador: { programar: () => null, cancelar: () => {} },
+        });
+        return { controlador, llamadas, estado: controlador.estado };
+    }
+
+    async function buscarConExito(memoria) {
+        const c = citas(memoria);
+        await c.controlador.iniciar();
+        c.controlador.elegirTipo(DUI.idTipoDocumento);
+        await c.controlador.escribirNumero(NUMERO);
+        await c.controlador.buscar();
+        assert.deepEqual(c.estado.citas, [CITA]);
+        return c;
+    }
+
+    test('la búsqueda con éxito va a disco sin sesión: tipo, número, clínica, rango y resultados', async () => {
+        assert.equal(typeof memoriaVistas.RANURA_PUBLICO, 'string', 'memoria_vistas define la ranura pública');
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        const registro = disco(fabrica)[memoriaVistas.RANURA_PUBLICO];
+        assert.equal(registro.clave, CLAVE_CITAS);
+        assert.equal(registro.valor.criterios.numeroDocumento, NUMERO);
+        assert.equal(registro.valor.criterios.idTipoDocumento, DUI.idTipoDocumento);
+        assert.equal(registro.valor.criterios.idClinica, NORTE.idClinica);
+        assert.ok(registro.valor.criterios.desde && registro.valor.criterios.hasta);
+        assert.deepEqual(registro.valor.citas, [CITA]);
+    });
+
+    test('al recargar sin red, #/citas muestra la búsqueda guardada con el aviso y sin buscar', async () => {
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        const recargada = nuevaMemoria(fabrica, 60 * 60 * 1000);
+        assert.equal(await recargada.hidratar(), false, 'no hay sesión de empleado que restaurar');
+        const sinRed = citas(recargada, { enLinea: false, desfase: 60 * 60 * 1000 });
+        await sinRed.controlador.iniciar();
+        assert.deepEqual(sinRed.estado.citas, [CITA]);
+        assert.equal(sinRed.estado.numeroDocumento, NUMERO);
+        assert.equal(sinRed.estado.desdeMemoria, true);
+        assert.equal(MENSAJES_CITAS.memoria(formatearHoraSV(sinRed.estado.actualizadoEn)), 'Sin conexión. Mostrando la búsqueda de las 09:30.');
+        assert.equal(sinRed.estado.habilitado.buscar, false, 'sin red no se puede buscar');
+        await sinRed.controlador.buscar();
+        assert.equal(sinRed.llamadas.citas, 0);
+    });
+
+    test('"Nueva búsqueda" borra lo guardado en disco', async () => {
+        const fabrica = crearIndexedDbDoble();
+        const c = await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], 'antes estaba en disco');
+        c.controlador.nuevaBusqueda();
+        await asentar();
+        assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
+    });
+
+    test('a las 8 horas caduca: al recargar se borra y no se muestra', async () => {
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], 'antes estaba en disco');
+        const tarde = nuevaMemoria(fabrica, VIGENCIA_MS + 1);
+        await tarde.hidratar();
+        await asentar();
+        assert.equal(tarde.leer(CLAVE_CITAS), null);
+        assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
+    });
+
+    test('con la página abierta, una búsqueda de hace más de 8 horas se borra al volver a #/citas', async () => {
+        const fabrica = crearIndexedDbDoble();
+        const memoria = nuevaMemoria(fabrica);
+        await buscarConExito(memoria);
+        await asentar();
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], 'antes estaba en disco');
+        const despues = citas(memoria, { enLinea: false, desfase: VIGENCIA_MS + 1 });
+        await despues.controlador.iniciar();
+        await asentar();
+        assert.equal(despues.estado.citas, null);
+        assert.equal(memoria.leer(CLAVE_CITAS), null);
+        assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
+    });
+
+    test('al recargar sin sesión válida se borran solo los datos del empleado, no la búsqueda', async () => {
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        const almacen = crearAlmacenOffline(fabrica);
+        await almacen.guardar('dashboard', { clave: `${CARLOS}:dashboard.ultimo:x`, valor: {} });
+        const recargada = nuevaMemoria(fabrica);
+        await recargada.hidratar();
+        await asentar();
+        assert.ok(recargada.leer(CLAVE_CITAS), 'la búsqueda se restaura');
+        assert.equal(disco(fabrica).dashboard, undefined, 'lo del empleado sin sesión se borra');
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO]);
+    });
+
+    test('un empleado que inicia sesión borra la búsqueda pública del disco', async () => {
+        const fabrica = crearIndexedDbDoble();
+        const memoria = nuevaMemoria(fabrica);
+        await buscarConExito(memoria);
+        await asentar();
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], 'antes estaba en disco');
+        memoria.recordarSesion(sesionDe(CARLOS));
+        await asentar();
+        assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
     });
 });

@@ -13,8 +13,9 @@
  *  - Por el límite de 60 POST cada 5 min: las clínicas se piden una vez por par (tipo, número
  *    recortado), las citas solo si cambia un criterio, nada se repite mientras hay una petición en
  *    curso, y un 429 bloquea las búsquedas hasta la hora de Retry-After.
- *  - El número no sale de este estado ni de la memoria en RAM (memoria_vistas): nunca va a la URL,
- *    al historial ni al disco.
+ *  - El número nunca va a la URL ni al historial. Desde el 2026-11-17, la última búsqueda con éxito
+ *    (con su número) va a disco por memoria_vistas para verla sin red; caduca a las 8 horas y
+ *    "Nueva búsqueda" la borra.
  * Todo llega por inyección para probarse con node --test.
  */
 import CitasPublicasService, { segundosDeEspera } from "../../control/citas_publicas_service.js";
@@ -22,11 +23,11 @@ import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SI
 import { crearValidadorFormato, sinRestriccion } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { hoySV, sumarDias, diasEntre, esFechaISO, ZONA_SV } from "../fechas_sv.js";
-import { memoria as memoriaCompartida } from "./memoria_vistas.js";
+import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 
-/** Sin sesión no hay usuario: la clave es fija y se borra al cerrar o iniciar sesión, o al recargar. */
-export const CLAVE_MEMORIA = "publico:citas";
+/** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
+export const CLAVE_MEMORIA = CLAVE_PUBLICA_CITAS;
 export const MAX_NUMERO_DOCUMENTO = 50;
 /** El backend compara ChronoUnit.DAYS.between(desde, hasta) > 366 (D1: manda el código). */
 export const MAX_DIAS_RANGO = 366;
@@ -362,6 +363,8 @@ export class ControladorCitas {
         const guardado = this.#memoria.leer(CLAVE_MEMORIA);
         if (!guardado) return;
         const { criterios, clinicas, citas, en } = guardado;
+        const edad = this.#reloj().getTime() - en;
+        if (!(edad >= 0 && edad <= VIGENCIA_MS)) { this.#memoria.guardar(CLAVE_MEMORIA, null); return; }
         this.#parCargado = `${criterios.idTipoDocumento}\n${criterios.numeroDocumento}`;
         this.#clinicasPorPar.set(this.#parCargado, clinicas);
         this.#criteriosCargados = JSON.stringify({ idClinica: criterios.idClinica, desde: criterios.desde, hasta: criterios.hasta });

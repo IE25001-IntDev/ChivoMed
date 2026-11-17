@@ -11,9 +11,13 @@
  *  - la sesión verificada, sin `csrfToken`, con la hora de la verificación;
  *  - el último dashboard (`dashboard.ultimo:*`) y las asignaciones (`dashboard.asignaciones`);
  *  - la consulta abierta (`consulta:{id}`), sin el valor guardado del paso.
- * Cada uno reemplaza al anterior. Nunca van a disco los borradores, lo leído en "Ver registro" ni la
- * búsqueda pública de citas (HU1), que sigue solo en memoria. `hidratar()` descarta la copia si la
- * sesión se verificó hace más de 8 horas (el máximo de una sesión en el backend).
+ * Cada uno reemplaza al anterior. Nunca van a disco los borradores ni lo leído en "Ver registro".
+ * `hidratar()` descarta la copia si la sesión se verificó hace más de 8 horas (el máximo de una
+ * sesión en el backend).
+ *
+ * Desde el 2026-11-17 también va a disco, sin sesión, la última búsqueda pública de citas (HU1,
+ * clave `publico:citas`, ranura `publico`) con su número de documento, para verla sin red. Caduca
+ * a las 8 horas de la búsqueda (`en`), se borra con "Nueva búsqueda" y al entrar un empleado.
  *
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
@@ -31,6 +35,9 @@ export const ESPERA_HIDRATAR_MS = 1500;
 /** Registros en disco: uno por ranura. */
 export const RANURA_SESION = "sesion";
 const RANURAS_DATOS = Object.freeze(["dashboard", "asignaciones", "consulta"]);
+/** Búsqueda pública de citas: se guarda sin sesión, con su propia caducidad. */
+export const CLAVE_PUBLICA_CITAS = "publico:citas";
+export const RANURA_PUBLICO = "publico";
 
 /** Ranura en disco del nombre de una clave de datos, o null si no se persiste. */
 export function ranuraDe(nombre) {
@@ -89,8 +96,12 @@ export class MemoriaVistas {
         this.#persistir(clave, valor);
     }
 
-    /** Copia en disco las claves persistibles del usuario de la sesión. */
+    /** Copia en disco las claves persistibles del usuario de la sesión y la búsqueda pública. */
     #persistir(clave, valor) {
+        if (clave === CLAVE_PUBLICA_CITAS) {
+            this.#persistencia?.guardar(RANURA_PUBLICO, valor == null ? null : { clave, valor });
+            return;
+        }
         const id = this.#estado.sesion?.usuario?.idUsuario;
         if (!this.#persistencia || !id || !clave.startsWith(`${id}:`)) return;
         const ranura = ranuraDe(clave.slice(id.length + 1));
@@ -142,12 +153,15 @@ export class MemoriaVistas {
     }
 
     async #hidratar() {
-        const registros = await this.#persistencia.leer([RANURA_SESION, ...RANURAS_DATOS]);
+        const registros = await this.#persistencia.leer([RANURA_SESION, ...RANURAS_DATOS, RANURA_PUBLICO]);
+        await this.#hidratarPublico(registros?.[RANURA_PUBLICO]);
         const { sesion, verificadaEn } = registros?.[RANURA_SESION] ?? {};
         const id = sesion?.usuario?.idUsuario;
         const edad = verificadaEn instanceof Date ? this.#reloj().getTime() - verificadaEn.getTime() : Number.NaN;
         if (typeof id !== "string" || !id || !(edad >= 0 && edad <= VIGENCIA_MS)) {
-            if (registros && Object.keys(registros).length) await this.#persistencia.borrar();
+            // Sin sesión válida se borra solo lo del empleado; la búsqueda pública tiene su regla.
+            const deEmpleado = [RANURA_SESION, ...RANURAS_DATOS].filter(r => registros?.[r] !== undefined);
+            await Promise.all(deEmpleado.map(r => this.#persistencia.guardar(r, null)));
             return false;
         }
         // Una sesión verificada mientras se leía el disco manda: no se pisa con la copia.
@@ -162,6 +176,21 @@ export class MemoriaVistas {
         }
         Object.assign(this.#estado, { sesion, datos: Object.freeze(datos) });
         return true;
+    }
+
+    /** Restaura la búsqueda pública si tiene 8 horas o menos; si caducó o no es válida, la borra. */
+    async #hidratarPublico(registro) {
+        if (registro === undefined) return;
+        const en = registro?.valor?.en;
+        const edad = Number.isFinite(en) ? this.#reloj().getTime() - en : Number.NaN;
+        if (registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
+            await this.#persistencia.guardar(RANURA_PUBLICO, null);
+            return;
+        }
+        // Una sesión ya presente (o datos cargados mientras se leía el disco) mandan.
+        if (this.#estado.sesion || Object.hasOwn(this.#estado.datos, CLAVE_PUBLICA_CITAS)) return;
+        this.#estado.datos = Object.freeze(Object.assign(Object.create(null), this.#estado.datos,
+            { [CLAVE_PUBLICA_CITAS]: congelarProfundo(registro.valor) }));
     }
 }
 
