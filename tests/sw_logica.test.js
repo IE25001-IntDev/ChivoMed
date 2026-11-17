@@ -265,7 +265,106 @@ describe('atenderMensaje: reclamar una página sin control (Ctrl+Shift+R)', () =
         const { readFileSync } = await import('node:fs');
         const codigo = readFileSync(new URL('../src/sw.js', import.meta.url), 'utf8');
         assert.match(codigo, /addEventListener\(\s*["']message["']/);
-        assert.match(codigo, /atenderMensaje\(\s*event\.data\s*,\s*\{\s*clients:\s*self\.clients\s*\}\s*\)/);
+        assert.match(codigo, /atenderMensaje\(\s*event\.data\s*,\s*\{\s*clients:\s*self\.clients\s*,\s*caches\s*,\s*fetch:[^}]*,\s*base\s*\}\s*\)/);
         assert.match(codigo, /event\.waitUntil\(/);
+    });
+});
+
+// Punto 4: caché renovado en cada inicio con red, sin perder el modo sin conexión.
+describe('renovar: copia nueva completa del precache y los catálogos', () => {
+    const TIPOS_URL = url('/galenosv/api/publico/tipos-documento');
+    const fetchNuevo = (marca = 'nuevo', falla = null) => crearFetch(destino => {
+        if (falla && destino.endsWith(falla)) return new TypeError('Failed to fetch');
+        if (destino === TIPOS_URL) return json([{ nombre: `DUI ${marca}` }]);
+        return new Response(`${marca} ${new URL(destino).pathname}`);
+    });
+    const inicial = () => crearCaches({
+        [SW.CACHE_SHELL]: { [url('/index.html')]: new Response('instalado /index.html') },
+        [SW.CACHE_DATOS]: { [TIPOS_URL]: json([{ nombre: 'DUI instalado' }]) },
+        'chivomed-shell-2026-01-01.1': {}, 'otra-app-v1': {},
+    });
+    const sinRedIndice = async caches => (await SW.responder(get('/', { mode: 'navigate' }), { fetch: sinRed(), caches, base: BASE })).text();
+    const sinRedTipos = async caches => (await SW.responder(get('/galenosv/api/publico/tipos-documento'), { fetch: sinRed(), caches, base: BASE })).json();
+    const nombresChivomed = async caches => (await caches.keys()).filter(n => n.startsWith(SW.PREFIJO)).sort();
+
+    test('renovación completa: cambia al caché nuevo y borra los anteriores', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        const fetch = fetchNuevo();
+        assert.equal(await SW.renovar({ caches, fetch, base: BASE }), true);
+        assert.equal(fetch.llamadas.length, SW.PRECACHE.length + SW.CATALOGOS_PUBLICOS.length);
+        const vigentes = await SW.cachesVigentes(caches);
+        assert.notEqual(vigentes.shell, SW.CACHE_SHELL);
+        assert.equal(caches.almacen.get(vigentes.shell).size, SW.PRECACHE.length);
+        assert.deepEqual(await nombresChivomed(caches), [SW.CACHE_VIGENTE, vigentes.datos, vigentes.shell].sort());
+        assert.ok((await caches.keys()).includes('otra-app-v1'), 'los cachés ajenos no se tocan');
+        assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
+        assert.deepEqual(await sinRedTipos(caches), [{ nombre: 'DUI nuevo' }]);
+    });
+
+    test('fallo a medias: se descarta la copia nueva y se conserva la anterior', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        assert.equal(await SW.renovar({ caches, fetch: fetchNuevo('primera'), base: BASE }), true);
+        const antes = await nombresChivomed(caches);
+        assert.equal(await SW.renovar({ caches, fetch: fetchNuevo('segunda', '/js/boundary/router.js'), base: BASE }), false);
+        assert.deepEqual(await nombresChivomed(caches), antes);
+        assert.equal(await sinRedIndice(caches), 'primera /index.html');
+        assert.deepEqual(await sinRedTipos(caches), [{ nombre: 'DUI primera' }]);
+    });
+
+    test('un catálogo que no responde 200 JSON también descarta la copia', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        const fetch = crearFetch(destino => (destino === TIPOS_URL ? json({ code: 'x' }, 503) : new Response('nuevo')));
+        assert.equal(await SW.renovar({ caches, fetch, base: BASE }), false);
+        assert.deepEqual(await nombresChivomed(caches), ['chivomed-shell-2026-01-01.1', SW.CACHE_DATOS, SW.CACHE_SHELL].sort());
+        assert.equal(await sinRedIndice(caches), 'instalado /index.html');
+    });
+
+    test('sin red no se borra nada', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        assert.equal(await SW.renovar({ caches, fetch: sinRed(), base: BASE }), false);
+        assert.deepEqual(caches.registro.borrados.filter(n => !n.includes(String(SW.VERSION) + '-')), []);
+        assert.deepEqual(await nombresChivomed(caches), ['chivomed-shell-2026-01-01.1', SW.CACHE_DATOS, SW.CACHE_SHELL].sort());
+        assert.equal(await sinRedIndice(caches), 'instalado /index.html');
+    });
+
+    test('dos pestañas a la vez: una sola descarga y un único juego final', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        const fetch = fetchNuevo();
+        const contexto = { clients: { claim: async () => {} }, caches, fetch, base: BASE };
+        const a = SW.atenderMensaje({ tipo: 'renovar' }, contexto);
+        const b = SW.atenderMensaje({ tipo: 'renovar' }, contexto);
+        assert.ok(a instanceof Promise);
+        assert.equal(a, b, 'la segunda pestaña espera la misma renovación');
+        assert.equal(await a, true);
+        assert.equal(fetch.llamadas.length, SW.PRECACHE.length + SW.CATALOGOS_PUBLICOS.length);
+        assert.equal((await nombresChivomed(caches)).length, 3);
+        assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
+    });
+
+    test('lo que se sirve y se guarda en tiempo de ejecución usa el caché vigente', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        await SW.renovar({ caches, fetch: fetchNuevo(), base: BASE });
+        const { datos, shell } = await SW.cachesVigentes(caches);
+        await SW.responder(get('/galenosv/api/publico/tipos-documento'), { fetch: crearFetch(() => json([{ nombre: 'DUI red' }])), caches, base: BASE });
+        assert.deepEqual(await (await caches.almacen.get(datos).get(TIPOS_URL).clone()).json(), [{ nombre: 'DUI red' }]);
+        const modulo = await SW.responder(get('/js/boundary/router.js'), { fetch: sinRed(), caches, base: BASE });
+        assert.equal(await modulo.text(), 'nuevo /js/boundary/router.js');
+        assert.ok(caches.almacen.has(shell));
+    });
+
+    test('activate conserva el caché vigente y su puntero', async () => {
+        assert.equal(typeof SW.renovar, 'function');
+        const caches = inicial();
+        await SW.renovar({ caches, fetch: fetchNuevo(), base: BASE });
+        const antes = await nombresChivomed(caches);
+        await SW.limpiarVersionesViejas(caches);
+        assert.deepEqual(await nombresChivomed(caches), antes);
+        assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
     });
 });

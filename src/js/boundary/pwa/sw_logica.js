@@ -8,8 +8,12 @@
  * Reglas:
  *  - Solo se responden peticiones GET del mismo origen; el resto lo maneja el navegador.
  *  - Navegaciones → index.html (red primero, precache como respaldo).
- *  - Archivos del shell (lista PRECACHE) → red primero, precache como respaldo. No se reescribe
- *    el precache en tiempo de ejecución: offline siempre hay un conjunto coherente de una versión.
+ *  - Archivos del shell (lista PRECACHE) → red primero, precache como respaldo. El fetch no
+ *    reescribe el precache: offline siempre hay un conjunto coherente.
+ *  - Renovación ({ tipo: "renovar" }, en cada inicio con red): descarga de nuevo todo el precache y
+ *    los catálogos públicos en cachés nuevos (`…-{generación}`). Solo si la copia queda completa se
+ *    apunta a ella (caché CACHE_VIGENTE) y se borran las demás; si falla, se descarta y se conserva
+ *    la anterior. `cachesVigentes()` dice siempre de dónde servir; sin puntero, los de la instalación.
  *  - /galenosv/api/publico/* → red primero; solo los catálogos de CATALOGOS_PUBLICOS se guardan
  *    en caché y se usan como respaldo. Nada de datos clínicos.
  *  - Cualquier otra ruta de la API (auth, escrituras, datos clínicos) → nunca se toca ni se cachea.
@@ -18,13 +22,16 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-17.3";
+    const VERSION = "2026-11-17.4";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
     const CACHE_DATOS = `${PREFIJO_DATOS}${VERSION}`;
     const RUTA_API = "/galenosv/api/";
     const CATALOGOS_PUBLICOS = Object.freeze(["tipos-documento"]);
+    /** Caché con una entrada por versión: { shell, datos } de la copia vigente. */
+    const CACHE_VIGENTE = `${PREFIJO}vigente`;
+    const CLAVE_VIGENTE = `https://chivomed.vigente/${VERSION}`;
 
     /** Rutas relativas al alcance del service worker (la carpeta src/). */
     const PRECACHE = Object.freeze([
@@ -147,8 +154,21 @@
         });
     }
 
+    /** Nombres { shell, datos } de la copia vigente de esta versión; los de la instalación si no hay. */
+    async function cachesVigentes(caches) {
+        try {
+            // Abrir crea el caché: solo se abre si ya existe.
+            if (!(await caches.keys()).includes(CACHE_VIGENTE)) return { shell: CACHE_SHELL, datos: CACHE_DATOS };
+            const guardado = await (await caches.open(CACHE_VIGENTE)).match(CLAVE_VIGENTE);
+            const { shell, datos } = guardado ? await guardado.json() : {};
+            if (typeof shell === "string" && shell.startsWith(`${CACHE_SHELL}-`)
+                && typeof datos === "string" && datos.startsWith(`${CACHE_DATOS}-`)) return { shell, datos };
+        } catch { /* Sin puntero legible se usan los de la instalación. */ }
+        return { shell: CACHE_SHELL, datos: CACHE_DATOS };
+    }
+
     async function desdePrecache(urlTexto, caches) {
-        const cache = await caches.open(CACHE_SHELL);
+        const cache = await caches.open((await cachesVigentes(caches)).shell);
         return cache.match(urlTexto);
     }
 
@@ -180,13 +200,13 @@
             const respuesta = await fetch(solicitud);
             const esJson = respuesta.headers.get("Content-Type")?.includes("application/json");
             if (cacheable && respuesta.status === 200 && esJson) {
-                const cache = await caches.open(CACHE_DATOS);
+                const cache = await caches.open((await cachesVigentes(caches)).datos);
                 await cache.put(solicitud.url, respuesta.clone());
             }
             return respuesta;
         } catch {
             if (cacheable) {
-                const cache = await caches.open(CACHE_DATOS);
+                const cache = await caches.open((await cachesVigentes(caches)).datos);
                 const guardada = await cache.match(solicitud.url);
                 if (guardada) return guardada;
             }
@@ -210,9 +230,53 @@
         await cache.addAll(PRECACHE.map(ruta => crearSolicitud(new URL(ruta, base).href)));
     }
 
-    /** Borra los cachés de ChivoMed de otras versiones. Devuelve los nombres borrados. */
+    let generaciones = 0;
+    let renovacionEnCurso = null;
+
+    /**
+     * Renueva la copia sin conexión. Resuelve true si cambió a una copia nueva completa y false si
+     * algo falló (sin red, un archivo o un catálogo): entonces se descarta lo nuevo y no se borra
+     * nada más. Mientras hay una en curso, otra llamada (otra pestaña) recibe la misma promesa.
+     */
+    function renovar(opciones) {
+        renovacionEnCurso ??= ejecutarRenovacion(opciones).finally(() => { renovacionEnCurso = null; });
+        return renovacionEnCurso;
+    }
+
+    async function ejecutarRenovacion({ caches, fetch, base, crearSolicitud = url => new Request(url, { cache: "reload" }) }) {
+        const generacion = `${Date.now()}-${++generaciones}`;
+        const nuevos = { shell: `${CACHE_SHELL}-${generacion}`, datos: `${CACHE_DATOS}-${generacion}` };
+        const descargar = async (url, valida) => {
+            const respuesta = await fetch(crearSolicitud(url));
+            if (!valida(respuesta)) throw new Error(`Descarga incompleta: ${url}`);
+            return [url, respuesta];
+        };
+        try {
+            const archivos = await Promise.all(PRECACHE.map(ruta => descargar(new URL(ruta, base).href, r => r.ok)));
+            const catalogos = await Promise.all(CATALOGOS_PUBLICOS.map(nombre => descargar(
+                new URL(`${RUTA_API}publico/${nombre}`, base).href,
+                r => r.status === 200 && Boolean(r.headers.get("Content-Type")?.includes("application/json")))));
+            const shell = await caches.open(nuevos.shell);
+            for (const [url, respuesta] of archivos) await shell.put(url, respuesta);
+            const datos = await caches.open(nuevos.datos);
+            for (const [url, respuesta] of catalogos) await datos.put(url, respuesta);
+            await (await caches.open(CACHE_VIGENTE)).put(CLAVE_VIGENTE, new Response(JSON.stringify(nuevos), {
+                headers: { "Content-Type": "application/json" },
+            }));
+        } catch {
+            await Promise.all([caches.delete(nuevos.shell), caches.delete(nuevos.datos)]);
+            return false;
+        }
+        const conservar = new Set([nuevos.shell, nuevos.datos, CACHE_VIGENTE]);
+        const anteriores = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO) && !conservar.has(nombre));
+        await Promise.all(anteriores.map(nombre => caches.delete(nombre)));
+        return true;
+    }
+
+    /** Borra los cachés de ChivoMed de otras versiones (conserva la copia vigente). Devuelve los borrados. */
     async function limpiarVersionesViejas(caches) {
-        const vigentes = new Set([CACHE_SHELL, CACHE_DATOS]);
+        const { shell, datos } = await cachesVigentes(caches);
+        const vigentes = new Set([CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, shell, datos]);
         const viejos = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO) && !vigentes.has(nombre));
         await Promise.all(viejos.map(nombre => caches.delete(nombre)));
         return viejos;
@@ -228,14 +292,18 @@
     /**
      * Mensaje de una página. { tipo: "reclamar" }: una página cargada con Ctrl+Shift+R queda sin
      * control del SW y activate no vuelve a correr; clients.claim() la toma para que, sin red, sus
-     * hojas de estilo y módulos salgan del precache. Devuelve la promesa, o null si se ignora.
+     * hojas de estilo y módulos salgan del precache. { tipo: "renovar" }: la página arrancó con red
+     * y pide renovar la copia sin conexión. Devuelve la promesa, o null si se ignora.
      */
-    function atenderMensaje(datos, { clients }) {
-        return datos?.tipo === "reclamar" ? clients.claim() : null;
+    function atenderMensaje(datos, { clients, caches, fetch, base }) {
+        if (datos?.tipo === "reclamar") return clients.claim();
+        if (datos?.tipo === "renovar" && caches && fetch && base) return renovar({ caches, fetch, base });
+        return null;
     }
 
     raiz.ChivoMedSW = Object.freeze({
-        VERSION, CACHE_SHELL, CACHE_DATOS, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
+        VERSION, CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
         clasificar, esCatalogoCacheable, responder, precachear, limpiarVersionesViejas, limpiarDatos, atenderMensaje,
+        cachesVigentes, renovar,
     });
 })(globalThis);

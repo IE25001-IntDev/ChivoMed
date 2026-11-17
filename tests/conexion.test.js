@@ -110,6 +110,21 @@ describe('registrarServiceWorker', () => {
         assert.deepEqual(registro, { active: null });
     });
 
+    // Punto 4: cada inicio con red pide al SW que renueve su caché.
+    test('con red y SW activo le pide { tipo: "renovar" }', async () => {
+        const { mensajes, navegador } = conActivo({ controller: {} });
+        navegador.onLine = true;
+        await registrarServiceWorker({ navegador });
+        assert.deepEqual(mensajes, [{ tipo: 'renovar' }]);
+    });
+
+    test('arranque sin red: no pide renovar', async () => {
+        const { mensajes, navegador } = conActivo({ controller: {} });
+        navegador.onLine = false;
+        await registrarServiceWorker({ navegador });
+        assert.deepEqual(mensajes, []);
+    });
+
     test('si el registro falla devuelve null y no rompe la app', async () => {
         const avisos = [];
         console.warn = (...args) => avisos.push(args);

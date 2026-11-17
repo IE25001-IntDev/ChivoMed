@@ -15,7 +15,13 @@ function worker({ fallaInstalacion = false } = {}) {
         clients: { claim: async () => { acciones.push('claim'); } },
         skipWaiting: async () => { acciones.push('skipWaiting'); },
         addEventListener: (tipo, fn) => eventos.set(tipo, fn),
-        fetch: async () => { if (!enLinea) throw new TypeError('sin red'); return new Response('red'); },
+        fetch: async solicitud => {
+            if (!enLinea) throw new TypeError('sin red');
+            const destino = typeof solicitud === 'string' ? solicitud : solicitud.url;
+            return destino.includes('/galenosv/api/publico/')
+                ? new Response('[]', { headers: { 'Content-Type': 'application/json' } })
+                : new Response('red');
+        },
         caches: {
             keys: async () => [...almacen.keys()],
             delete: async nombre => { acciones.push(nombre); return almacen.delete(nombre); },
@@ -29,7 +35,11 @@ function worker({ fallaInstalacion = false } = {}) {
                         acciones.push('precache');
                     },
                     match: async r => cache.get(typeof r === 'string' ? r : r.url)?.clone(),
-                    put: () => assert.fail('Este recorrido no debe guardar datos del API'),
+                    put: async (r, respuesta) => {
+                        const destino = typeof r === 'string' ? r : r.url;
+                        if (destino.includes('/galenosv/api/') && !destino.includes('/publico/tipos-documento')) assert.fail('Solo se guardan catálogos públicos');
+                        cache.set(destino, respuesta);
+                    },
                 };
             },
         },
@@ -88,4 +98,17 @@ test('PWA: solo el mensaje reclamar extiende el evento hasta clients.claim()', a
     assert.equal(emitir(w, 'message', { data: { tipo: 'desconocido' } }), null);
     await emitir(w, 'message', { data: { tipo: 'reclamar' } });
     assert.deepEqual(w.acciones, ['claim']);
+});
+
+test('PWA: el mensaje renovar descarga una copia nueva y, sin red, se sirve de ella', async () => {
+    const w = worker();
+    await emitir(w, 'install');
+    const promesa = emitir(w, 'message', { data: { tipo: 'renovar' } });
+    assert.ok(promesa, 'renovar extiende el evento con waitUntil');
+    assert.equal(await promesa, true);
+    const SW = w.contexto.ChivoMedSW;
+    assert.equal(w.almacen.has(SW.CACHE_SHELL), false, 'la copia instalada se reemplaza');
+    w.sinRed();
+    const request = { url: 'http://localhost:3000/js/boundary/router.js', method: 'GET', mode: 'cors' };
+    assert.equal(await (await emitir(w, 'fetch', { request })).text(), 'red');
 });
