@@ -89,6 +89,27 @@ describe('<vista-citas>: barra y resultados', () => {
         assert.equal(ctx.espia.detenido, 1);
     });
 
+    test('la ayuda del número va entre la etiqueta y el campo, y el campo la sigue nombrando', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        try {
+            await asentar();
+            const ayuda = ctx.$('numero-indicaciones');
+            const campo = ctx.$('numero').parentNode;
+            const hijos = campo.childNodes;
+            const etiqueta = hijos.find(n => n.localName === 'label');
+            assert.equal(ayuda.parentNode, campo, 'la ayuda está en el mismo .campo que el número');
+            assert.ok(hijos.indexOf(etiqueta) < hijos.indexOf(ayuda), 'la etiqueta va antes de la ayuda');
+            assert.ok(hijos.indexOf(ayuda) < hijos.indexOf(ctx.$('numero')), 'la ayuda va antes del campo');
+            assert.ok(ctx.$('numero').getAttribute('aria-describedby').split(/\s+/).includes('numero-indicaciones'));
+            ctx.$('tipo').value = DUI.idTipoDocumento;
+            ctx.$('tipo').dispatchEvent(new Event('change'));
+            await asentar();
+            assert.equal(ayuda.hidden, false);
+            assert.equal(ayuda.textContent, DUI.indicaciones);
+        } finally { desconectar(ctx.vista); }
+    });
+
     test('carga clínicas para el documento y manda todos los filtros en una búsqueda', async () => {
         const ctx = montar();
         await llenarFiltros(ctx);

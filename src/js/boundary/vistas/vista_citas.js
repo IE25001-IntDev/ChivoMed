@@ -30,14 +30,14 @@ const PLANTILLA = plantilla(`
     </div>
     <div class="campo">
       <label for="numero">Número de documento</label>
+      <p class="indicaciones" id="numero-indicaciones" hidden></p>
       <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
              maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones" />
-      <p class="indicaciones" id="numero-indicaciones" hidden></p>
     </div>
     <div class="campo">
       <label for="clinica">Clínica</label>
       <select id="clinica" name="clinica" required>
-        <option value="">Primero escribe tu documento</option>
+        <option value="">Sin documento</option>
       </select>
     </div>
     <div class="rango-fechas">
@@ -203,7 +203,7 @@ class VistaCitas extends HTMLElement {
     #pintarClinicas(estado) {
         const select = this.$("clinica");
         const inicial = estado.cargando === "clinicas" ? "Cargando clínicas…"
-            : estado.clinicas?.length ? "Selecciona una clínica" : "Primero escribe tu documento";
+            : estado.clinicas?.length ? "Selecciona una clínica" : "Sin documento";
         const opcion = (texto, valor) => {
             const o = document.createElement("option");
             o.value = valor;

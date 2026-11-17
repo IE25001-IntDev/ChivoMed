@@ -6,13 +6,16 @@
 }
 
 .barra-busqueda {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) auto; gap: var(--espacio-3);
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--espacio-3);
   align-items: end; padding: var(--espacio-4); border: 1px solid var(--border-strong);
   border-radius: 14px; background: var(--surface-soft, var(--tarjeta));
 }
 .barra-busqueda .campo { min-width: 0; }
 .rango-fechas, .acciones-busqueda { display: contents; }
-.acciones-busqueda > .indicaciones, .acciones-busqueda > .aviso { grid-column: 1 / -1; margin: 0; }
+/* "Buscar citas" va en su fila, debajo de los campos, y los avisos ("Falta…") debajo del botón: que
+   aparezcan o se oculten al escribir no mueve los campos ni el botón. */
+.acciones-busqueda > #buscar { grid-column: 1 / -1; justify-self: end; }
+.acciones-busqueda > .indicaciones, .acciones-busqueda > .aviso { grid-column: 1 / -1; margin: 0; order: 1; }
 .acciones-busqueda > button:not(#buscar) { grid-column: 1 / -1; justify-self: start; }
 .resultados-citas { display: grid; gap: var(--espacio-3); margin-top: var(--espacio-6); }
 .resultados-citas > h2 { margin: 0; }
@@ -44,7 +47,6 @@
 
 @media (max-width: 1000px) {
   .barra-busqueda { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .acciones-busqueda > #buscar { grid-column: 1 / -1; justify-self: end; }
 }
 @media (max-width: 680px) {
   .barra-busqueda { grid-template-columns: repeat(2, minmax(0, 1fr)); }
