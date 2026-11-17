@@ -387,6 +387,19 @@ export class ControladorConsulta {
         return idPaso ? MemoriaVistas.clave(this.estado.sesion, `consulta.borrador:${idPaso}`) : null;
     }
 
+    /**
+     * Lo guardado de esta consulta: la copia de la vista o, si no hay, la que dejó el dashboard en
+     * `consultas.pendientes` (sin detalle del paso: se abre en solo lectura). null si no hay nada.
+     */
+    #guardado() {
+        const propio = this.#memoria.leer(this.#claveConsulta());
+        if (propio) return propio;
+        const idPersonaRol = this.estado.sesion?.rolActivo?.idPersonaRol;
+        const pendientes = idPersonaRol ? this.#memoria.leer(MemoriaVistas.clave(this.estado.sesion, `consultas.pendientes:${idPersonaRol}`)) : null;
+        const consulta = pendientes?.consultas.find(c => c.idConsulta === this.estado.idConsulta);
+        return consulta ? congelar({ consulta, detalle: SIN_DETALLE, en: pendientes.en }) : null;
+    }
+
     #guardarEnMemoria() {
         const { consulta, detalle } = this.estado;
         if (!consulta) return;
@@ -421,7 +434,7 @@ export class ControladorConsulta {
 
     #mostrarMemoria(id) {
         if (id !== this.#secuencia) return;
-        const guardado = this.#memoria.leer(this.#claveConsulta());
+        const guardado = this.#guardado();
         if (!guardado) {
             Object.assign(this.estado, { cargando: false, consulta: null, detalle: SIN_DETALLE, error: MENSAJES.sinRedCarga, desdeMemoria: false });
             return;
@@ -473,7 +486,7 @@ export class ControladorConsulta {
             await this.#cargarDetalle(id);
         } catch (error) {
             if (id !== this.#secuencia) return;
-            if (error?.status === 0 && this.#memoria.leer(this.#claveConsulta())) {
+            if (error?.status === 0 && this.#guardado()) {
                 this.#mostrarMemoria(id);
                 return;
             }

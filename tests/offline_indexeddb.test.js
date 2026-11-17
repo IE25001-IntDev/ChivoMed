@@ -370,3 +370,39 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
     });
 });
+
+// Punto 6: las consultas de hoy que me tocan van a disco con las mismas reglas.
+describe('consultas pendientes de hoy en IndexedDB', () => {
+    test('van a disco, se hidratan al recargar y cerrar sesión las borra', async () => {
+        assert.equal(ranuraDe('consultas.pendientes:x'), 'pendientes');
+        const fabrica = crearIndexedDbDoble();
+        const memoria = nuevaMemoria(fabrica);
+        const sesion = sesionDe(CARLOS);
+        memoria.recordarSesion(sesion);
+        const { controlador } = controladorDashboard(memoria, { enLinea: true });
+        await controlador.iniciar(sesion);
+        await asentar();
+        const clave = MemoriaVistas.clave(sesion, `consultas.pendientes:${UUID(10)}`);
+        assert.equal(disco(fabrica).pendientes?.clave, clave);
+        const recargada = nuevaMemoria(fabrica);
+        assert.equal(await recargada.hidratar(), true);
+        assert.deepEqual(recargada.leer(clave).consultas.map(c => c.idConsulta), [UUID(20)]);
+        recargada.limpiar();
+        await asentar();
+        assert.equal(disco(fabrica).pendientes, undefined);
+    });
+
+    test('caducan a las 8 horas con la sesión', async () => {
+        const fabrica = crearIndexedDbDoble();
+        const memoria = nuevaMemoria(fabrica);
+        const sesion = sesionDe(CARLOS);
+        memoria.recordarSesion(sesion);
+        await controladorDashboard(memoria, { enLinea: true }).controlador.iniciar(sesion);
+        await asentar();
+        assert.ok(disco(fabrica).pendientes, 'antes estaban en disco');
+        const tarde = nuevaMemoria(fabrica, VIGENCIA_MS + 1);
+        assert.equal(await tarde.hidratar(), false);
+        await asentar();
+        assert.equal(disco(fabrica).pendientes, undefined);
+    });
+});

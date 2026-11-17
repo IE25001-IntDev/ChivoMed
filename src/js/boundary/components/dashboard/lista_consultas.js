@@ -173,6 +173,7 @@ class ListaConsultas extends HTMLElement {
             tarjeta.consulta = consulta;
             tarjeta.valores = estado.valores;
             tarjeta.motivo = this.#motivo(consulta);
+            tarjeta.verSinConexion = this.#controlador.puedeVerSinConexion(consulta);
             tarjeta.enCurso = this.#controlador.estaEnCurso(consulta);
             tarjeta.addEventListener("ver-registro", e => { e.stopPropagation(); this.#controlador.alternarRegistro(e.detail.idPaso); });
             tarjeta.addEventListener("reintentar-registro", e => { e.stopPropagation(); this.#controlador.cargarRegistro(e.detail.idPaso); });
@@ -186,7 +187,9 @@ class ListaConsultas extends HTMLElement {
     #pintarMotivos(estado) {
         for (const consulta of estado.consultas) {
             const tarjeta = this.#tarjetas.get(consulta.idConsulta);
-            if (tarjeta) tarjeta.motivo = this.#motivo(consulta);
+            if (!tarjeta) continue;
+            tarjeta.motivo = this.#motivo(consulta);
+            tarjeta.verSinConexion = this.#controlador.puedeVerSinConexion(consulta);
         }
     }
 

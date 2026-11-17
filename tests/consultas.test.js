@@ -388,11 +388,13 @@ describe('ControladorConsultas: atender', () => {
         assert.equal(controlador.atender(UUID(1)), true);
     });
 
-    test('sin red no se puede atender', async () => {
-        const { controlador, conexion } = preparar();
+    test('sin red no se puede atender: solo se abre la copia guardada de una consulta pendiente de hoy', async () => {
+        const { controlador, conexion } = preparar({ dashboard: async () => [consulta(1), consulta(2, { pendienteParaMi: false })] });
         await controlador.iniciar(sesionCon());
         conexion.emitir(false);
-        assert.equal(controlador.atender(UUID(1)), false);
+        assert.equal(motivoNoAtender(controlador.estado.consultas[0], controlador.contextoAtender()), MENSAJES.sinRedAtender);
+        assert.equal(controlador.atender(UUID(2)), false);
+        assert.equal(controlador.atender(UUID(1)), true, 'la pendiente guardada se abre en solo lectura');
     });
 });
 
@@ -501,5 +503,56 @@ describe('Buscar paciente y título según el rango', () => {
         assert.match(controlador.titulo, /^Consultas del 1 nov.? 2026 al 20 nov.? 2026$/);
         controlador.buscarPaciente(null);
         assert.equal(controlador.consultasVisibles.length, 2);
+    });
+});
+
+// Punto 6: el detalle de cada consulta de hoy que me toca queda guardado para verla sin red.
+describe('ControladorConsultas: consultas pendientes de hoy para ver sin conexión', () => {
+    const clavePendientes = sesion => MemoriaVistas.clave(sesion, `consultas.pendientes:${sesion.rolActivo.idPersonaRol}`);
+    const dosConsultas = async () => [consulta(1), consulta(2, { pendienteParaMi: false })];
+
+    test('al cargar las de hoy guarda las pendientes para mí, sin pedir cada consulta aparte', async () => {
+        const { controlador, llamadas, memoria } = preparar({ dashboard: dosConsultas });
+        const sesion = sesionCon();
+        await controlador.iniciar(sesion);
+        const guardado = memoria.leer(clavePendientes(sesion));
+        assert.ok(guardado, 'se guardan las pendientes de hoy');
+        assert.deepEqual(guardado.consultas.map(c => c.idConsulta), [UUID(1)]);
+        assert.ok(guardado.en instanceof Date);
+        assert.ok(Object.isFrozen(guardado));
+        assert.equal(llamadas.dashboard.length, 1, 'un solo GET al dashboard, sin N+1');
+    });
+
+    test('otro rango de fechas no reemplaza las pendientes de hoy', async () => {
+        const { controlador, memoria } = preparar({ dashboard: async ({ desde }) => (desde === '2026-11-13' ? dosConsultas() : []) });
+        const sesion = sesionCon();
+        await controlador.iniciar(sesion);
+        controlador.cambiarFechas('2026-11-01', '2026-11-02');
+        await controlador.buscar();
+        assert.deepEqual(memoria.leer(clavePendientes(sesion))?.consultas.map(c => c.idConsulta), [UUID(1)]);
+    });
+
+    test('al cambiar de rol se guardan las del rol nuevo (sin pedir dashboards de otros roles)', async () => {
+        const { controlador, memoria, llamadas } = preparar({ dashboard: dosConsultas });
+        await controlador.iniciar(sesionCon());
+        const otroRol = sesionCon(UUID(901));
+        await controlador.cambiarSesion(otroRol);
+        assert.deepEqual(memoria.leer(clavePendientes(otroRol))?.consultas.map(c => c.idConsulta), [UUID(1)]);
+        assert.equal(llamadas.dashboard.length, 2);
+    });
+
+    test('sin red, una consulta guardada se puede ver sin conexión; las demás no', async () => {
+        const { controlador, conexion } = preparar({ dashboard: dosConsultas });
+        await controlador.iniciar(sesionCon());
+        conexion.emitir(false);
+        assert.equal(typeof controlador.puedeVerSinConexion, 'function');
+        const [pendiente, otra] = controlador.estado.consultas;
+        assert.equal(controlador.puedeVerSinConexion(pendiente), true);
+        assert.equal(controlador.puedeVerSinConexion(otra), false);
+        assert.equal(controlador.atender(UUID(1)), true);
+        assert.deepEqual(controlador.estado.navegarA, { ruta: `/consulta/${UUID(1)}` });
+        assert.equal(controlador.atender(UUID(2)), false);
+        conexion.emitir(true);
+        assert.equal(controlador.puedeVerSinConexion(pendiente), false, 'con red se atiende normal');
     });
 });

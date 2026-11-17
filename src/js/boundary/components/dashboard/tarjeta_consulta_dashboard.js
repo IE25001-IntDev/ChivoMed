@@ -6,6 +6,8 @@
  *              los paneles de registro que cambiaron).
  *  - motivo:   null si se puede atender; si no, el texto que explica por qué no.
  *  - enCurso:  true si es la consulta en curso en la sesión (insignia "En curso", F8).
+ *  - verSinConexion: true si, sin red, la consulta quedó guardada: el botón dice "Ver sin conexión"
+ *              y se habilita aunque haya motivo (abre la consulta en solo lectura).
  * Emite (bubbles, composed): 'ver-registro' { idPaso }, 'reintentar-registro' { idPaso },
  * 'atender' { idConsulta }. El botón dice "Cerrar consulta" si al rol activo solo le falta cerrarla.
  * Todos los datos se pintan con textContent; la plantilla es fija.
@@ -44,6 +46,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
     #valores = {};
     #motivo = null;
     #enCurso = false;
+    #verSinConexion = false;
     /** idPaso → { boton, panel, pintado } de los pasos con registro. */
     #registros = new Map();
     #alAtender = () => this.#emitir("atender", { idConsulta: this.#consulta?.idConsulta });
@@ -73,6 +76,13 @@ class TarjetaConsultaDashboard extends HTMLElement {
     }
 
     get motivo() { return this.#motivo; }
+
+    set verSinConexion(valor) {
+        this.#verSinConexion = valor === true;
+        if (this.isConnected) this.#pintarAtender();
+    }
+
+    get verSinConexion() { return this.#verSinConexion; }
 
     /** F8: true si es la consulta en curso en la sesión (insignia "En curso"). */
     set enCurso(valor) {
@@ -112,11 +122,6 @@ class TarjetaConsultaDashboard extends HTMLElement {
         this.$("estado").textContent = c.fechaFin ? `Cerrada el ${formatearFechaHora(c.fechaFin)}` : "Abierta";
         this.$("pendiente").hidden = !c.pendienteParaMi;
         this.$("en-curso").hidden = !this.#enCurso;
-        const cerrar = accionAtender(c) === "cerrar";
-        this.$("atender").textContent = cerrar ? "Cerrar consulta" : "Atender";
-        // Nombre accesible único: varias tarjetas tienen el mismo botón visible.
-        const cuando = formatearFechaHora(c.fechaInicio);
-        this.$("atender").setAttribute("aria-label", `${cerrar ? "Cerrar la consulta de" : "Atender a"} ${paciente.nombre}, ${cuando}`);
         this.$("tarjeta").className = c.pendienteParaMi ? "tarjeta-consulta pendiente" : "tarjeta-consulta";
 
         this.#registros = new Map();
@@ -220,7 +225,16 @@ class TarjetaConsultaDashboard extends HTMLElement {
 
     #pintarAtender() {
         const motivo = this.#motivo;
-        this.$("atender").disabled = Boolean(motivo);
+        const c = this.#consulta;
+        const ver = this.#verSinConexion;
+        if (c) {
+            const cerrar = accionAtender(c) === "cerrar";
+            this.$("atender").textContent = ver ? "Ver sin conexión" : cerrar ? "Cerrar consulta" : "Atender";
+            // Nombre accesible único: varias tarjetas tienen el mismo botón visible.
+            const accion = ver ? "Ver sin conexión la consulta de" : cerrar ? "Cerrar la consulta de" : "Atender a";
+            this.$("atender").setAttribute("aria-label", `${accion} ${c.paciente.nombre}, ${formatearFechaHora(c.fechaInicio)}`);
+        }
+        this.$("atender").disabled = Boolean(motivo) && !ver;
         this.$("motivo").hidden = !motivo;
         this.$("motivo").textContent = motivo ?? "";
     }

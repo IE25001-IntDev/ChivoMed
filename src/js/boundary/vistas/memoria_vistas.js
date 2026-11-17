@@ -10,7 +10,9 @@
  * empleado funcionen sin red después de recargar. Se guardan:
  *  - la sesión verificada, sin `csrfToken`, con la hora de la verificación;
  *  - el último dashboard (`dashboard.ultimo:*`) y las asignaciones (`dashboard.asignaciones`);
- *  - la consulta abierta (`consulta:{id}`), sin el valor guardado del paso.
+ *  - la consulta abierta (`consulta:{id}`), sin el valor guardado del paso;
+ *  - las consultas de hoy que le tocan al rol activo (`consultas.pendientes:{idPersonaRol}`), con el
+ *    mismo JSON del dashboard, para abrirlas sin red en solo lectura.
  * Cada uno reemplaza al anterior. Nunca van a disco los borradores ni lo leído en "Ver registro".
  * `hidratar()` descarta la copia si la sesión se verificó hace más de 8 horas (el máximo de una
  * sesión en el backend).
@@ -34,7 +36,7 @@ export const ESPERA_HIDRATAR_MS = 1500;
 
 /** Registros en disco: uno por ranura. */
 export const RANURA_SESION = "sesion";
-const RANURAS_DATOS = Object.freeze(["dashboard", "asignaciones", "consulta"]);
+const RANURAS_DATOS = Object.freeze(["dashboard", "asignaciones", "consulta", "pendientes"]);
 /** Búsqueda pública de citas: se guarda sin sesión, con su propia caducidad. */
 export const CLAVE_PUBLICA_CITAS = "publico:citas";
 export const RANURA_PUBLICO = "publico";
@@ -44,6 +46,7 @@ export function ranuraDe(nombre) {
     if (nombre.startsWith("dashboard.ultimo:")) return "dashboard";
     if (nombre === "dashboard.asignaciones") return "asignaciones";
     if (nombre.startsWith("consulta:")) return "consulta";
+    if (nombre.startsWith("consultas.pendientes:")) return "pendientes";
     return null;
 }
 

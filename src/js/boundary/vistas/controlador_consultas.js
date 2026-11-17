@@ -327,6 +327,12 @@ export class ControladorConsultas {
         return ultimo?.desde === desde && ultimo?.hasta === hasta ? ultimo : null;
     }
 
+    /** Consultas de hoy que le tocan al rol activo, guardadas para abrirlas sin red. */
+    #clavePendientes() {
+        const idPersonaRol = this.estado.sesion?.rolActivo?.idPersonaRol;
+        return idPersonaRol ? MemoriaVistas.clave(this.estado.sesion, `consultas.pendientes:${idPersonaRol}`) : null;
+    }
+
     #claveValor(idPaso) {
         return MemoriaVistas.clave(this.estado.sesion, `dashboard.valor:${idPaso}`);
     }
@@ -432,6 +438,12 @@ export class ControladorConsultas {
             const en = this.#reloj();
             this.#memoria.guardar(clave, congelar({ consultas, en }));
             this.#memoria.guardar(this.#claveUltimo(), congelar({ desde, hasta, consultas, en }));
+            // Al ingresar y al cambiar de rol se cargan las de hoy: las que me tocan quedan guardadas
+            // (mismo JSON que GET /atencion/consultas/{id}, sin pedir cada una) para verlas sin red.
+            const hoy = hoySV(this.#reloj);
+            if (desde === hoy && hasta === hoy) {
+                this.#memoria.guardar(this.#clavePendientes(), congelar({ consultas: congelar(consultas.filter(c => c.pendienteParaMi)), en }));
+            }
             this.#mostrar({ consultas, en }, consultado, { desdeMemoria: false });
         } catch (error) {
             if (id !== this.#secuencia) return;
@@ -515,10 +527,17 @@ export class ControladorConsultas {
         return Boolean(this.estado.enCurso) && consulta?.idConsulta === this.estado.enCurso;
     }
 
-    /** Publica la ruta de la consulta solo si se puede atender. Devuelve true si la publicó. */
+    /** Sin red (o en solo lectura): true si la consulta quedó guardada para verla sin conexión. */
+    puedeVerSinConexion(consulta) {
+        const { enLinea, soloLectura } = this.estado;
+        if (enLinea && !soloLectura) return false;
+        return Boolean(this.#memoria.leer(this.#clavePendientes())?.consultas.some(c => c.idConsulta === consulta?.idConsulta));
+    }
+
+    /** Publica la ruta de la consulta si se puede atender o, sin red, ver la copia guardada. Devuelve true si la publicó. */
     atender(idConsulta) {
         const consulta = this.estado.consultas.find(c => c.idConsulta === idConsulta);
-        if (!consulta || motivoNoAtender(consulta, this.contextoAtender())) return false;
+        if (!consulta || (motivoNoAtender(consulta, this.contextoAtender()) && !this.puedeVerSinConexion(consulta))) return false;
         this.estado.navegarA = congelar({ ruta: `/consulta/${consulta.idConsulta}` });
         return true;
     }

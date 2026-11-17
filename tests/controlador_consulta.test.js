@@ -628,3 +628,27 @@ describe('ControladorConsulta: salir de la consulta (F8)', () => {
         assert.equal(nombres().filter(n => n === 'salirDeConsulta').length, 1);
     });
 });
+
+// Punto 6: abrir sin red, en solo lectura, una consulta pendiente guardada desde el dashboard.
+describe('ControladorConsulta: consulta pendiente guardada por el dashboard', () => {
+    test('sin red la abre en solo lectura con lo que guardó el dashboard, sin pedir nada', async () => {
+        const memoria = new MemoriaVistas();
+        const { ControladorConsultas } = await import('../src/js/boundary/vistas/controlador_consultas.js');
+        const dashboard = new ControladorConsultas({
+            servicio: { dashboard: async () => ({ data: [consultaB6()] }), valorPaso: async () => ({ data: null }) },
+            conexion: { enLinea: true, suscribir: () => () => {} }, memoria, reloj: () => new Date('2026-11-13T15:30:00Z'),
+        });
+        await dashboard.iniciar(sesionCon());
+        dashboard.detener();
+        for (const opciones of [{ enLinea: false }, { soloLectura: true }]) {
+            const { controlador, nombres, iniciar } = preparar({ memoria, ...opciones });
+            await iniciar();
+            assert.deepEqual(nombres(), []);
+            assert.equal(controlador.estado.error, null);
+            assert.equal(controlador.estado.consulta?.idConsulta, ID_CONSULTA);
+            assert.equal(controlador.estado.desdeMemoria, true);
+            assert.equal(controlador.estado.atendiendo, false);
+            assert.equal(controlador.bloqueo, MENSAJES.sinRed);
+        }
+    });
+});

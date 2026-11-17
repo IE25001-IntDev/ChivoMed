@@ -431,3 +431,37 @@ describe('ControladorConsultas.marcarEnCurso (F8)', () => {
         assert.equal(controlador.estaEnCurso(normal(3)), false);
     });
 });
+
+// Punto 6: sin red, "Ver sin conexión" abre la consulta guardada.
+describe('Ver sin conexión', () => {
+    test('<tarjeta-consulta-dashboard>: con verSinConexion el botón se habilita y dice "Ver sin conexión"', () => {
+        const { el, eventos, $ } = tarjeta(normal(1), { motivo: 'Sin conexión: para atender una consulta necesitas red.' });
+        assert.equal($('atender').disabled, true);
+        el.verSinConexion = true;
+        assert.equal($('atender').disabled, false);
+        assert.equal($('atender').textContent, 'Ver sin conexión');
+        assert.match($('atender').getAttribute('aria-label'), /^Ver sin conexión la consulta de /);
+        $('atender').click();
+        assert.equal(eventos.filter(e => e.type === 'atender').length, 1);
+        el.verSinConexion = false;
+        assert.equal($('atender').disabled, true);
+        assert.equal($('atender').textContent, 'Atender');
+    });
+
+    test('<lista-consultas>: al perder la red, la pendiente guardada ofrece verla y navega a ella', async () => {
+        const { lista, conexion, tarjetas, navegaciones } = montarLista();
+        conectar(lista);
+        await asentar();
+        conexion.emitir(false);
+        await asentar();
+        const [pendiente, otra] = tarjetas();
+        assert.equal(pendiente.verSinConexion, true);
+        assert.equal(otra.verSinConexion, false);
+        conectar(pendiente);
+        assert.equal(pendiente.shadowRoot.getElementById('atender').disabled, false);
+        pendiente.shadowRoot.getElementById('atender').dispatchEvent(new Event('click'));
+        await asentar();
+        assert.equal(navegaciones.at(-1)?.detail?.ruta, `/consulta/${UUID(1)}`);
+        desconectar(lista);
+    });
+});
