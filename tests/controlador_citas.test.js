@@ -4,6 +4,7 @@ import {
     ControladorCitas, MENSAJES, CLAVE_MEMORIA, PASOS, validarNumero, validarRango, pasoAlcanzable,
     motivoNoBuscar, mensajeDeErrorCitas, rangoPorDefecto, formatearHoraSV,
 } from '../src/js/boundary/vistas/controlador_citas.js';
+import * as citas from '../src/js/boundary/vistas/controlador_citas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
 import { AuthError, CODIGO_SIN_RED } from '../src/js/control/auth_service.js';
@@ -603,5 +604,93 @@ describe('ControladorCitas: barra de búsqueda y respuestas tardías', () => {
         await descargando;
         assert.deepEqual(ctx.estado.tickets, {});
         assert.equal(ctx.estado.numeroDocumento, '');
+    });
+});
+
+// Punto 1: máscara a partir de la expresión regular del tipo.
+const EXPR_DUI = '^[0-9]{8}-[0-9]$';
+const EXPR_PASAPORTE = '^[A-Z][0-9]{8}$';
+const EXPR_NIT = '^[0-9]{4}-[0-9]{6}-[0-9]{3}-[0-9]$';
+const PASAPORTE_DEMO = Object.freeze({ idTipoDocumento: UUID(3), nombre: 'Pasaporte', indicaciones: 'Una letra y ocho dígitos.', expresionRegular: EXPR_PASAPORTE });
+
+describe('Máscara del número a partir de la expresión regular', () => {
+    test('mascaraDeExpresion convierte las tres expresiones de la demo', () => {
+        assert.equal(typeof citas.mascaraDeExpresion, 'function');
+        const dui = citas.mascaraDeExpresion(EXPR_DUI);
+        assert.equal(dui.length, 10);
+        assert.deepEqual(dui[8], { literal: '-' });
+        assert.deepEqual(dui[0], { clase: '[0-9]' });
+        const pasaporte = citas.mascaraDeExpresion(EXPR_PASAPORTE);
+        assert.equal(pasaporte.length, 9);
+        assert.deepEqual(pasaporte[0], { clase: '[A-Z]' });
+        const nit = citas.mascaraDeExpresion(EXPR_NIT);
+        assert.equal(nit.length, 17);
+        assert.deepEqual([4, 11, 15].map(i => nit[i]), [{ literal: '-' }, { literal: '-' }, { literal: '-' }]);
+        assert.ok(Object.isFrozen(dui));
+    });
+
+    test('una expresión con |, *, +, ?, grupos, {n,m} o . no da máscara', () => {
+        assert.equal(typeof citas.mascaraDeExpresion, 'function');
+        for (const expr of ['^[0-9]+$', '^[0-9]*$', '^A?[0-9]{3}$', '^(A|B)[0-9]{3}$', '^[0-9]{3}|[A-Z]{3}$',
+            '^[0-9]{2,4}$', '^.{5}$', null, '', '.', '^[0-9$']) {
+            assert.equal(citas.mascaraDeExpresion(expr), null, String(expr));
+        }
+    });
+
+    test('DUI: las letras no entran y el guion se pone solo', () => {
+        assert.equal(typeof citas.aplicarMascara, 'function');
+        const m = citas.mascaraDeExpresion(EXPR_DUI);
+        assert.equal(citas.aplicarMascara(m, 'a1b2'), '12');
+        assert.equal(citas.aplicarMascara(m, '12345678'), '12345678');
+        assert.equal(citas.aplicarMascara(m, '123456789'), '12345678-9');
+        assert.equal(citas.aplicarMascara(m, '12345678-'), '12345678-');
+    });
+
+    test('pegar se limpia con la misma regla', () => {
+        assert.equal(typeof citas.aplicarMascara, 'function');
+        const m = citas.mascaraDeExpresion(EXPR_DUI);
+        assert.equal(citas.aplicarMascara(m, ' 0100 0004 4 '), '01000004-4');
+        assert.equal(citas.aplicarMascara(m, '0100-0004-4'), '01000004-4');
+        assert.equal(citas.aplicarMascara(citas.mascaraDeExpresion(EXPR_NIT), '06142803901010'), '0614-280390-101-0');
+    });
+
+    test('Pasaporte: la minúscula se convierte y un dígito no entra en la letra', () => {
+        assert.equal(typeof citas.aplicarMascara, 'function');
+        const m = citas.mascaraDeExpresion(EXPR_PASAPORTE);
+        assert.equal(citas.aplicarMascara(m, 'b10000004'), 'B10000004');
+        assert.equal(citas.aplicarMascara(m, '1b1x'), 'B1');
+    });
+
+    test('no se escribe más allá del largo de la máscara', () => {
+        assert.equal(typeof citas.aplicarMascara, 'function');
+        assert.equal(citas.aplicarMascara(citas.mascaraDeExpresion(EXPR_DUI), '0100000449999'), '01000004-4');
+        assert.equal(citas.aplicarMascara(citas.mascaraDeExpresion(EXPR_PASAPORTE), 'B100000041234'), 'B10000004');
+    });
+
+    test('el controlador aplica la máscara al escribir y borrar funciona normal', async () => {
+        const { controlador, estado } = preparar({ tipos: [DUI, PASAPORTE_DEMO] });
+        await controlador.iniciar();
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero('1234abc5678');
+        assert.equal(estado.numeroDocumento, '12345678');
+        controlador.escribirNumero('123456789999');
+        assert.equal(estado.numeroDocumento, '12345678-9');
+        controlador.escribirNumero('12345678-');
+        assert.equal(estado.numeroDocumento, '12345678-');
+        controlador.escribirNumero('12345678');
+        assert.equal(estado.numeroDocumento, '12345678');
+        controlador.elegirTipo(PASAPORTE_DEMO.idTipoDocumento);
+        controlador.escribirNumero('b10000004');
+        assert.equal(estado.numeroDocumento, 'B10000004');
+    });
+
+    test('un tipo sin máscara guarda lo escrito y queda la validación actual', async () => {
+        const LIBRE = Object.freeze({ idTipoDocumento: UUID(4), nombre: 'Carné', indicaciones: null, expresionRegular: '^[0-9]+$' });
+        const { controlador, estado } = preparar({ tipos: [LIBRE] });
+        await controlador.iniciar();
+        controlador.elegirTipo(LIBRE.idTipoDocumento);
+        controlador.escribirNumero('12ab');
+        assert.equal(estado.numeroDocumento, '12ab');
+        assert.match(validarNumero(LIBRE, '12ab'), /formato de Carné/);
     });
 });

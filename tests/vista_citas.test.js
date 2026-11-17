@@ -215,3 +215,22 @@ describe('<vista-citas>: barra y resultados', () => {
         desconectar(sinRed.vista);
     });
 });
+
+describe('<vista-citas>: máscara del número', () => {
+    test('una letra en DUI no queda en el campo y el guion se pone solo', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('tipo').dispatchEvent(new Event('change'));
+        ctx.$('numero').value = '1';
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        ctx.$('numero').value = '1a';
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        assert.equal(ctx.$('numero').value, '1', 'la letra se quita del campo');
+        ctx.$('numero').value = '123456789';
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        assert.equal(ctx.$('numero').value, '12345678-9');
+        desconectar(ctx.vista);
+    });
+});

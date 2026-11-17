@@ -99,7 +99,11 @@ class VistaCitas extends HTMLElement {
             c.elegirTipo(this.$("tipo").value);
             c.prepararClinicas();
         });
-        this.#escuchar(this.$("numero"), "input", () => c.escribirNumero(this.$("numero").value));
+        this.#escuchar(this.$("numero"), "input", () => {
+            c.escribirNumero(this.$("numero").value);
+            // Si la máscara descartó lo escrito, el estado no cambia y no hay repintado: se repone aquí.
+            if (this.$("numero").value !== c.estado.numeroDocumento) this.$("numero").value = c.estado.numeroDocumento;
+        });
         this.#escuchar(this.$("numero"), "change", () => c.prepararClinicas());
         this.#escuchar(this.$("clinica"), "change", () => c.elegirClinica(this.$("clinica").value));
         for (const id of ["desde", "hasta"]) {

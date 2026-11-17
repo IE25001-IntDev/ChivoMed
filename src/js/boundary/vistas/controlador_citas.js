@@ -16,7 +16,7 @@
  */
 import CitasPublicasService, { segundosDeEspera } from "../../control/citas_publicas_service.js";
 import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../../control/auth_service.js";
-import { autoformatear, crearValidadorFormato } from "../../control/formato_documento.js";
+import { crearValidadorFormato, sinRestriccion } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { hoySV, sumarDias, diasEntre, esFechaISO, ZONA_SV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida } from "./memoria_vistas.js";
@@ -88,6 +88,90 @@ export function validarNumero(tipo, numeroDocumento) {
             : `El número no tiene el formato de ${tipo.nombre}.`;
     }
     return null;
+}
+
+/**
+ * Máscara del número a partir de la expresión regular del tipo: una posición por carácter, cada una
+ * `{ clase }` (p. ej. "[0-9]") o `{ literal }` (p. ej. "-"), con `{n}` expandido.
+ * `^[0-9]{8}-[0-9]$` → 8 × [0-9], "-", [0-9]. Devuelve null (sin máscara) si la expresión no
+ * compila o tiene algo que no es de largo fijo: |, *, +, ?, grupos, {n,m}, "." u otros escapes.
+ */
+export function mascaraDeExpresion(expresionRegular) {
+    if (sinRestriccion(expresionRegular)) return null;
+    try { new RegExp(expresionRegular); } catch { return null; }
+    const cuerpo = expresionRegular.trim().replace(/^\^/, "").replace(/(?<!\\)\$$/, "");
+    const posiciones = [];
+    let i = 0;
+    while (i < cuerpo.length) {
+        let posicion;
+        const c = cuerpo[i];
+        if (c === "[") {
+            const fin = cuerpo.indexOf("]", i + 2);
+            if (fin < 0) return null;
+            posicion = Object.freeze({ clase: cuerpo.slice(i, fin + 1) });
+            i = fin + 1;
+        } else if (c === "\\") {
+            const siguiente = cuerpo[i + 1];
+            if (siguiente === "d") posicion = Object.freeze({ clase: "[0-9]" });
+            else if (siguiente && /[-.\/\\^$*+?()[\]{}|]/.test(siguiente)) posicion = Object.freeze({ literal: siguiente });
+            else return null;
+            i += 2;
+        } else if ("|*+?(){}.^$".includes(c)) {
+            return null;
+        } else {
+            posicion = Object.freeze({ literal: c });
+            i += 1;
+        }
+        let veces = 1;
+        if (cuerpo[i] === "{") {
+            const m = /^\{(\d{1,2})\}/.exec(cuerpo.slice(i));
+            if (!m) return null;
+            veces = Number(m[1]);
+            i += m[0].length;
+        }
+        for (let n = 0; n < veces; n++) posiciones.push(posicion);
+    }
+    return posiciones.length ? Object.freeze(posiciones) : null;
+}
+
+const pruebasDeClase = new Map();
+function aceptaClase(clase, caracter) {
+    if (!pruebasDeClase.has(clase)) pruebasDeClase.set(clase, new RegExp(`^${clase}$`));
+    return pruebasDeClase.get(clase).test(caracter);
+}
+
+/**
+ * Limpia `texto` con la máscara: en cada posición de clase entra solo un carácter que la cumpla
+ * (la minúscula se convierte si la posición solo acepta mayúsculas); lo demás se descarta. Un literal
+ * se pone solo cuando llega el siguiente carácter válido, así borrar funciona normal. Corta en el
+ * largo de la máscara. Pegar texto pasa por la misma regla.
+ */
+export function aplicarMascara(mascara, texto) {
+    if (!mascara) return typeof texto === "string" ? texto : "";
+    let salida = "";
+    for (const caracter of typeof texto === "string" ? texto : "") {
+        if (salida.length >= mascara.length) break;
+        const posicion = mascara[salida.length];
+        if (posicion.literal !== undefined) {
+            if (caracter === posicion.literal) { salida += caracter; continue; }
+            // El literal se completa solo si el carácter cabe en la posición siguiente.
+            let j = salida.length;
+            let literales = "";
+            while (j < mascara.length && mascara[j].literal !== undefined) literales += mascara[j++].literal;
+            const valido = j < mascara.length ? caracterValido(mascara[j], caracter) : null;
+            if (valido) salida += literales + valido;
+            continue;
+        }
+        const valido = caracterValido(posicion, caracter);
+        if (valido) salida += valido;
+    }
+    return salida;
+}
+
+function caracterValido(posicion, caracter) {
+    if (aceptaClase(posicion.clase, caracter)) return caracter;
+    const mayuscula = caracter.toUpperCase();
+    return mayuscula !== caracter && aceptaClase(posicion.clase, mayuscula) ? mayuscula : null;
 }
 
 /** Error del rango (null si es válido): fechas reales, desde ≤ hasta y diferencia ≤ 366 días. */
@@ -292,10 +376,10 @@ export class ControladorCitas {
         this.#invalidarDocumento();
     }
 
-    /** Guarda el número; al escribir hacia adelante inserta los guiones del formato (p. ej., DUI). */
+    /** Guarda el número con la máscara del tipo (si su expresión se puede convertir en una). */
     escribirNumero(valor) {
         const tipo = this.tipo(this.estado.idTipoDocumento);
-        const numero = autoformatear(typeof valor === "string" ? valor : "", tipo?.expresionRegular, this.estado.numeroDocumento);
+        const numero = aplicarMascara(mascaraDeExpresion(tipo?.expresionRegular), typeof valor === "string" ? valor : "");
         if (numero === this.estado.numeroDocumento) return;
         const cambio = numero.trim() !== this.estado.numeroDocumento.trim();
         this.#actualizar({ numeroDocumento: numero });
