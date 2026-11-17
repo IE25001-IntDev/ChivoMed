@@ -224,7 +224,7 @@ describe('ControladorCitas: pasos y datos', () => {
         assert.equal(estado.paso, 1);
     });
 
-    test('cambiar el número invalida clínicas y resultados, el alcanzado vuelve al 2 y las fechas se conservan', async () => {
+    test('cambiar el número invalida clínicas y resultados, el alcanzado vuelve al 2 y las fechas vuelven al rango por defecto', async () => {
         const ctx = preparar();
         await hastaFechas(ctx);
         const { controlador, estado, llamadas } = ctx;
@@ -236,7 +236,7 @@ describe('ControladorCitas: pasos y datos', () => {
         assert.equal(estado.clinicas, null);
         assert.equal(estado.idClinica, null);
         assert.equal(estado.citas, null);
-        assert.equal(estado.desde, '2026-11-01');
+        assert.equal(estado.desde, rangoPorDefecto(() => new Date(AHORA)).desde);
         await controlador.siguiente();
         assert.equal(llamadas.clinicas.length, 2);
     });
@@ -256,7 +256,7 @@ describe('ControladorCitas: pasos y datos', () => {
         ctx.controlador.elegirTipo(PASAPORTE.idTipoDocumento);
         assert.equal(ctx.estado.alcanzado, 2);
         assert.equal(ctx.estado.clinicas, null);
-        assert.equal(ctx.estado.numeroDocumento, NUMERO, 'el número escrito se conserva');
+        assert.equal(ctx.estado.numeroDocumento, '', 'cambiar el tipo vacía el número');
     });
 
     test('cambiar la clínica o las fechas invalida solo los resultados', async () => {
@@ -315,9 +315,9 @@ describe('ControladorCitas: pasos y datos', () => {
         await ctx.controlador.iniciar();
         ctx.controlador.elegirTipo(DUI.idTipoDocumento);
         ctx.controlador.siguiente();
-        ctx.controlador.escribirNumero(NUMERO);
         let soltar;
         ctx.respuestas.clinicas = () => new Promise(r => { soltar = () => r([NORTE]); });
+        ctx.controlador.escribirNumero(NUMERO);
         const primera = ctx.controlador.siguiente();
         assert.equal(ctx.estado.cargando, 'clinicas');
         ctx.controlador.siguiente();
@@ -351,10 +351,10 @@ describe('ControladorCitas: límite de solicitudes (429)', () => {
         await ctx.controlador.iniciar();
         ctx.controlador.elegirTipo(DUI.idTipoDocumento);
         ctx.controlador.siguiente();
-        ctx.controlador.escribirNumero(NUMERO);
         ctx.respuestas.clinicas = async () => {
             throw new DefaultError({ status: 429, code: 'publico.demasiadasSolicitudes', headers: { 'retry-after': '300' } });
         };
+        ctx.controlador.escribirNumero(NUMERO);
         await ctx.controlador.siguiente();
         const { estado } = ctx;
         assert.equal(estado.paso, 2);
@@ -426,8 +426,8 @@ describe('ControladorCitas: sin red y memoria', () => {
         await ctx.controlador.iniciar();
         ctx.controlador.elegirTipo(DUI.idTipoDocumento);
         ctx.controlador.siguiente();
-        ctx.controlador.escribirNumero(NUMERO);
         ctx.red(false);
+        ctx.controlador.escribirNumero(NUMERO);
         assert.equal(ctx.estado.enLinea, false);
         await ctx.controlador.siguiente();
         assert.equal(ctx.estado.paso, 2);
@@ -541,10 +541,12 @@ describe('ControladorCitas: barra de búsqueda y respuestas tardías', () => {
     ]) {
         test(`${caso}: no hace ninguna petición de búsqueda`, async () => {
             const ctx = await barra();
+            await ctx.controlador.prepararClinicas();
+            const antes = ctx.llamadas.clinicas.length;
             modificar(ctx.controlador);
             await ctx.controlador.buscar();
             assert.ok(ctx.estado.errores[campo]);
-            assert.equal(ctx.llamadas.clinicas.length, 0);
+            assert.equal(ctx.llamadas.clinicas.length, antes);
             assert.equal(ctx.llamadas.citas.length, 0);
         });
     }
@@ -692,5 +694,128 @@ describe('Máscara del número a partir de la expresión regular', () => {
         controlador.escribirNumero('12ab');
         assert.equal(estado.numeroDocumento, '12ab');
         assert.match(validarNumero(LIBRE, '12ab'), /formato de Carné/);
+    });
+});
+
+// Punto 2: campos que se desbloquean en orden.
+describe('Campos que se desbloquean en orden', () => {
+    const NADA = { numero: false, clinica: false, fechas: false, buscar: false };
+
+    test('al iniciar todo está bloqueado y falta el tipo', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        assert.deepEqual({ ...estado.habilitado }, NADA);
+        assert.ok(Object.isFrozen(estado.habilitado));
+        assert.equal(estado.falta, citas.MENSAJES.faltaTipo);
+    });
+
+    test('tipo → número; número completo → se piden las clínicas y se activa la clínica; clínica → fechas y buscar', async () => {
+        const { controlador, estado, llamadas } = preparar();
+        await controlador.iniciar();
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        assert.deepEqual({ ...estado.habilitado }, { ...NADA, numero: true });
+        assert.equal(estado.falta, citas.MENSAJES.faltaNumero);
+        controlador.escribirNumero('12345678');
+        await asentar();
+        assert.equal(llamadas.clinicas.length, 0, 'un número incompleto no pide clínicas');
+        assert.equal(estado.habilitado.clinica, false);
+        controlador.escribirNumero(NUMERO);
+        await asentar();
+        assert.deepEqual(llamadas.clinicas, [{ idTipoDocumento: DUI.idTipoDocumento, numeroDocumento: NUMERO }]);
+        assert.deepEqual({ ...estado.habilitado }, { ...NADA, numero: true, clinica: true });
+        assert.equal(estado.falta, citas.MENSAJES.faltaClinica);
+        controlador.elegirClinica(NORTE.idClinica);
+        assert.deepEqual({ ...estado.habilitado }, { numero: true, clinica: true, fechas: true, buscar: true });
+        assert.equal(estado.falta, null);
+    });
+
+    test('fechas inválidas bloquean "Buscar citas" y dicen qué falta', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero(NUMERO);
+        await asentar();
+        controlador.elegirClinica(NORTE.idClinica);
+        controlador.fijarFechas({ desde: '2026-12-01', hasta: '2026-11-01' });
+        assert.equal(typeof estado.habilitado, 'object', 'el controlador publica habilitado');
+        assert.equal(estado.habilitado.buscar, false);
+        assert.equal(estado.falta, citas.MENSAJES.faltaFechas);
+    });
+
+    test('cambiar el tipo vacía y bloquea todo lo que sigue; las fechas vuelven al rango por defecto', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        const defecto = rangoPorDefecto(() => new Date(AHORA));
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero(NUMERO);
+        await asentar();
+        controlador.elegirClinica(NORTE.idClinica);
+        controlador.fijarFechas({ desde: '2026-11-01', hasta: '2026-11-10' });
+        controlador.elegirTipo(PASAPORTE.idTipoDocumento);
+        assert.equal(estado.numeroDocumento, '');
+        assert.equal(estado.clinicas, null);
+        assert.equal(estado.idClinica, null);
+        assert.deepEqual({ desde: estado.desde, hasta: estado.hasta }, defecto);
+        assert.deepEqual({ ...estado.habilitado }, { ...NADA, numero: true });
+    });
+
+    test('cambiar el número vacía la clínica y las fechas', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        const defecto = rangoPorDefecto(() => new Date(AHORA));
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero(NUMERO);
+        await asentar();
+        controlador.elegirClinica(NORTE.idClinica);
+        controlador.fijarFechas({ desde: '2026-11-01', hasta: '2026-11-10' });
+        controlador.escribirNumero('12345678-');
+        assert.equal(estado.idClinica, null);
+        assert.equal(estado.clinicas, null);
+        assert.deepEqual({ desde: estado.desde, hasta: estado.hasta }, defecto);
+        assert.deepEqual({ ...estado.habilitado }, { ...NADA, numero: true });
+    });
+
+    test('cambiar la clínica vacía las fechas y los resultados', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        const defecto = rangoPorDefecto(() => new Date(AHORA));
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero(NUMERO);
+        await asentar();
+        controlador.elegirClinica(NORTE.idClinica);
+        controlador.fijarFechas({ desde: '2026-11-01', hasta: '2026-11-10' });
+        await controlador.buscar();
+        assert.ok(estado.citas);
+        controlador.elegirClinica(SUR.idClinica);
+        assert.equal(estado.citas, null);
+        assert.deepEqual({ desde: estado.desde, hasta: estado.hasta }, defecto);
+    });
+
+    test('sin máscara las clínicas no se piden al escribir sino al salir del campo', async () => {
+        const LIBRE = Object.freeze({ idTipoDocumento: UUID(4), nombre: 'Carné', indicaciones: null, expresionRegular: '^[0-9]+$' });
+        const { controlador, estado, llamadas } = preparar({ tipos: [LIBRE] });
+        await controlador.iniciar();
+        controlador.elegirTipo(LIBRE.idTipoDocumento);
+        controlador.escribirNumero('123');
+        await asentar();
+        assert.equal(llamadas.clinicas.length, 0);
+        await controlador.prepararClinicas();
+        assert.equal(llamadas.clinicas.length, 1);
+        assert.equal(typeof estado.habilitado, 'object', 'el controlador publica habilitado');
+        assert.equal(estado.habilitado.clinica, true);
+    });
+
+    test('la búsqueda restaurada deja todo habilitado', async () => {
+        const memoria = new MemoriaVistas();
+        const a = preparar({ memoria });
+        await a.controlador.iniciar();
+        a.controlador.elegirTipo(DUI.idTipoDocumento);
+        a.controlador.escribirNumero(NUMERO);
+        await asentar();
+        a.controlador.elegirClinica(NORTE.idClinica);
+        await a.controlador.buscar();
+        const b = preparar({ memoria });
+        await b.controlador.iniciar();
+        assert.deepEqual({ ...b.estado.habilitado }, { numero: true, clinica: true, fechas: true, buscar: true });
     });
 });

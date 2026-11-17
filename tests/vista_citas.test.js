@@ -234,3 +234,33 @@ describe('<vista-citas>: máscara del número', () => {
         desconectar(ctx.vista);
     });
 });
+
+describe('<vista-citas>: campos que se desbloquean en orden', () => {
+    test('pinta disabled desde el estado y "Buscar citas" dice qué falta', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        assert.equal(typeof ctx.estado.habilitado, 'object', 'el controlador publica habilitado');
+        for (const id of ['numero', 'clinica', 'desde', 'hasta', 'buscar']) assert.equal(ctx.$(id).disabled, true, `${id} bloqueado`);
+        assert.ok(ctx.$('buscar').getAttribute('aria-describedby').split(' ').includes('falta'));
+        assert.equal(ctx.$('falta').textContent, ctx.estado.falta);
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('tipo').dispatchEvent(new Event('change'));
+        await asentar();
+        assert.equal(ctx.$('numero').disabled, false);
+        ctx.$('numero').value = NUMERO;
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        await asentar();
+        await asentar();
+        assert.equal(ctx.$('clinica').disabled, false);
+        assert.equal(ctx.$('desde').disabled, true);
+        ctx.$('clinica').value = NORTE.idClinica;
+        ctx.$('clinica').dispatchEvent(new Event('change'));
+        await asentar();
+        assert.equal(ctx.$('desde').disabled, false);
+        assert.equal(ctx.$('hasta').disabled, false);
+        assert.equal(ctx.$('buscar').disabled, false);
+        assert.equal(ctx.$('falta').hidden, true);
+        desconectar(ctx.vista);
+    });
+});

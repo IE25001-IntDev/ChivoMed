@@ -48,7 +48,8 @@ const PLANTILLA = plantilla(`
       <p class="indicaciones" id="error-tipos" role="alert" hidden></p>
       <button class="boton boton-secundario" id="reintentar-tipos" type="button" hidden>Volver a cargar tipos</button>
       <p class="aviso aviso-motivo" id="motivo" hidden></p>
-      <button class="boton boton-principal" id="buscar" type="submit">Buscar citas</button>
+      <p class="indicaciones" id="falta" hidden></p>
+      <button class="boton boton-principal" id="buscar" type="submit" aria-describedby="falta motivo">Buscar citas</button>
     </div>
   </form>
 
@@ -147,6 +148,7 @@ class VistaCitas extends HTMLElement {
         if (cambio("tipos", "cargandoTipos", "errorTipos", "idTipoDocumento")) this.#pintarTipos(estado);
         if (cambio("numeroDocumento") && this.$("numero").value !== estado.numeroDocumento) this.$("numero").value = estado.numeroDocumento;
         if (cambio("clinicas", "idClinica", "cargando")) this.#pintarClinicas(estado);
+        if (cambio("habilitado", "falta", "clinicas", "idClinica", "cargando")) this.#pintarHabilitados(estado);
         if (cambio("desde", "hasta")) {
             if (this.$("desde").value !== estado.desde) this.$("desde").value = estado.desde;
             if (this.$("hasta").value !== estado.hasta) this.$("hasta").value = estado.hasta;
@@ -204,7 +206,17 @@ class VistaCitas extends HTMLElement {
         });
         select.replaceChildren(opcion(inicial, ""), ...opciones);
         select.value = estado.clinicas?.some(c => c.idClinica === estado.idClinica) ? estado.idClinica : "";
-        select.disabled = estado.cargando === "clinicas" || !opciones.length;
+    }
+
+    /** Los campos se desbloquean en orden según `habilitado` del controlador. */
+    #pintarHabilitados(estado) {
+        const { numero, clinica, fechas } = estado.habilitado;
+        this.$("numero").disabled = !numero;
+        this.$("clinica").disabled = !clinica;
+        this.$("desde").disabled = !fechas;
+        this.$("hasta").disabled = !fechas;
+        this.$("falta").hidden = !estado.falta;
+        this.$("falta").textContent = estado.falta ?? "";
     }
 
     #errorCampo(control, idError, error) {
@@ -269,7 +281,7 @@ class VistaCitas extends HTMLElement {
         const ocupado = Boolean(estado.cargando);
         const motivo = motivoNoBuscar(estado, Date.now());
         this.$("reintentar-tipos").disabled = !estado.enLinea || estado.cargandoTipos;
-        this.$("buscar").disabled = ocupado || Boolean(motivo);
+        this.$("buscar").disabled = !estado.habilitado.buscar;
         this.$("buscar").textContent = estado.cargando === "clinicas" ? "Cargando clínicas…"
             : estado.cargando === "citas" ? "Buscando citas…" : "Buscar citas";
         this.$("motivo").hidden = !motivo;

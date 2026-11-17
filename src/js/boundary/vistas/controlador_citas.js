@@ -3,10 +3,13 @@
  * Pasos: 1 tipo de documento, 2 número, 3 clínica, 4 fechas, 5 resultados con el ticket PDF.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
- * Reglas (docs/reportes/hu1-plan.md):
- *  - Ir y volver entre pasos nunca borra lo escrito; un cambio solo invalida los datos derivados:
- *    tipo o número → clínicas, clínica elegida y resultados (el alcanzado vuelve al 2);
- *    clínica o fechas → solo los resultados (el alcanzado vuelve al 4).
+ * Reglas (docs/reportes/hu1-plan.md, cambiadas el 2026-11-17):
+ *  - Los campos se desbloquean en orden (`habilitado`): número tras elegir el tipo; clínica cuando
+ *    el número cumple la expresión y llegaron sus clínicas; fechas tras elegir clínica; "Buscar
+ *    citas" con todo válido. `falta` dice qué falta. Con máscara, las clínicas se piden en cuanto
+ *    el número queda completo; sin máscara, al salir del campo.
+ *  - Cambiar el tipo vacía el número y todo lo que sigue; cambiar el número o la clínica vacía lo
+ *    que sigue. Las fechas vuelven al rango por defecto; fechas → solo los resultados.
  *  - Por el límite de 60 POST cada 5 min: las clínicas se piden una vez por par (tipo, número
  *    recortado), las citas solo si cambia un criterio, nada se repite mientras hay una petición en
  *    curso, y un 429 bloquea las búsquedas hasta la hora de Retry-After.
@@ -56,6 +59,10 @@ export const MENSAJES = Object.freeze({
     tiposSinRed: "Necesitas conexión para cargar los tipos de documento.",
     sinRedBuscar: "Necesitas conexión para buscar.",
     sinRedTicket: "Necesitas conexión para descargar el ticket.",
+    faltaTipo: "Falta elegir el tipo de documento.",
+    faltaNumero: "Falta completar el número de documento.",
+    faltaClinica: "Falta elegir la clínica.",
+    faltaFechas: "Falta escribir un rango de fechas válido.",
     limite: hora => `Hiciste muchas búsquedas seguidas. Podrás intentarlo de nuevo a las ${hora}.`,
     memoria: hora => `Sin conexión. Mostrando la búsqueda de las ${hora}.`,
 });
@@ -206,6 +213,7 @@ export function mensajeDeErrorCitas(error) {
 }
 
 const SIN_ERRORES = Object.freeze({ tipo: null, numero: null, clinica: null, rango: null });
+const NADA_HABILITADO = Object.freeze({ numero: false, clinica: false, fechas: false, buscar: false });
 const VACIO = Object.freeze({});
 
 export class ControladorCitas {
@@ -220,6 +228,8 @@ export class ControladorCitas {
     #secuencia = 0;
     /** par "tipo\nnúmero recortado" → clínicas, para no repetir la petición. */
     #clinicasPorPar = new Map();
+    /** Petición de clínicas en curso, para que buscar() y siguiente() la esperen en vez de repetirla. */
+    #clinicasEnCurso = null;
     /** Par con el que se cargaron las clínicas del estado; null si están invalidadas. */
     #parCargado = null;
     /** Criterios (JSON) de las citas del estado; null si están invalidadas. */
@@ -268,6 +278,10 @@ export class ControladorCitas {
             actualizadoEn: null,
             /** idConsulta → { estado: "descargando"|"listo"|"entregado"|"error", archivo?, error? } */
             tickets: VACIO,
+            /** Qué campos se pueden usar ahora (congelado): se desbloquean en orden. */
+            habilitado: NADA_HABILITADO,
+            /** Qué falta para poder buscar; null si no falta nada (los motivos de red van aparte). */
+            falta: MENSAJES.faltaTipo,
         });
         this.estado = estado;
         this.suscribir = suscribir;
@@ -275,10 +289,34 @@ export class ControladorCitas {
 
     #actualizar(cambios) {
         Object.assign(this.estado, cambios);
+        this.#derivar();
     }
 
     #errores(cambios) {
         this.estado.errores = Object.freeze({ ...this.estado.errores, ...cambios });
+    }
+
+    /** Recalcula `habilitado` y `falta` a partir del resto del estado. */
+    #derivar() {
+        const e = this.estado;
+        const tipo = this.tipo();
+        const numeroValido = Boolean(tipo) && validarNumero(tipo, e.numeroDocumento) === null;
+        const hayClinicas = numeroValido && Boolean(e.clinicas?.length);
+        const clinica = hayClinicas && e.clinicas.some(c => c.idClinica === e.idClinica);
+        const rango = validarRango(e.desde, e.hasta) === null;
+        const habilitado = {
+            numero: Boolean(tipo),
+            clinica: hayClinicas && e.cargando !== "clinicas",
+            fechas: clinica,
+            buscar: clinica && rango && !e.cargando && !this.#motivo(),
+        };
+        const falta = !tipo ? MENSAJES.faltaTipo
+            : !numeroValido || !e.clinicas ? MENSAJES.faltaNumero
+            : !e.clinicas.length ? MENSAJES.sinClinicas
+            : !clinica ? MENSAJES.faltaClinica
+            : !rango ? MENSAJES.faltaFechas : null;
+        if (Object.keys(habilitado).some(k => habilitado[k] !== e.habilitado[k])) e.habilitado = Object.freeze(habilitado);
+        e.falta = falta;
     }
 
     tipo(idTipoDocumento = this.estado.idTipoDocumento) {
@@ -355,7 +393,7 @@ export class ControladorCitas {
         this.#parCargado = null;
         this.#criteriosCargados = null;
         this.#actualizar({ clinicas: null, idClinica: null, citas: null, tickets: VACIO, cargando: null,
-            alcanzado: Math.min(this.estado.alcanzado, 2), desdeMemoria: false });
+            ...rangoPorDefecto(this.#reloj), alcanzado: Math.min(this.estado.alcanzado, 2), desdeMemoria: false });
     }
 
     /** Clínica o fechas cambiaron: se invalidan solo los resultados. */
@@ -368,29 +406,41 @@ export class ControladorCitas {
             alcanzado: Math.min(this.estado.alcanzado, 4), desdeMemoria: false });
     }
 
+    /** Cambiar el tipo vacía el número y todo lo que sigue. */
     elegirTipo(idTipoDocumento) {
         const id = typeof idTipoDocumento === "string" ? idTipoDocumento : "";
         if (id === this.estado.idTipoDocumento) return;
-        this.#actualizar({ idTipoDocumento: id });
-        this.#errores({ tipo: null, numero: null, clinica: null });
+        this.#errores({ tipo: null, numero: null, clinica: null, rango: null });
+        this.#actualizar({ idTipoDocumento: id, numeroDocumento: "" });
         this.#invalidarDocumento();
     }
 
     /** Guarda el número con la máscara del tipo (si su expresión se puede convertir en una). */
+    /**
+     * Guarda el número con la máscara del tipo (si su expresión se puede convertir en una). Con
+     * máscara, en cuanto el número queda completo y válido se piden sus clínicas.
+     */
     escribirNumero(valor) {
         const tipo = this.tipo(this.estado.idTipoDocumento);
-        const numero = aplicarMascara(mascaraDeExpresion(tipo?.expresionRegular), typeof valor === "string" ? valor : "");
-        if (numero === this.estado.numeroDocumento) return;
+        if (!tipo) return Promise.resolve();
+        const mascara = mascaraDeExpresion(tipo.expresionRegular);
+        const numero = aplicarMascara(mascara, typeof valor === "string" ? valor : "");
+        if (numero === this.estado.numeroDocumento) return Promise.resolve();
         const cambio = numero.trim() !== this.estado.numeroDocumento.trim();
-        this.#actualizar({ numeroDocumento: numero });
         if (this.estado.errores.numero || this.estado.errores.clinica) this.#errores({ numero: null, clinica: null });
+        this.#actualizar({ numeroDocumento: numero });
         if (cambio) this.#invalidarDocumento();
+        if (mascara && numero.length === mascara.length && !validarNumero(tipo, numero) && !this.estado.cargando) {
+            return this.#buscarClinicas(false);
+        }
+        return Promise.resolve();
     }
 
+    /** Cambiar la clínica vacía las fechas (vuelven al rango por defecto) y los resultados. */
     elegirClinica(idClinica) {
         if (!this.estado.clinicas?.some(c => c.idClinica === idClinica) || idClinica === this.estado.idClinica) return;
-        this.#actualizar({ idClinica });
-        this.#errores({ clinica: null });
+        this.#errores({ clinica: null, rango: null });
+        this.#actualizar({ idClinica, ...rangoPorDefecto(this.#reloj) });
         this.#invalidarResultados();
     }
 
@@ -417,6 +467,8 @@ export class ControladorCitas {
 
     /** Valida el paso actual y avanza; en los pasos 2 y 4 hace la petición si hace falta. */
     siguiente() {
+        // Las clínicas pueden estar llegando porque el número se completó: se espera esa petición.
+        if (this.estado.cargando === "clinicas" && this.estado.paso === 2) return this.#esperarClinicas().then(() => this.siguiente());
         if (this.estado.cargando) return Promise.resolve();
         switch (this.estado.paso) {
             case 1:
@@ -444,7 +496,22 @@ export class ControladorCitas {
         if (avanzar) this.#avanzar(3);
     }
 
-    async #buscarClinicas(avanzar = true) {
+    /** Promesa de la petición de clínicas en curso (resuelve sin valor), o una resuelta si no hay. */
+    #esperarClinicas() {
+        return this.#clinicasEnCurso ?? Promise.resolve();
+    }
+
+    #buscarClinicas(avanzar = true) {
+        const promesa = this.#pedirClinicas(avanzar);
+        if (this.estado.cargando === "clinicas") {
+            const enCurso = promesa.finally(() => { if (this.#clinicasEnCurso === enCurso) this.#clinicasEnCurso = null; });
+            this.#clinicasEnCurso = enCurso;
+            return enCurso;
+        }
+        return promesa;
+    }
+
+    async #pedirClinicas(avanzar) {
         const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
         if (error) { this.#errores(this.tipo() ? { numero: error } : { tipo: error }); return; }
         if (this.#parCargado === this.#par() && this.estado.clinicas) {
@@ -473,12 +540,14 @@ export class ControladorCitas {
 
     /** Carga las opciones de clínica al salir del documento, sin mover la pantalla. */
     prepararClinicas() {
+        if (this.estado.cargando === "clinicas") return this.#esperarClinicas();
         if (this.estado.cargando || !this.tipo() || !this.estado.numeroDocumento.trim()) return Promise.resolve();
         return this.#buscarClinicas(false);
     }
 
     /** Valida la barra, carga clínicas si hace falta y luego consulta las citas. */
     async buscar() {
+        if (this.estado.cargando === "clinicas") await this.#esperarClinicas();
         if (this.estado.cargando) return;
         this.#actualizar({ mensaje: null });
         if (!this.tipo()) { this.#errores({ tipo: MENSAJES.tipoRequerido }); return; }
