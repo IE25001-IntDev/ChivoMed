@@ -20,6 +20,8 @@
  * Desde el 2026-11-17 también va a disco, sin sesión, la última búsqueda pública de citas (HU1,
  * clave `publico:citas`, ranura `publico`) con su número de documento, para verla sin red. Caduca
  * a las 8 horas de la búsqueda (`en`), se borra con "Nueva búsqueda" y al entrar un empleado.
+ * Solo se usa sin conexión: si la app carga con red (`navigator.onLine` al hidratar), se borra del
+ * disco y #/citas arranca vacío; si la red se pierde con la página abierta, lo que se ve se queda.
  *
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
@@ -69,16 +71,19 @@ export class MemoriaVistas {
     #suscribir;
     #persistencia;
     #reloj;
+    #enLinea;
 
     /**
      * @param {object} [opciones]
      * @param {{ leer: Function, guardar: Function, borrar: Function }|null} [opciones.persistencia] almacén en disco
      * @param {() => Date} [opciones.reloj]
+     * @param {() => boolean} [opciones.enLinea] si la app carga con red (navigator.onLine === true)
      */
-    constructor({ persistencia = null, reloj = () => new Date() } = {}) {
+    constructor({ persistencia = null, reloj = () => new Date(), enLinea = () => globalThis.navigator?.onLine === true } = {}) {
         ({ estado: this.#estado, suscribir: this.#suscribir } = crearEstado({ sesion: null, datos: VACIO }));
         this.#persistencia = persistencia;
         this.#reloj = reloj;
+        this.#enLinea = enLinea;
     }
 
     /** Clave de datos atada al usuario de la sesión; null si la sesión no trae usuario. */
@@ -181,12 +186,12 @@ export class MemoriaVistas {
         return true;
     }
 
-    /** Restaura la búsqueda pública si tiene 8 horas o menos; si caducó o no es válida, la borra. */
+    /** Sin red, restaura la búsqueda pública si tiene 8 horas o menos; con red, o si caducó o no es válida, la borra. */
     async #hidratarPublico(registro) {
         if (registro === undefined) return;
         const en = registro?.valor?.en;
         const edad = Number.isFinite(en) ? this.#reloj().getTime() - en : Number.NaN;
-        if (registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
+        if (this.#enLinea() || registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
             await this.#persistencia.guardar(RANURA_PUBLICO, null);
             return;
         }

@@ -23,8 +23,8 @@ const reloj = (ms = 0) => () => new Date(AHORA.getTime() + ms);
 /** Lo que hay en disco, leído directamente del doble. */
 const disco = fabrica => Object.fromEntries(fabrica.bases.get(NOMBRE_BASE)?.get(ALMACEN) ?? []);
 
-function nuevaMemoria(fabrica, desfase = 0) {
-    return new MemoriaVistas({ persistencia: crearAlmacenOffline(fabrica), reloj: reloj(desfase) });
+function nuevaMemoria(fabrica, desfase = 0, { enLinea = false } = {}) {
+    return new MemoriaVistas({ persistencia: crearAlmacenOffline(fabrica), reloj: reloj(desfase), enLinea: () => enLinea });
 }
 
 const consultaDemo = {
@@ -356,6 +356,68 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         await asentar();
         assert.ok(recargada.leer(CLAVE_CITAS), 'la búsqueda se restaura');
         assert.equal(disco(fabrica).dashboard, undefined, 'lo del empleado sin sesión se borra');
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO]);
+    });
+
+    test('al cargar la app con red se borra del disco y #/citas arranca con el formulario vacío', async () => {
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], 'antes estaba en disco');
+        const recargada = nuevaMemoria(fabrica, 60 * 60 * 1000, { enLinea: true });
+        await recargada.hidratar();
+        await asentar();
+        assert.equal(recargada.leer(CLAVE_CITAS), null);
+        assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
+        const conRed = citas(recargada, { enLinea: true, desfase: 60 * 60 * 1000 });
+        await conRed.controlador.iniciar();
+        assert.equal(conRed.estado.citas, null);
+        assert.equal(conRed.estado.numeroDocumento, '');
+        assert.equal(conRed.estado.idClinica, null);
+        assert.equal(conRed.estado.desdeMemoria, false);
+    });
+
+    test('al cargar la app sin red se restaura (y sigue en disco)', async () => {
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        const recargada = nuevaMemoria(fabrica, 60 * 60 * 1000, { enLinea: false });
+        await recargada.hidratar();
+        await asentar();
+        assert.ok(recargada.leer(CLAVE_CITAS));
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO]);
+    });
+
+    for (const enLinea of [true, false]) {
+        test(`una búsqueda caducada se borra al cargar ${enLinea ? 'con' : 'sin'} red`, async () => {
+            const fabrica = crearIndexedDbDoble();
+            await buscarConExito(nuevaMemoria(fabrica));
+            await asentar();
+            const tarde = nuevaMemoria(fabrica, VIGENCIA_MS + 1, { enLinea });
+            await tarde.hidratar();
+            await asentar();
+            assert.equal(tarde.leer(CLAVE_CITAS), null);
+            assert.equal(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], undefined);
+        });
+    }
+
+    test('si se pierde la red con la página abierta, la búsqueda en pantalla se queda', async () => {
+        const fabrica = crearIndexedDbDoble();
+        let avisar = () => {};
+        const memoria = nuevaMemoria(fabrica, 0, { enLinea: true });
+        await memoria.hidratar();
+        const c = await buscarConExito(memoria);
+        const conexion = { enLinea: true, suscribir: fn => { avisar = fn; return () => {}; } };
+        const otra = new ControladorCitas({
+            servicio: { clinicas: async () => [], citas: async () => [], ticket: async () => null },
+            listarTiposDocumento: async () => [DUI], conexion, memoria, reloj: reloj(),
+            temporizador: { programar: () => null, cancelar: () => {} },
+        });
+        await otra.iniciar();
+        conexion.enLinea = false;
+        avisar(false);
+        assert.deepEqual(otra.estado.citas, [CITA]);
+        assert.deepEqual(c.estado.citas, [CITA]);
         assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO]);
     });
 
