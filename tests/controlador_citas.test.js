@@ -187,7 +187,7 @@ describe('ControladorCitas: pasos y datos', () => {
         await controlador.siguiente();
         assert.equal(estado.paso, 3);
         assert.deepEqual(estado.clinicas, []);
-        assert.equal(MENSAJES.sinClinicas, 'No encontramos clínicas para esa búsqueda. Revisa el tipo y el número de documento.');
+        assert.equal(MENSAJES.sinClinicas, 'No encontramos ese documento registrado como paciente.');
         controlador.siguiente();
         assert.equal(estado.paso, 3);
         assert.equal(estado.alcanzado, 3);
@@ -525,11 +525,11 @@ describe('ControladorCitas: barra de búsqueda y respuestas tardías', () => {
         assert.equal(ctx.llamadas.clinicas.length, 1);
     });
 
-    for (const [clinicas, mensaje] of [[[], MENSAJES.sinClinicas], [[NORTE, SUR], MENSAJES.clinicaRequerida]]) {
+    for (const [clinicas, mensaje, campo] of [[[], MENSAJES.sinClinicas, 'numero'], [[NORTE, SUR], MENSAJES.clinicaRequerida, 'clinica']]) {
         test(`sin clínica seleccionada: ${mensaje}`, async () => {
             const ctx = await barra({ clinicas });
             await ctx.controlador.buscar();
-            assert.equal(ctx.estado.errores.clinica, mensaje);
+            assert.equal(ctx.estado.errores[campo], mensaje);
             assert.equal(ctx.llamadas.citas.length, 0);
         });
     }
@@ -817,5 +817,47 @@ describe('Campos que se desbloquean en orden', () => {
         const b = preparar({ memoria });
         await b.controlador.iniciar();
         assert.deepEqual({ ...b.estado.habilitado }, { numero: true, clinica: true, fechas: true, buscar: true });
+    });
+});
+
+// Punto 3: errores para el recuadro único de avisos.
+describe('Errores de la búsqueda de citas', () => {
+    const SIN_PACIENTE = 'No encontramos ese documento registrado como paciente.';
+
+    test('número completo sin clínicas: el error va al número con el texto neutro', async () => {
+        const { controlador, estado } = preparar({ clinicas: [] });
+        await controlador.iniciar();
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        await controlador.escribirNumero('99999999-9');
+        assert.equal(estado.errores.numero, SIN_PACIENTE);
+        assert.equal(estado.errores.clinica, null);
+    });
+
+    test('al buscar sin clínicas registradas el error también va al número', async () => {
+        const { controlador, estado } = preparar({ clinicas: [] });
+        await controlador.iniciar();
+        controlador.elegirTipo(PASAPORTE.idTipoDocumento);
+        controlador.escribirNumero('X1');
+        await controlador.buscar();
+        assert.equal(estado.errores.numero, SIN_PACIENTE);
+    });
+
+    test('un rango inválido marca el error al fijar las fechas', async () => {
+        const { controlador, estado } = preparar();
+        await controlador.iniciar();
+        controlador.fijarFechas({ desde: '2026-11-20', hasta: '2026-11-01' });
+        assert.equal(estado.errores.rango, MENSAJES.rangoInvertido);
+        controlador.fijarFechas({ desde: '2026-11-01', hasta: '2026-11-20' });
+        assert.equal(estado.errores.rango, null);
+    });
+
+    test('salir del campo con un número que no cumple: mensaje con las indicaciones del tipo', async () => {
+        const { controlador, estado, llamadas } = preparar();
+        await controlador.iniciar();
+        controlador.elegirTipo(DUI.idTipoDocumento);
+        controlador.escribirNumero('123');
+        await controlador.prepararClinicas();
+        assert.match(estado.errores.numero, /formato de DUI\. Ocho dígitos, guion y un dígito\./);
+        assert.equal(llamadas.clinicas.length, 0);
     });
 });

@@ -18,31 +18,30 @@ const PLANTILLA = plantilla(`
   <h1 id="titulo" tabindex="-1">Búsqueda de citas</h1>
   <p class="subtitulo">Consulta tus citas con tu documento, la clínica donde te atienden y un rango de fechas.</p>
   <p class="aviso" id="aviso-memoria" role="status" hidden></p>
-  <div class="mensaje-error" id="mensaje" role="alert" hidden><p id="mensaje-texto"></p></div>
+  <div class="mensaje-error" id="mensaje" role="alert" hidden>
+    <ul class="lista-errores" id="lista-errores"></ul>
+    <p id="mensaje-texto"></p>
+  </div>
   <form id="form-busqueda" class="barra-busqueda" novalidate>
     <div class="campo">
       <label for="tipo">Tipo de documento</label>
-      <select id="tipo" name="tipo" required aria-describedby="tipo-error"><option value="">Cargando tipos…</option></select>
-      <p class="error-campo" id="tipo-error" hidden></p>
+      <select id="tipo" name="tipo" required><option value="">Cargando tipos…</option></select>
     </div>
     <div class="campo">
       <label for="numero">Número de documento</label>
       <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
-             maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones numero-error" />
+             maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones" />
       <p class="indicaciones" id="numero-indicaciones" hidden></p>
-      <p class="error-campo" id="numero-error" hidden></p>
     </div>
     <div class="campo">
       <label for="clinica">Clínica</label>
-      <select id="clinica" name="clinica" required aria-describedby="clinica-error">
+      <select id="clinica" name="clinica" required>
         <option value="">Primero escribe tu documento</option>
       </select>
-      <p class="error-campo" id="clinica-error" hidden></p>
     </div>
     <div class="rango-fechas">
-      <div class="campo"><label for="desde">Desde</label><input id="desde" name="desde" type="date" required aria-describedby="rango-error" /></div>
-      <div class="campo"><label for="hasta">Hasta</label><input id="hasta" name="hasta" type="date" required aria-describedby="rango-error" /></div>
-      <p class="error-campo" id="rango-error" hidden></p>
+      <div class="campo"><label for="desde">Desde</label><input id="desde" name="desde" type="date" required /></div>
+      <div class="campo"><label for="hasta">Hasta</label><input id="hasta" name="hasta" type="date" required /></div>
     </div>
     <div class="acciones-busqueda">
       <p class="indicaciones" id="error-tipos" role="alert" hidden></p>
@@ -67,6 +66,11 @@ const PLANTILLA = plantilla(`
 
   <p class="pie-tarjeta">¿Trabajas en una clínica? <a href="#/login">Acceso del personal</a></p>
 </section>`);
+
+/** Clave de `errores` → campos que marca, en el orden en que reciben el foco. */
+const CAMPOS_CON_ERROR = Object.freeze([
+    ["tipo", ["tipo"]], ["numero", ["numero"]], ["clinica", ["clinica"]], ["rango", ["desde", "hasta"]],
+]);
 
 class VistaCitas extends HTMLElement {
     #controlador = null;
@@ -106,6 +110,12 @@ class VistaCitas extends HTMLElement {
             if (this.$("numero").value !== c.estado.numeroDocumento) this.$("numero").value = c.estado.numeroDocumento;
         });
         this.#escuchar(this.$("numero"), "change", () => c.prepararClinicas());
+        // Enter en el número es "intentar seguir": valida y lleva el foco al primer campo con error.
+        this.#escuchar(this.$("numero"), "keydown", e => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            c.prepararClinicas().then(() => { if (this.isConnected) this.#enfocarError(); });
+        });
         this.#escuchar(this.$("clinica"), "change", () => c.elegirClinica(this.$("clinica").value));
         for (const id of ["desde", "hasta"]) {
             this.#escuchar(this.$(id), "change", () => c.fijarFechas({ desde: this.$("desde").value, hasta: this.$("hasta").value }));
@@ -136,10 +146,14 @@ class VistaCitas extends HTMLElement {
         const c = this.#controlador;
         await c.buscar();
         if (!this.isConnected) return;
-        const error = c.estado.errores;
-        const campo = error.tipo ? "tipo" : error.numero ? "numero" : error.clinica ? "clinica" : error.rango ? "desde" : null;
+        if (!this.#enfocarError() && c.estado.citas) this.$("h-resultados").focus();
+    }
+
+    /** Lleva el foco al primer campo con error. Devuelve true si había alguno. */
+    #enfocarError() {
+        const campo = CAMPOS_CON_ERROR.find(([clave]) => this.#controlador.estado.errores[clave])?.[1][0];
         if (campo) this.$(campo).focus();
-        else if (c.estado.citas) this.$("h-resultados").focus();
+        return Boolean(campo);
     }
 
     /** `cambios` es el Set de claves del lote, o null para el pintado completo inicial. */
@@ -153,19 +167,11 @@ class VistaCitas extends HTMLElement {
             if (this.$("desde").value !== estado.desde) this.$("desde").value = estado.desde;
             if (this.$("hasta").value !== estado.hasta) this.$("hasta").value = estado.hasta;
         }
-        if (cambio("errores")) {
-            this.#errorCampo(this.$("tipo"), "tipo-error", estado.errores.tipo);
-            this.#errorCampo(this.$("numero"), "numero-error", estado.errores.numero);
-            this.#errorCampo(this.$("clinica"), "clinica-error", estado.errores.clinica);
-            this.#errorCampo(this.$("desde"), "rango-error", estado.errores.rango);
-            this.#errorCampo(this.$("hasta"), "rango-error", estado.errores.rango);
-        }
+        if (cambio("errores", "mensaje")) this.#pintarErrores(estado);
         if (cambio("citas")) this.#pintarResultados(estado);
         if (cambio("tickets")) this.#entregarTickets(estado);
         if (cambio("citas", "tickets", "enLinea", "bloqueadoHasta")) this.#pintarTarjetas(estado);
         this.#pintarAcciones(estado);
-        this.$("mensaje").hidden = !estado.mensaje;
-        this.$("mensaje-texto").textContent = estado.mensaje ?? "";
         const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn)) : null;
         this.$("aviso-memoria").hidden = !memoria;
         this.$("aviso-memoria").textContent = memoria ?? "";
@@ -219,11 +225,34 @@ class VistaCitas extends HTMLElement {
         this.$("falta").textContent = estado.falta ?? "";
     }
 
-    #errorCampo(control, idError, error) {
-        const texto = this.$(idError);
-        texto.hidden = !error;
-        texto.textContent = error ?? "";
-        if (error) control.setAttribute("aria-invalid", "true");
+    /**
+     * Un solo recuadro de avisos arriba del formulario: los errores de los campos (en lista) y el
+     * mensaje general. Cada campo con error lleva aria-invalid y aria-describedby hacia el recuadro.
+     */
+    #pintarErrores(estado) {
+        const textos = [];
+        for (const [clave, ids] of CAMPOS_CON_ERROR) {
+            const error = estado.errores[clave];
+            if (error && !textos.includes(error)) textos.push(error);
+            for (const id of ids) this.#marcarCampo(this.$(id), Boolean(error));
+        }
+        this.$("lista-errores").replaceChildren(...textos.map(texto => {
+            const li = document.createElement("li");
+            li.textContent = texto;
+            return li;
+        }));
+        this.$("lista-errores").hidden = !textos.length;
+        this.$("mensaje-texto").hidden = !estado.mensaje;
+        this.$("mensaje-texto").textContent = estado.mensaje ?? "";
+        this.$("mensaje").hidden = !textos.length && !estado.mensaje;
+    }
+
+    #marcarCampo(control, conError) {
+        const describe = (control.getAttribute("aria-describedby") ?? "").split(" ").filter(id => id && id !== "mensaje");
+        if (conError) describe.push("mensaje");
+        if (describe.length) control.setAttribute("aria-describedby", describe.join(" "));
+        else control.removeAttribute("aria-describedby");
+        if (conError) control.setAttribute("aria-invalid", "true");
         else control.removeAttribute("aria-invalid");
     }
 

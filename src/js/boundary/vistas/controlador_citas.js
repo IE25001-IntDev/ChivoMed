@@ -49,7 +49,8 @@ export const MENSAJES = Object.freeze({
     fechasInvalidas: "Escribe dos fechas válidas.",
     rangoInvertido: "La fecha inicial no puede ser posterior a la final.",
     rangoLargo: `Entre la fecha inicial y la final puede haber como máximo ${MAX_DIAS_RANGO} días.`,
-    sinClinicas: "No encontramos clínicas para esa búsqueda. Revisa el tipo y el número de documento.",
+    /** Mismo texto exista o no la persona: el backend responde 200 [] en ambos casos. */
+    sinClinicas: "No encontramos ese documento registrado como paciente.",
     sinCitas: "No hay citas en ese rango de fechas.",
     datos: "Revisa los datos de la búsqueda.",
     conexion: "No pudimos conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
@@ -448,8 +449,9 @@ export class ControladorCitas {
         desde = String(desde ?? "");
         hasta = String(hasta ?? "");
         if (desde === this.estado.desde && hasta === this.estado.hasta) return;
+        // El error del rango se ve al fijar las fechas: con fechas inválidas no se puede buscar.
+        this.#errores({ rango: validarRango(desde, hasta) });
         this.#actualizar({ desde, hasta });
-        if (this.estado.errores.rango) this.#errores({ rango: null });
         this.#invalidarResultados();
     }
 
@@ -492,6 +494,7 @@ export class ControladorCitas {
         this.#parCargado = this.#par();
         const idClinica = clinicas.length === 1 ? clinicas[0].idClinica
             : clinicas.some(c => c.idClinica === this.estado.idClinica) ? this.estado.idClinica : null;
+        if (!clinicas.length) this.#errores({ numero: MENSAJES.sinClinicas });
         this.#actualizar({ clinicas, idClinica });
         if (avanzar) this.#avanzar(3);
     }
@@ -560,7 +563,7 @@ export class ControladorCitas {
         if (par !== this.#par()) return;
         if (!this.estado.clinicas || this.estado.mensaje) return;
         if (!this.estado.clinicas.some(c => c.idClinica === this.estado.idClinica)) {
-            this.#errores({ clinica: this.estado.clinicas.length ? MENSAJES.clinicaRequerida : MENSAJES.sinClinicas });
+            this.#errores(this.estado.clinicas.length ? { clinica: MENSAJES.clinicaRequerida } : { numero: MENSAJES.sinClinicas });
             return;
         }
         return this.#buscarCitas();

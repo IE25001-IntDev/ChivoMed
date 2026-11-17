@@ -152,7 +152,7 @@ describe('<vista-citas>: barra y resultados', () => {
         ctx.$('numero').dispatchEvent(new Event('input'));
         ctx.enviar();
         await asentar();
-        assert.match(ctx.$('numero-error').textContent, /formato de DUI/);
+        assert.match(ctx.$('mensaje').textContent, /formato de DUI/);
         assert.equal(ctx.llamadas.clinicas, 0);
         assert.equal(ctx.$('numero').getAttribute('aria-invalid'), 'true');
     });
@@ -261,6 +261,85 @@ describe('<vista-citas>: campos que se desbloquean en orden', () => {
         assert.equal(ctx.$('hasta').disabled, false);
         assert.equal(ctx.$('buscar').disabled, false);
         assert.equal(ctx.$('falta').hidden, true);
+        desconectar(ctx.vista);
+    });
+});
+
+describe('<vista-citas>: errores en un solo recuadro arriba del formulario', () => {
+    const errores = ctx => ctx.$('mensaje').querySelectorAll('li').map(li => li.textContent);
+
+    test('no hay mensajes debajo de los campos', () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        for (const id of ['tipo-error', 'numero-error', 'clinica-error', 'rango-error']) assert.equal(ctx.$(id), null, id);
+        assert.equal(ctx.vista.shadowRoot.querySelectorAll('.error-campo').length, 0);
+        desconectar(ctx.vista);
+    });
+
+    test('al salir del número inválido: recuadro con role=alert, aria-invalid y aria-describedby; el foco no se mueve', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('tipo').dispatchEvent(new Event('change'));
+        ctx.$('numero').value = '123';
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        ctx.$('desde').focus();
+        ctx.$('numero').dispatchEvent(new Event('change'));
+        await asentar();
+        assert.equal(ctx.$('mensaje').getAttribute('role'), 'alert');
+        assert.equal(ctx.$('mensaje').hidden, false);
+        assert.equal(errores(ctx).length, 1);
+        assert.match(errores(ctx)[0], /formato de DUI\. Ocho dígitos/);
+        assert.equal(ctx.$('numero').getAttribute('aria-invalid'), 'true');
+        assert.ok(ctx.$('numero').getAttribute('aria-describedby').split(' ').includes('mensaje'));
+        assert.equal(ctx.vista.shadowRoot.activeElement, ctx.$('desde'));
+        desconectar(ctx.vista);
+    });
+
+    test('Enter en el número inválido lleva el foco al primer campo con error', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('tipo').dispatchEvent(new Event('change'));
+        ctx.$('numero').value = '123';
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        ctx.$('desde').focus();
+        const enter = Object.assign(new Event('keydown', { cancelable: true }), { key: 'Enter' });
+        ctx.$('numero').dispatchEvent(enter);
+        await asentar();
+        await asentar();
+        assert.equal(ctx.vista.shadowRoot.activeElement, ctx.$('numero'));
+        assert.equal(errores(ctx).length, 1);
+        desconectar(ctx.vista);
+    });
+
+    test('documento sin clínicas: el mismo texto neutro en el recuadro y el número marcado', async () => {
+        const ctx = montar({ clinicas: [] });
+        conectar(ctx.vista);
+        await asentar();
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('tipo').dispatchEvent(new Event('change'));
+        ctx.$('numero').value = NUMERO;
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        await asentar();
+        await asentar();
+        assert.deepEqual(errores(ctx), ['No encontramos ese documento registrado como paciente.']);
+        assert.equal(ctx.$('numero').getAttribute('aria-invalid'), 'true');
+        desconectar(ctx.vista);
+    });
+
+    test('errores de red y de campo comparten el recuadro; un campo sin error no lo referencia', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        ctx.controlador.fijarFechas({ desde: '2026-11-20', hasta: '2026-11-01' });
+        await asentar();
+        assert.ok(errores(ctx).includes('La fecha inicial no puede ser posterior a la final.'));
+        assert.equal(ctx.$('desde').getAttribute('aria-invalid'), 'true');
+        assert.ok((ctx.$('hasta').getAttribute('aria-describedby') ?? '').split(' ').includes('mensaje'));
+        assert.ok(!(ctx.$('tipo').getAttribute('aria-describedby') ?? '').split(' ').includes('mensaje'));
         desconectar(ctx.vista);
     });
 });
