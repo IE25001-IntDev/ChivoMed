@@ -260,3 +260,100 @@ describe('<install-prompt>', () => {
         }
     });
 });
+
+// Punto 7: invitación a instalar al buscar o al ingresar, una vez por sesión.
+describe('ControladorInstalacion: ofrecer una vez al buscar o al ingresar', () => {
+    const conSesion = (opciones = {}) => {
+        const ctx = preparar(opciones);
+        const datos = new Map();
+        ctx.ventana.sessionStorage = { getItem: k => datos.get(k) ?? null, setItem: (k, v) => datos.set(k, String(v)) };
+        return ctx;
+    };
+
+    test('se ofrece dentro del mismo clic: prompt() se llama de forma síncrona', async () => {
+        const { ventana, controlador } = conSesion();
+        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
+        const aviso = crearAviso('dismissed');
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        const promesa = controlador.ofrecerUnaVez();
+        assert.equal(aviso.llamadasPrompt, 1, 'sin esperar: el navegador exige el gesto del usuario');
+        assert.equal(await promesa, 'dismissed');
+    });
+
+    test('no se ofrece dos veces en la sesión, aunque llegue otro beforeinstallprompt o se recargue', async () => {
+        const { ventana, controlador } = conSesion();
+        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
+        ventana.dispatchEvent(crearAviso('dismissed'));
+        await asentar();
+        await controlador.ofrecerUnaVez();
+        const segundo = crearAviso();
+        ventana.dispatchEvent(segundo);
+        await asentar();
+        assert.equal(controlador.ofrecerUnaVez(), null);
+        assert.equal(segundo.llamadasPrompt, 0);
+        const otro = new ControladorInstalacion({ ventana });
+        otro.iniciar();
+        const tercero = crearAviso();
+        ventana.dispatchEvent(tercero);
+        assert.equal(otro.ofrecerUnaVez(), null, 'otra instancia en la misma sesión tampoco ofrece');
+        assert.equal(tercero.llamadasPrompt, 0);
+        assert.equal(controlador.estado.modo, MODOS.DISPONIBLE, 'el botón "Instalar app" sigue disponible');
+    });
+
+    test('no se ofrece si ya está instalada ni sin beforeinstallprompt', () => {
+        const instalada = conSesion({ standalone: true });
+        assert.equal(typeof instalada.controlador.ofrecerUnaVez, 'function');
+        const aviso = crearAviso();
+        instalada.ventana.dispatchEvent(aviso);
+        assert.equal(instalada.controlador.ofrecerUnaVez(), null);
+        assert.equal(aviso.llamadasPrompt, 0);
+        assert.equal(conSesion().controlador.ofrecerUnaVez(), null);
+    });
+
+    test('si la persona la rechazó con el botón, no se ofrece después', async () => {
+        const { ventana, controlador } = conSesion();
+        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
+        ventana.dispatchEvent(crearAviso('dismissed'));
+        await asentar();
+        await controlador.instalar();
+        const nuevo = crearAviso();
+        ventana.dispatchEvent(nuevo);
+        assert.equal(controlador.ofrecerUnaVez(), null);
+        assert.equal(nuevo.llamadasPrompt, 0);
+    });
+
+    test('sin sessionStorage (o si falla) solo se ofrece una vez por instancia', async () => {
+        const { ventana, controlador } = preparar();
+        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
+        ventana.sessionStorage = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
+        const aviso = crearAviso('dismissed');
+        ventana.dispatchEvent(aviso);
+        controlador.ofrecerUnaVez();
+        ventana.dispatchEvent(crearAviso());
+        assert.equal(controlador.ofrecerUnaVez(), null);
+        assert.equal(aviso.llamadasPrompt, 1);
+    });
+});
+
+describe('<install-prompt>: escucha la invitación de las vistas', () => {
+    test('el evento "ofrecer-instalacion" en document abre el diálogo en el mismo clic, y deja de escuchar al desconectarse', async () => {
+        instalarDom();
+        const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
+        const ventana = crearVentana();
+        const controlador = new ControladorInstalacion({ ventana });
+        const el = new InstallPrompt();
+        el.controlador = controlador;
+        conectar(el);
+        const aviso = crearAviso('dismissed');
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        document.dispatchEvent(new CustomEvent('ofrecer-instalacion'));
+        assert.equal(aviso.llamadasPrompt, 1);
+        desconectar(el);
+        const otro = crearAviso();
+        ventana.dispatchEvent(otro);
+        document.dispatchEvent(new CustomEvent('ofrecer-instalacion'));
+        assert.equal(otro.llamadasPrompt, 0);
+    });
+});

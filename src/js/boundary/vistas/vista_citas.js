@@ -11,6 +11,7 @@ import { ControladorCitas, MENSAJES, MAX_NUMERO_DOCUMENTO, motivoNoBuscar, forma
 import { formatearFecha } from "../fechas_sv.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { plantilla } from "../plantilla.js";
+import { EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
 import "../components/citas/tarjeta_cita.js";
 
 const PLANTILLA = plantilla(`
@@ -144,6 +145,8 @@ class VistaCitas extends HTMLElement {
     async #buscar(event) {
         event.preventDefault();
         const c = this.#controlador;
+        // Invitación a instalar dentro del mismo clic (prompt() lo exige); la búsqueda no la espera.
+        if (c.estado.habilitado.buscar) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
         await c.buscar();
         if (!this.isConnected) return;
         if (!this.#enfocarError() && c.estado.citas) this.$("h-resultados").focus();

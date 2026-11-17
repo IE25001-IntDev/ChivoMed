@@ -11,6 +11,7 @@ import { hojaDeEstilos } from "./estilos.js";
 import { conexion } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
 import { plantilla } from "../plantilla.js";
+import { EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
 
 const PLANTILLA = plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
@@ -172,6 +173,9 @@ class VistaLogin extends HTMLElement {
     async #enviar(event) {
         event.preventDefault();
         const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
+        // Invitación a instalar dentro del mismo clic (prompt() lo exige); el login no la espera.
+        const invalido = this.#controlador.validar(datos);
+        if (!invalido.tipo && !invalido.numero && !this.#controlador.estado.enviando) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
         const sesion = await this.#controlador.enviar(datos);
         if (!this.isConnected) return;
         if (sesion) {

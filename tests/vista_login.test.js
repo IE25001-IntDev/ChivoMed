@@ -176,3 +176,32 @@ describe('<vista-login>: autoformato del número', () => {
         assert.equal(ctx.$('numero').value, '123456789', 'desconectada ya no escucha');
     });
 });
+
+describe('<vista-login>: invitación a instalar', () => {
+    test('al pulsar "Ingresar" con datos válidos se pide en el mismo clic y el login sigue', async () => {
+        const ctx = montar();
+        const invitaciones = [];
+        const escuchar = e => invitaciones.push(e);
+        document.addEventListener('ofrecer-instalacion', escuchar);
+        try {
+            conectar(ctx.vista);
+            await asentar();
+            ctx.enviar();
+            assert.equal(invitaciones.length, 0, 'con errores de validación no se ofrece');
+            await asentar();
+            ctx.$('tipo').value = DUI.idTipoDocumento;
+            ctx.$('tipo').dispatchEvent(new Event('change'));
+            ctx.$('numero').value = '01000001-1';
+            ctx.$('numero').dispatchEvent(new Event('input'));
+            ctx.enviar();
+            assert.equal(invitaciones.length, 1, 'dentro del mismo submit, antes de esperar');
+            await asentar();
+            await asentar();
+            assert.equal(ctx.llamadas.login.length, 1, 'el login continúa');
+            assert.equal(ctx.eventos.length, 1, 'y navega');
+        } finally {
+            document.removeEventListener('ofrecer-instalacion', escuchar);
+            desconectar(ctx.vista);
+        }
+    });
+});

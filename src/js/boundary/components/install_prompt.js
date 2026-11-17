@@ -4,8 +4,10 @@
  * ya está instalada o cuando se instala (appinstalled). La lógica vive en ControladorInstalacion.
  * Se suscribe a su estado reactivo al conectarse y cancela al desconectarse.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea uno por conexión.
+ * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas y el login dentro del clic)
+ * y pide al controlador que invite a instalar una sola vez por sesión. El botón no cambia.
  */
-import { ControladorInstalacion, MODOS } from "../pwa/controlador_instalacion.js";
+import { ControladorInstalacion, MODOS, EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { plantilla } from "../plantilla.js";
 
@@ -21,6 +23,7 @@ class InstallPrompt extends HTMLElement {
     #inyectado = null;
     #cancelar = null;
     #alPulsar = () => this.#controlador.instalar();
+    #alOfrecer = () => this.#controlador.ofrecerUnaVez();
 
     /** Controlador inyectado; solo se puede asignar antes de conectar el componente. */
     set controlador(valor) {
@@ -42,12 +45,14 @@ class InstallPrompt extends HTMLElement {
         this.#controlador = this.#inyectado ?? new ControladorInstalacion({ ventana: window });
         this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
         this.shadowRoot.getElementById("instalar").addEventListener("click", this.#alPulsar);
+        document.addEventListener(EVENTO_OFRECER, this.#alOfrecer);
         this.#controlador.iniciar();
         this.#pintar(this.#controlador.estado);
     }
 
     disconnectedCallback() {
         this.shadowRoot.getElementById("instalar").removeEventListener("click", this.#alPulsar);
+        document.removeEventListener(EVENTO_OFRECER, this.#alOfrecer);
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();

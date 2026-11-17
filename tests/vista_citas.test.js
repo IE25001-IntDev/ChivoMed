@@ -343,3 +343,34 @@ describe('<vista-citas>: errores en un solo recuadro arriba del formulario', () 
         desconectar(ctx.vista);
     });
 });
+
+describe('<vista-citas>: invitación a instalar', () => {
+    test('al pulsar "Buscar citas" válido se pide en el mismo clic y la búsqueda sigue', async () => {
+        const ctx = montar();
+        const invitaciones = [];
+        const escuchar = e => invitaciones.push(e);
+        document.addEventListener('ofrecer-instalacion', escuchar);
+        try {
+            conectar(ctx.vista);
+            await asentar();
+            ctx.$('tipo').value = DUI.idTipoDocumento;
+            ctx.$('tipo').dispatchEvent(new Event('change'));
+            ctx.enviar();
+            assert.equal(invitaciones.length, 0, 'sin datos válidos no se ofrece');
+            ctx.$('numero').value = NUMERO;
+            ctx.$('numero').dispatchEvent(new Event('input'));
+            await asentar();
+            await asentar();
+            ctx.$('clinica').value = NORTE.idClinica;
+            ctx.$('clinica').dispatchEvent(new Event('change'));
+            ctx.enviar();
+            assert.equal(invitaciones.length, 1, 'dentro del mismo submit, antes de esperar');
+            await asentar();
+            await asentar();
+            assert.equal(ctx.llamadas.citas, 1, 'la búsqueda continúa aunque se rechace');
+        } finally {
+            document.removeEventListener('ofrecer-instalacion', escuchar);
+            desconectar(ctx.vista);
+        }
+    });
+});
