@@ -175,3 +175,19 @@ describe('components.css', () => {
         assert.ok(clases.has('theme-button') && clases.has('sun-icon') && clases.has('moon-icon') && clases.has('theme-label'));
     });
 });
+
+describe('components.css: sin scroll horizontal en móvil', () => {
+    test('a 375 px y menos el botón muestra solo el ícono, con 44 px de alto y el mismo nombre accesible', async () => {
+        const { readFile } = await import('node:fs/promises');
+        const css = (await readFile(new URL('../src/resources/components.css', import.meta.url), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+        const ocultan = [...css.matchAll(/@media\s*\(max-width:\s*(\d+)px\)\s*\{([^{}]*\{[^{}]*\})*[^{}]*\}/g)]
+            .filter(([bloque]) => /\.theme-label\s*\{[^}]*display:\s*none/.test(bloque))
+            .map(([, ancho]) => Number(ancho));
+        assert.ok(ocultan.length > 0, 'hay una media query que oculta .theme-label');
+        assert.ok(Math.max(...ocultan) >= 375, `la etiqueta se oculta hasta ${Math.max(...ocultan)} px; a 375 px se sale de la pantalla`);
+        assert.match(css, /\.theme-button\s*\{[^}]*min-height:\s*44px/, 'el botón conserva 44 px de alto');
+        assert.doesNotMatch(css, /\.theme-button\s*\{[^}]*(?:max-height|(?<![\w-])height):/, 'nada le recorta el alto');
+        const { boton } = montar();
+        assert.equal(boton.shadowRoot.querySelector('button').getAttribute('aria-label'), 'Modo oscuro', 'el nombre accesible no depende de la etiqueta visible');
+    });
+});

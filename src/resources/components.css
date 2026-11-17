@@ -60,7 +60,9 @@ svg {
     padding: var(--espacio-2) var(--espacio-3);
   }
 }
-@media (max-width: 360px) {
+/* A 400 px y menos solo el ícono: con la etiqueta, la cabecera se sale a 375 px. El nombre
+   accesible viene de aria-label, no de la etiqueta. */
+@media (max-width: 400px) {
   .theme-label {
     display: none;
   }
