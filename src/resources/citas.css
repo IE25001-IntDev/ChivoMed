@@ -45,7 +45,9 @@
 .estado-ticket { margin: 0; font-size: .9rem; }
 .estado-ticket:empty { display: none; }
 
-@media (max-width: 1000px) {
+/* Los cinco campos caben en una línea desde 1053 px (medido, con barra de scroll); con unos 40 px
+   de margen por el ancho del campo de fecha según el idioma, por debajo de 1093 px van en tres columnas. */
+@media (max-width: 1092px) {
   .barra-busqueda { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 680px) {

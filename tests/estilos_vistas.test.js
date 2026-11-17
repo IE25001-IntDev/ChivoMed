@@ -69,3 +69,15 @@ test('citas.css: con la barra en una columna, las fechas van una debajo de la ot
     assert.match(fechas, /grid-template-columns:\s*1fr\s*(;|$)/, `.rango-fechas tiene una sola columna (hoy: "${fechas.trim()}")`);
     assert.doesNotMatch(css, /\.rango-fechas[^{]*\{[^}]*min-width:\s*0/, 'no se aprietan con min-width: 0');
 });
+
+// Medido en Chromium con barra de scroll: los cinco campos caben en una línea (cada fecha unos
+// 160 px) desde 1053 px de ventana. Con unos 40 px de margen, porque el campo de fecha cambia con
+// el idioma, por debajo de 1093 px la barra usa el acomodo de tres columnas.
+test('citas.css: la fila de cinco campos solo se usa desde 1093 px', async () => {
+    const css = (await readFile(join(SRC, 'resources/citas.css'), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const tres = [...css.matchAll(/@media\s*\(max-width:\s*(\d+)px\)\s*\{((?:[^{}]*\{[^{}]*\})*)[^{}]*\}/g)]
+        .find(([, , cuerpo]) => /\.barra-busqueda\s*\{[^}]*repeat\(3,/.test(cuerpo));
+    assert.ok(tres, 'existe el acomodo de tres columnas');
+    assert.equal(Number(tres[1]), 1092, `el acomodo de tres columnas llega hasta ${tres[1]} px`);
+    assert.match(css, /\.barra-busqueda\s*\{[^}]*grid-template-columns:\s*repeat\(5,/, 'la fila de cinco sigue siendo el acomodo ancho');
+});
