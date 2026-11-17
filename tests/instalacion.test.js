@@ -329,7 +329,7 @@ describe('ControladorInstalacion: ofrecer una vez al buscar o al ingresar', () =
         ventana.sessionStorage = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
         const aviso = crearAviso('dismissed');
         ventana.dispatchEvent(aviso);
-        controlador.ofrecerUnaVez();
+        await controlador.ofrecerUnaVez(); // la persona la rechaza
         ventana.dispatchEvent(crearAviso());
         assert.equal(controlador.ofrecerUnaVez(), null);
         assert.equal(aviso.llamadasPrompt, 1);

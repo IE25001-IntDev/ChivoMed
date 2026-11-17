@@ -374,3 +374,78 @@ describe('<vista-citas>: invitación a instalar', () => {
         }
     });
 });
+
+// La invitación sale de la vista real y la recibe el <install-prompt> real (no se lanza desde document).
+describe('<vista-citas> + <install-prompt>: invitación de extremo a extremo', () => {
+    let InstallPrompt;
+    let ControladorInstalacion;
+    before(async () => {
+        ({ default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js'));
+        ({ ControladorInstalacion } = await import('../src/js/boundary/pwa/controlador_instalacion.js'));
+    });
+
+    /** Una "carga de página": ventana doble con la sessionStorage de la pestaña e install-prompt real. */
+    function cargarPagina(sesionPestana) {
+        const ventana = new EventTarget();
+        ventana.matchMedia = () => ({ matches: false });
+        ventana.navigator = {};
+        ventana.sessionStorage = { getItem: k => sesionPestana.get(k) ?? null, setItem: (k, v) => sesionPestana.set(k, String(v)) };
+        const instalador = new InstallPrompt();
+        instalador.controlador = new ControladorInstalacion({ ventana });
+        conectar(instalador);
+        return { ventana, instalador };
+    }
+
+    function aviso({ falla = false } = {}) {
+        const e = new Event('beforeinstallprompt', { cancelable: true });
+        e.llamadas = 0;
+        e.prompt = () => { e.llamadas++; return falla ? Promise.reject(new Error('NotAllowedError')) : Promise.resolve(); };
+        e.userChoice = Promise.resolve({ outcome: 'dismissed', platform: 'web' });
+        return e;
+    }
+
+    test('"Buscar citas" válido abre la invitación y la búsqueda continúa', async () => {
+        const { ventana, instalador } = cargarPagina(new Map());
+        const ctx = montar();
+        try {
+            const bip = aviso();
+            ventana.dispatchEvent(bip);
+            await asentar();
+            await llenarFiltros(ctx);
+            assert.equal(bip.llamadas, 1, 'el evento de la vista llega a <install-prompt>');
+            assert.equal(ctx.llamadas.citas, 1, 'la búsqueda sigue');
+        } finally {
+            desconectar(ctx.vista);
+            desconectar(instalador);
+        }
+    });
+
+    test('un intento que no llegó a mostrarse no gasta la invitación de la sesión', async () => {
+        const pestana = new Map();
+        const primera = cargarPagina(pestana);
+        const ctx1 = montar();
+        try {
+            primera.ventana.dispatchEvent(aviso({ falla: true }));
+            await asentar();
+            await llenarFiltros(ctx1);
+            await asentar();
+        } finally {
+            desconectar(ctx1.vista);
+            desconectar(primera.instalador);
+        }
+        // Se recarga la pestaña: el navegador vuelve a dar beforeinstallprompt y el botón se ve.
+        const segunda = cargarPagina(pestana);
+        const ctx2 = montar();
+        try {
+            const bip = aviso();
+            segunda.ventana.dispatchEvent(bip);
+            await asentar();
+            assert.equal(segunda.instalador.shadowRoot.getElementById('instalar').hidden, false, 'el botón está visible');
+            await llenarFiltros(ctx2);
+            assert.equal(bip.llamadas, 1, 'la invitación sale al pulsar "Buscar citas"');
+        } finally {
+            desconectar(ctx2.vista);
+            desconectar(segunda.instalador);
+        }
+    });
+});

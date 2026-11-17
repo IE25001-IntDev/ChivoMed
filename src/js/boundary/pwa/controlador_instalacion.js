@@ -6,7 +6,7 @@
  *
  * Invitación (2026-11-17): al buscar citas o al ingresar, las vistas emiten EVENTO_OFRECER en
  * document dentro del mismo clic; <install-prompt> llama a ofrecerUnaVez(), que abre el diálogo una
- * sola vez por sesión (marca en sessionStorage), nunca si ya está instalada, si el navegador no dio
+ * sola vez por sesión (marca en sessionStorage al rechazarla), nunca si ya está instalada, si el navegador no dio
  * beforeinstallprompt o si la persona ya la rechazó en esta sesión.
  */
 import { crearEstado } from "../../control/estado_reactivo.js";
@@ -84,10 +84,11 @@ export class ControladorInstalacion {
     /**
      * Invitación al buscar o al ingresar: abre el diálogo (prompt() se llama de forma síncrona, dentro
      * del clic) solo una vez por sesión. Devuelve la promesa de instalar() o null si no se ofrece.
+     * La sesión se marca cuando la persona la rechaza (en instalar()), no al intentarlo: un intento
+     * que no llegó a mostrarse o sin respuesta (p. ej. se recargó) no gasta la invitación.
      */
     ofrecerUnaVez() {
         if (this.#yaOfrecida() || !this.#evento || this.estado.modo !== MODOS.DISPONIBLE || this.yaInstalada()) return null;
-        this.#marcarOfrecida();
         return this.instalar();
     }
 

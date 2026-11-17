@@ -205,3 +205,42 @@ describe('<vista-login>: invitación a instalar', () => {
         }
     });
 });
+
+// La invitación sale de la vista real y la recibe el <install-prompt> real (no se lanza desde document).
+describe('<vista-login> + <install-prompt>: invitación de extremo a extremo', () => {
+    test('"Ingresar" válido abre la invitación y el login continúa', async () => {
+        const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
+        const { ControladorInstalacion } = await import('../src/js/boundary/pwa/controlador_instalacion.js');
+        const ventana = new EventTarget();
+        ventana.matchMedia = () => ({ matches: false });
+        ventana.navigator = {};
+        const pestana = new Map();
+        ventana.sessionStorage = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)) };
+        const instalador = new InstallPrompt();
+        instalador.controlador = new ControladorInstalacion({ ventana });
+        conectar(instalador);
+        const bip = new Event('beforeinstallprompt', { cancelable: true });
+        bip.llamadas = 0;
+        bip.prompt = () => { bip.llamadas++; return Promise.resolve(); };
+        bip.userChoice = Promise.resolve({ outcome: 'dismissed', platform: 'web' });
+        ventana.dispatchEvent(bip);
+        const ctx = montar();
+        try {
+            conectar(ctx.vista);
+            await asentar();
+            ctx.$('tipo').value = DUI.idTipoDocumento;
+            ctx.$('tipo').dispatchEvent(new Event('change'));
+            ctx.$('numero').value = '01000001-1';
+            ctx.$('numero').dispatchEvent(new Event('input'));
+            ctx.enviar();
+            assert.equal(bip.llamadas, 1, 'el evento de la vista llega a <install-prompt>');
+            await asentar();
+            await asentar();
+            assert.equal(ctx.llamadas.login.length, 1, 'el login continúa');
+            assert.equal(ctx.eventos.length, 1, 'y navega');
+        } finally {
+            desconectar(ctx.vista);
+            desconectar(instalador);
+        }
+    });
+});
