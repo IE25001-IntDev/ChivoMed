@@ -5,9 +5,11 @@
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  *
  * Invitación (2026-11-17): al buscar citas o al ingresar, las vistas emiten EVENTO_OFRECER en
- * document dentro del mismo clic; <install-prompt> llama a ofrecerUnaVez(), que abre el diálogo una
- * sola vez por sesión (marca en sessionStorage al rechazarla), nunca si ya está instalada, si el navegador no dio
- * beforeinstallprompt o si la persona ya la rechazó en esta sesión.
+ * document; <install-prompt> llama a ofrecerUnaVez(), que pone `invitacion: true` (la vista abre su
+ * ventana propia) una sola vez por sesión, nunca si ya está instalada, si el navegador no dio
+ * beforeinstallprompt o si la persona ya la rechazó en esta sesión. "Instalar" llama a
+ * aceptarInvitacion() (prompt() dentro de ese clic); "Ahora no", Esc o clic fuera, a
+ * rechazarInvitacion(), que marca la sesión en sessionStorage.
  */
 import { crearEstado } from "../../control/estado_reactivo.js";
 
@@ -38,7 +40,7 @@ export class ControladorInstalacion {
      */
     constructor({ ventana }) {
         this.#ventana = ventana;
-        const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null });
+        const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null, invitacion: false });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
         this.estado = estado;
         /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
@@ -82,14 +84,29 @@ export class ControladorInstalacion {
     }
 
     /**
-     * Invitación al buscar o al ingresar: abre el diálogo (prompt() se llama de forma síncrona, dentro
-     * del clic) solo una vez por sesión. Devuelve la promesa de instalar() o null si no se ofrece.
-     * La sesión se marca cuando la persona la rechaza (en instalar()), no al intentarlo: un intento
-     * que no llegó a mostrarse o sin respuesta (p. ej. se recargó) no gasta la invitación.
+     * Invitación al buscar o al ingresar: abre la ventana propia (`invitacion: true`) solo una vez por
+     * sesión. Devuelve true si la abrió. La sesión se marca cuando la persona la rechaza, no al
+     * abrirla: una ventana sin respuesta (p. ej. se recargó) no gasta la invitación.
      */
     ofrecerUnaVez() {
-        if (this.#yaOfrecida() || !this.#evento || this.estado.modo !== MODOS.DISPONIBLE || this.yaInstalada()) return null;
+        if (this.estado.invitacion || this.#yaOfrecida() || !this.#evento
+            || this.estado.modo !== MODOS.DISPONIBLE || this.yaInstalada()) return false;
+        this.#actualizar({ invitacion: true });
+        return true;
+    }
+
+    /** "Instalar" en la ventana: la cierra y llama a prompt() dentro de ese clic. */
+    aceptarInvitacion() {
+        if (!this.estado.invitacion) return null;
+        this.#actualizar({ invitacion: false });
         return this.instalar();
+    }
+
+    /** "Ahora no", Esc o clic fuera: la cierra y no se vuelve a ofrecer en la sesión. */
+    rechazarInvitacion() {
+        if (!this.estado.invitacion) return;
+        this.#marcarOfrecida();
+        this.#actualizar({ invitacion: false });
     }
 
     /** Muestra el diálogo del navegador. Devuelve "accepted", "dismissed" o null si no se pudo. */
@@ -126,7 +143,7 @@ export class ControladorInstalacion {
 
     #instalada() {
         this.#evento = null;
-        this.#actualizar({ modo: MODOS.INSTALADA, mensaje: "ChivoMed quedó instalada en este dispositivo." });
+        this.#actualizar({ modo: MODOS.INSTALADA, mensaje: "ChivoMed quedó instalada en este dispositivo.", invitacion: false });
     }
 
     #actualizar(cambios) {

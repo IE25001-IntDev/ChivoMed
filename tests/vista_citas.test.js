@@ -376,7 +376,7 @@ describe('<vista-citas>: invitación a instalar', () => {
 });
 
 // La invitación sale de la vista real y la recibe el <install-prompt> real (no se lanza desde document).
-describe('<vista-citas> + <install-prompt>: invitación de extremo a extremo', () => {
+describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     let InstallPrompt;
     let ControladorInstalacion;
     before(async () => {
@@ -385,67 +385,136 @@ describe('<vista-citas> + <install-prompt>: invitación de extremo a extremo', (
     });
 
     /** Una "carga de página": ventana doble con la sessionStorage de la pestaña e install-prompt real. */
-    function cargarPagina(sesionPestana) {
+    function cargarPagina(pestana = new Map(), { instalada = false } = {}) {
         const ventana = new EventTarget();
-        ventana.matchMedia = () => ({ matches: false });
+        ventana.matchMedia = q => ({ matches: instalada && q === '(display-mode: standalone)' });
         ventana.navigator = {};
-        ventana.sessionStorage = { getItem: k => sesionPestana.get(k) ?? null, setItem: (k, v) => sesionPestana.set(k, String(v)) };
+        ventana.sessionStorage = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)) };
         const instalador = new InstallPrompt();
         instalador.controlador = new ControladorInstalacion({ ventana });
         conectar(instalador);
-        return { ventana, instalador };
+        const $i = id => instalador.shadowRoot.getElementById(id);
+        assert.ok($i('invitacion'), '<install-prompt> trae su <dialog id="invitacion">');
+        return { ventana, instalador, $i, dialogo: $i('invitacion'), pestana };
     }
 
-    function aviso({ falla = false } = {}) {
+    function aviso() {
         const e = new Event('beforeinstallprompt', { cancelable: true });
         e.llamadas = 0;
-        e.prompt = () => { e.llamadas++; return falla ? Promise.reject(new Error('NotAllowedError')) : Promise.resolve(); };
+        e.prompt = () => { e.llamadas++; return Promise.resolve(); };
         e.userChoice = Promise.resolve({ outcome: 'dismissed', platform: 'web' });
         return e;
     }
 
-    test('"Buscar citas" válido abre la invitación y la búsqueda continúa', async () => {
-        const { ventana, instalador } = cargarPagina(new Map());
+    /** Abre la página con beforeinstallprompt y pulsa "Buscar citas" con el foco en el botón. */
+    async function buscarConAviso(pagina = cargarPagina(), bip = aviso()) {
         const ctx = montar();
+        pagina.ventana.dispatchEvent(bip);
+        await asentar();
+        conectar(ctx.vista);
+        await asentar();
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('tipo').dispatchEvent(new Event('change'));
+        ctx.$('numero').value = NUMERO;
+        ctx.$('numero').dispatchEvent(new Event('input'));
+        await asentar();
+        ctx.$('clinica').value = NORTE.idClinica;
+        ctx.$('clinica').dispatchEvent(new Event('change'));
+        ctx.$('buscar').focus();
+        ctx.enviar();
+        await asentar();
+        return { ...pagina, ctx, bip, cerrar: () => { desconectar(ctx.vista); desconectar(pagina.instalador); } };
+    }
+
+    test('"Buscar citas" válido abre la ventana accesible con el foco en "Instalar", y la búsqueda sigue', async () => {
+        const p = await buscarConAviso();
         try {
-            const bip = aviso();
-            ventana.dispatchEvent(bip);
+            assert.equal(p.dialogo.open, true, 'la ventana se abre');
+            assert.equal(p.bip.llamadas, 0, 'prompt() espera al clic en "Instalar"');
+            assert.equal(p.dialogo.getAttribute('aria-labelledby'), 'invitacion-titulo');
+            assert.equal(p.dialogo.getAttribute('aria-describedby'), 'invitacion-texto');
+            assert.equal(p.$i('invitacion-titulo').textContent.trim(), 'Instalar ChivoMed');
+            assert.equal(p.$i('invitacion-texto').textContent.trim(),
+                '¿Quieres instalar ChivoMed en este dispositivo? Podrás abrirla como una aplicación y consultar tus datos guardados sin conexión.');
+            assert.equal(p.$i('invitacion-instalar').textContent.trim(), 'Instalar');
+            assert.equal(p.$i('invitacion-no').textContent.trim(), 'Ahora no');
+            assert.equal(p.instalador.shadowRoot.activeElement, p.$i('invitacion-instalar'));
             await asentar();
-            await llenarFiltros(ctx);
-            assert.equal(bip.llamadas, 1, 'el evento de la vista llega a <install-prompt>');
-            assert.equal(ctx.llamadas.citas, 1, 'la búsqueda sigue');
-        } finally {
-            desconectar(ctx.vista);
-            desconectar(instalador);
-        }
+            assert.equal(p.ctx.llamadas.citas, 1, 'la búsqueda no espera a la ventana');
+            assert.equal(p.$i('instalar').hidden, false, 'el botón de siempre sigue igual');
+        } finally { p.cerrar(); }
     });
 
-    test('un intento que no llegó a mostrarse no gasta la invitación de la sesión', async () => {
-        const pestana = new Map();
-        const primera = cargarPagina(pestana);
-        const ctx1 = montar();
+    test('"Instalar" llama a prompt(), cierra la ventana y devuelve el foco', async () => {
+        const p = await buscarConAviso();
         try {
-            primera.ventana.dispatchEvent(aviso({ falla: true }));
+            p.$i('invitacion-instalar').click();
+            assert.equal(p.bip.llamadas, 1, 'dentro del clic en "Instalar"');
             await asentar();
-            await llenarFiltros(ctx1);
-            await asentar();
-        } finally {
-            desconectar(ctx1.vista);
-            desconectar(primera.instalador);
-        }
-        // Se recarga la pestaña: el navegador vuelve a dar beforeinstallprompt y el botón se ve.
-        const segunda = cargarPagina(pestana);
-        const ctx2 = montar();
+            assert.equal(p.dialogo.open, false);
+            assert.equal(document.activeElement, p.ctx.vista);
+            assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'));
+        } finally { p.cerrar(); }
+    });
+
+    for (const [nombre, rechazar] of [
+        ['"Ahora no"', p => p.$i('invitacion-no').click()],
+        ['Esc', p => { p.dialogo.dispatchEvent(new Event('cancel')); p.dialogo.close(); }],
+        ['clic fuera', p => { const e = new Event('click'); Object.defineProperty(e, 'target', { value: p.dialogo }); p.dialogo.dispatchEvent(e); }],
+    ]) {
+        test(`${nombre} cierra la ventana, devuelve el foco y no vuelve a abrirse en la sesión`, async () => {
+            const p = await buscarConAviso();
+            try {
+                rechazar(p);
+                await asentar();
+                await asentar();
+                assert.equal(p.dialogo.open, false);
+                assert.equal(p.bip.llamadas, 0);
+                assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'));
+                p.ctx.enviar();
+                await asentar();
+                assert.equal(p.dialogo.open, false, 'otra búsqueda en la misma página no la abre');
+            } finally { p.cerrar(); }
+            const recargada = await buscarConAviso(cargarPagina(p.pestana));
+            try {
+                assert.equal(recargada.dialogo.open, false, 'tras recargar, en la misma sesión, tampoco');
+                assert.equal(recargada.$i('instalar').hidden, false);
+            } finally { recargada.cerrar(); }
+        });
+    }
+
+    test('un clic dentro de la ventana no cuenta como rechazo', async () => {
+        const p = await buscarConAviso();
         try {
-            const bip = aviso();
-            segunda.ventana.dispatchEvent(bip);
+            const e = new Event('click');
+            Object.defineProperty(e, 'target', { value: p.$i('invitacion-texto') });
+            p.dialogo.dispatchEvent(e);
             await asentar();
-            assert.equal(segunda.instalador.shadowRoot.getElementById('instalar').hidden, false, 'el botón está visible');
-            await llenarFiltros(ctx2);
-            assert.equal(bip.llamadas, 1, 'la invitación sale al pulsar "Buscar citas"');
-        } finally {
-            desconectar(ctx2.vista);
-            desconectar(segunda.instalador);
-        }
+            assert.equal(p.dialogo.open, true);
+        } finally { p.cerrar(); }
+    });
+
+    test('una ventana sin respuesta (se recargó) no gasta la invitación de la sesión', async () => {
+        const primera = await buscarConAviso();
+        primera.cerrar();
+        const segunda = await buscarConAviso(cargarPagina(primera.pestana));
+        try {
+            assert.equal(segunda.dialogo.open, true);
+        } finally { segunda.cerrar(); }
+    });
+
+    test('no se abre sin beforeinstallprompt ni si la app ya está instalada', async () => {
+        const pagina = cargarPagina();
+        const ctx = montar();
+        try {
+            await llenarFiltros(ctx);
+            assert.equal(pagina.dialogo.open, false, 'sin beforeinstallprompt');
+            assert.equal(ctx.llamadas.citas, 1);
+        } finally { desconectar(ctx.vista); desconectar(pagina.instalador); }
+        const instalada = await buscarConAviso(cargarPagina(new Map(), { instalada: true }));
+        try {
+            assert.equal(instalada.dialogo.open, false, 'ya instalada');
+            assert.equal(instalada.bip.llamadas, 0);
+        } finally { instalada.cerrar(); }
     });
 });

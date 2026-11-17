@@ -7,7 +7,8 @@
  * dataset (refleja los atributos data-*), foco, click() y remove(), y creación de Web Components registrados con
  * document.createElement. Los eventos no burbujean por el árbol, y agregar un elemento no llama a connectedCallback
  * (usar conectar()). El documento tiene documentElement (<html> con dataset), un <meta name="theme-color">,
- * querySelector y title.
+ * querySelector, title y activeElement (el host de nivel superior del elemento con foco, como el navegador).
+ * <dialog> con open, showModal() y close(); close() emite 'close' en otra tarea, como el navegador.
  * No hay layout, estilos, CSS ni parseo de HTML general: la plantilla debe estar bien formada.
  *
  * instalarDom() pone en globalThis: document, HTMLElement, customElements (los que falten).
@@ -129,9 +130,14 @@ class Elemento extends Contenedor {
         }
     }
 
+    /** Marca el foco en cada raíz de sombra hasta el documento (document.activeElement es el host de arriba). */
     focus() {
-        const raiz = raizDe(this);
-        if (raiz instanceof RaizSombra) raiz.activeElement = this;
+        let nodo = this;
+        for (let raiz = raizDe(nodo); raiz instanceof RaizSombra; raiz = raizDe(nodo)) {
+            raiz.activeElement = nodo;
+            nodo = raiz.host;
+        }
+        if (globalThis.document) globalThis.document.activeElement = nodo;
     }
 
     /** Como el navegador: emite 'click' (sin burbujear; ver la nota de arriba). */
@@ -145,6 +151,19 @@ class Elemento extends Contenedor {
         for (const b of BOOLEANOS) copia[b] = this[b];
         if (profundo) copia.append(...this.childNodes.map(n => n.cloneNode(true)));
         return copia;
+    }
+}
+
+class Dialogo extends Elemento {
+    constructor() { super("dialog"); this.open = false; }
+    showModal() {
+        if (this.open) throw new Error("InvalidStateError: el diálogo ya está abierto");
+        this.open = true;
+    }
+    close() {
+        if (!this.open) return;
+        this.open = false;
+        setTimeout(() => this.dispatchEvent(new Event("close")), 0);
     }
 }
 
@@ -216,6 +235,7 @@ function parsear(html) {
 function crearElemento(tag) {
     const nombre = tag.toLowerCase();
     if (nombre === "template") return new Plantilla();
+    if (nombre === "dialog") return new Dialogo();
     const Clase = globalThis.customElements?.get?.(nombre);
     if (Clase) {
         const elemento = new Clase();
@@ -262,6 +282,7 @@ export function instalarDom() {
         documento.documentElement.append(meta);
         documento.querySelector = selector => documento.documentElement.querySelector(selector);
         documento.title = "";
+        documento.activeElement = null;
         globalThis.document = documento;
     }
     return registro;

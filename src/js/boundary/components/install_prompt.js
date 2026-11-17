@@ -4,8 +4,10 @@
  * ya está instalada o cuando se instala (appinstalled). La lógica vive en ControladorInstalacion.
  * Se suscribe a su estado reactivo al conectarse y cancela al desconectarse.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea uno por conexión.
- * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas y el login dentro del clic)
- * y pide al controlador que invite a instalar una sola vez por sesión. El botón no cambia.
+ * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas y el login) y pide al
+ * controlador que invite a instalar una sola vez por sesión. Con `invitacion` abre su <dialog> modal
+ * (showModal), con el foco en "Instalar"; al cerrarse devuelve el foco a donde estaba. "Instalar"
+ * llama a prompt() en ese clic; "Ahora no", Esc o clic fuera cuentan como rechazo. El botón no cambia.
  */
 import { ControladorInstalacion, MODOS, EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
@@ -16,7 +18,17 @@ const PLANTILLA = plantilla(`
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
   <span>Instalar app</span>
 </button>
-<p class="solo-lectores" id="estado" role="status" aria-live="polite"></p>`);
+<p class="solo-lectores" id="estado" role="status" aria-live="polite"></p>
+<dialog class="invitacion" id="invitacion" aria-labelledby="invitacion-titulo" aria-describedby="invitacion-texto">
+  <div class="invitacion-cuerpo">
+    <h2 class="invitacion-titulo" id="invitacion-titulo">Instalar ChivoMed</h2>
+    <p class="invitacion-texto" id="invitacion-texto">¿Quieres instalar ChivoMed en este dispositivo? Podrás abrirla como una aplicación y consultar tus datos guardados sin conexión.</p>
+    <div class="invitacion-acciones">
+      <button class="accion accion-secundaria" id="invitacion-no" type="button">Ahora no</button>
+      <button class="accion accion-principal" id="invitacion-instalar" type="button" autofocus>Instalar</button>
+    </div>
+  </div>
+</dialog>`);
 
 class InstallPrompt extends HTMLElement {
     #controlador = null;
@@ -24,6 +36,14 @@ class InstallPrompt extends HTMLElement {
     #cancelar = null;
     #alPulsar = () => this.#controlador.instalar();
     #alOfrecer = () => this.#controlador.ofrecerUnaVez();
+    #alAceptar = () => this.#controlador.aceptarInvitacion();
+    #alRechazar = () => this.#controlador.rechazarInvitacion();
+    /** Esc (o cualquier cierre que no pasó por el controlador) cuenta como rechazo. */
+    #alCerrarDialogo = () => { if (this.#controlador.estado.invitacion) this.#controlador.rechazarInvitacion(); };
+    /** El cuerpo llena la ventana: un clic cuyo destino es el <dialog> mismo cayó en el fondo. */
+    #alClicDialogo = event => { if (event.target === this.shadowRoot.getElementById("invitacion")) this.#controlador.rechazarInvitacion(); };
+    /** Elemento con el foco antes de abrir la ventana, para devolvérselo al cerrarla. */
+    #focoPrevio = null;
 
     /** Controlador inyectado; solo se puede asignar antes de conectar el componente. */
     set controlador(valor) {
@@ -45,6 +65,7 @@ class InstallPrompt extends HTMLElement {
         this.#controlador = this.#inyectado ?? new ControladorInstalacion({ ventana: window });
         this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
         this.shadowRoot.getElementById("instalar").addEventListener("click", this.#alPulsar);
+        this.#escucharDialogo("addEventListener");
         document.addEventListener(EVENTO_OFRECER, this.#alOfrecer);
         this.#controlador.iniciar();
         this.#pintar(this.#controlador.estado);
@@ -52,10 +73,19 @@ class InstallPrompt extends HTMLElement {
 
     disconnectedCallback() {
         this.shadowRoot.getElementById("instalar").removeEventListener("click", this.#alPulsar);
+        this.#escucharDialogo("removeEventListener");
         document.removeEventListener(EVENTO_OFRECER, this.#alOfrecer);
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();
+    }
+
+    #escucharDialogo(metodo) {
+        const $ = id => this.shadowRoot.getElementById(id);
+        $("invitacion-instalar")[metodo]("click", this.#alAceptar);
+        $("invitacion-no")[metodo]("click", this.#alRechazar);
+        $("invitacion")[metodo]("close", this.#alCerrarDialogo);
+        $("invitacion")[metodo]("click", this.#alClicDialogo);
     }
 
     #pintar(estado) {
@@ -63,7 +93,29 @@ class InstallPrompt extends HTMLElement {
         boton.hidden = estado.modo !== MODOS.DISPONIBLE && estado.modo !== MODOS.INSTALANDO;
         boton.disabled = estado.modo === MODOS.INSTALANDO;
         this.shadowRoot.getElementById("estado").textContent = estado.mensaje ?? "";
+        this.#pintarInvitacion(estado.invitacion);
     }
+
+    #pintarInvitacion(abierta) {
+        const dialogo = this.shadowRoot.getElementById("invitacion");
+        if (abierta && !dialogo.open) {
+            this.#focoPrevio = focoProfundo();
+            dialogo.showModal();
+            this.shadowRoot.getElementById("invitacion-instalar").focus();
+        } else if (!abierta) {
+            if (dialogo.open) dialogo.close();
+            const previo = this.#focoPrevio;
+            this.#focoPrevio = null;
+            if (previo && previo.isConnected !== false) previo.focus?.();
+        }
+    }
+}
+
+/** El elemento con el foco, atravesando los Shadow DOM abiertos. */
+function focoProfundo() {
+    let actual = document.activeElement;
+    while (actual?.shadowRoot?.activeElement) actual = actual.shadowRoot.activeElement;
+    return actual;
 }
 
 customElements.define("install-prompt", InstallPrompt);

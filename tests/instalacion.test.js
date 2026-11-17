@@ -261,8 +261,8 @@ describe('<install-prompt>', () => {
     });
 });
 
-// Punto 7: invitación a instalar al buscar o al ingresar, una vez por sesión.
-describe('ControladorInstalacion: ofrecer una vez al buscar o al ingresar', () => {
+// Punto 7: invitación a instalar al buscar o al ingresar, una vez por sesión, con ventana propia.
+describe('ControladorInstalacion: invitar una vez al buscar o al ingresar', () => {
     const conSesion = (opciones = {}) => {
         const ctx = preparar(opciones);
         const datos = new Map();
@@ -270,74 +270,75 @@ describe('ControladorInstalacion: ofrecer una vez al buscar o al ingresar', () =
         return ctx;
     };
 
-    test('se ofrece dentro del mismo clic: prompt() se llama de forma síncrona', async () => {
+    test('ofrecerUnaVez() abre la invitación sin llamar a prompt(); aceptarla lo llama en ese clic', async () => {
         const { ventana, controlador } = conSesion();
-        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
         const aviso = crearAviso('dismissed');
         ventana.dispatchEvent(aviso);
         await asentar();
-        const promesa = controlador.ofrecerUnaVez();
+        assert.equal(controlador.ofrecerUnaVez(), true);
+        assert.equal(controlador.estado.invitacion, true);
+        assert.equal(aviso.llamadasPrompt, 0);
+        const promesa = controlador.aceptarInvitacion();
         assert.equal(aviso.llamadasPrompt, 1, 'sin esperar: el navegador exige el gesto del usuario');
+        assert.equal(controlador.estado.invitacion, false);
         assert.equal(await promesa, 'dismissed');
     });
 
-    test('no se ofrece dos veces en la sesión, aunque llegue otro beforeinstallprompt o se recargue', async () => {
+    test('rechazarla no la vuelve a abrir en la sesión, aunque llegue otro beforeinstallprompt o se recargue', async () => {
         const { ventana, controlador } = conSesion();
-        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
-        ventana.dispatchEvent(crearAviso('dismissed'));
+        ventana.dispatchEvent(crearAviso());
         await asentar();
-        await controlador.ofrecerUnaVez();
-        const segundo = crearAviso();
-        ventana.dispatchEvent(segundo);
-        await asentar();
-        assert.equal(controlador.ofrecerUnaVez(), null);
-        assert.equal(segundo.llamadasPrompt, 0);
+        controlador.ofrecerUnaVez();
+        controlador.rechazarInvitacion();
+        assert.equal(controlador.estado.invitacion, false);
+        ventana.dispatchEvent(crearAviso());
+        assert.equal(controlador.ofrecerUnaVez(), false);
         const otro = new ControladorInstalacion({ ventana });
         otro.iniciar();
         const tercero = crearAviso();
         ventana.dispatchEvent(tercero);
-        assert.equal(otro.ofrecerUnaVez(), null, 'otra instancia en la misma sesión tampoco ofrece');
+        assert.equal(otro.ofrecerUnaVez(), false, 'otra instancia en la misma sesión tampoco ofrece');
         assert.equal(tercero.llamadasPrompt, 0);
         assert.equal(controlador.estado.modo, MODOS.DISPONIBLE, 'el botón "Instalar app" sigue disponible');
     });
 
-    test('no se ofrece si ya está instalada ni sin beforeinstallprompt', () => {
+    test('no se abre si ya está instalada ni sin beforeinstallprompt', () => {
         const instalada = conSesion({ standalone: true });
-        assert.equal(typeof instalada.controlador.ofrecerUnaVez, 'function');
-        const aviso = crearAviso();
-        instalada.ventana.dispatchEvent(aviso);
-        assert.equal(instalada.controlador.ofrecerUnaVez(), null);
-        assert.equal(aviso.llamadasPrompt, 0);
-        assert.equal(conSesion().controlador.ofrecerUnaVez(), null);
+        instalada.ventana.dispatchEvent(crearAviso());
+        assert.equal(instalada.controlador.ofrecerUnaVez(), false);
+        assert.equal(conSesion().controlador.ofrecerUnaVez(), false);
     });
 
-    test('si la persona la rechazó con el botón, no se ofrece después', async () => {
+    test('si la persona la rechazó en el diálogo del navegador, no se abre después', async () => {
         const { ventana, controlador } = conSesion();
-        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
         ventana.dispatchEvent(crearAviso('dismissed'));
         await asentar();
         await controlador.instalar();
-        const nuevo = crearAviso();
-        ventana.dispatchEvent(nuevo);
-        assert.equal(controlador.ofrecerUnaVez(), null);
-        assert.equal(nuevo.llamadasPrompt, 0);
+        ventana.dispatchEvent(crearAviso());
+        assert.equal(controlador.ofrecerUnaVez(), false);
     });
 
-    test('sin sessionStorage (o si falla) solo se ofrece una vez por instancia', async () => {
-        const { ventana, controlador } = preparar();
-        assert.equal(typeof controlador.ofrecerUnaVez, 'function');
-        ventana.sessionStorage = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
-        const aviso = crearAviso('dismissed');
-        ventana.dispatchEvent(aviso);
-        await controlador.ofrecerUnaVez(); // la persona la rechaza
+    test('appinstalled con la invitación abierta la cierra', async () => {
+        const { ventana, controlador } = conSesion();
         ventana.dispatchEvent(crearAviso());
-        assert.equal(controlador.ofrecerUnaVez(), null);
-        assert.equal(aviso.llamadasPrompt, 1);
+        controlador.ofrecerUnaVez();
+        ventana.dispatchEvent(new Event('appinstalled'));
+        assert.equal(controlador.estado.invitacion, false);
+    });
+
+    test('sin sessionStorage (o si falla) solo se ofrece una vez por instancia', () => {
+        const { ventana, controlador } = preparar();
+        ventana.sessionStorage = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
+        ventana.dispatchEvent(crearAviso());
+        assert.equal(controlador.ofrecerUnaVez(), true);
+        controlador.rechazarInvitacion();
+        ventana.dispatchEvent(crearAviso());
+        assert.equal(controlador.ofrecerUnaVez(), false);
     });
 });
 
 describe('<install-prompt>: escucha la invitación de las vistas', () => {
-    test('el evento "ofrecer-instalacion" en document abre el diálogo en el mismo clic, y deja de escuchar al desconectarse', async () => {
+    test('"ofrecer-instalacion" abre la ventana y deja de escucharse al desconectarse', async () => {
         instalarDom();
         const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
         const ventana = crearVentana();
@@ -345,15 +346,14 @@ describe('<install-prompt>: escucha la invitación de las vistas', () => {
         const el = new InstallPrompt();
         el.controlador = controlador;
         conectar(el);
-        const aviso = crearAviso('dismissed');
-        ventana.dispatchEvent(aviso);
+        ventana.dispatchEvent(crearAviso());
         await asentar();
         document.dispatchEvent(new CustomEvent('ofrecer-instalacion'));
-        assert.equal(aviso.llamadasPrompt, 1);
+        await asentar();
+        assert.equal(el.shadowRoot.getElementById('invitacion').open, true);
+        el.shadowRoot.getElementById('invitacion-no').click();
         desconectar(el);
-        const otro = crearAviso();
-        ventana.dispatchEvent(otro);
         document.dispatchEvent(new CustomEvent('ofrecer-instalacion'));
-        assert.equal(otro.llamadasPrompt, 0);
+        assert.equal(controlador.estado.invitacion, false);
     });
 });

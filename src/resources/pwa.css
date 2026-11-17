@@ -33,7 +33,32 @@
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
+/* Ventana propia para invitar a instalar (<dialog> modal). El cuerpo la llena: un clic en el
+   <dialog> mismo cae en el fondo y cuenta como "Ahora no". */
+.invitacion {
+  width: min(28rem, calc(100vw - 2rem)); max-width: none; padding: 0;
+  border: 1px solid var(--border-strong); border-radius: var(--radio);
+  background: var(--surface-solid); color: var(--text); box-shadow: var(--sombra);
+  font: inherit;
+}
+.invitacion::backdrop { background: rgb(0 0 0 / .5); }
+.invitacion-cuerpo { display: grid; gap: var(--espacio-4); padding: var(--espacio-6); }
+.invitacion-titulo { margin: 0; font-size: 1.25rem; line-height: 1.3; }
+.invitacion-texto { margin: 0; color: var(--muted); line-height: 1.5; }
+.invitacion-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--espacio-2); }
+.accion {
+  min-height: 44px; padding: var(--espacio-2) var(--espacio-4); border-radius: 10px;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.accion-principal { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); }
+.accion-principal:hover { filter: brightness(1.08); }
+.accion-secundaria { border: 1px solid var(--border-strong); background: transparent; color: var(--text); }
+.accion-secundaria:hover { background: var(--mint-soft); }
+
 @media (max-width: 480px) {
+  .invitacion-cuerpo { padding: var(--espacio-4); }
+  .invitacion-acciones { flex-direction: column-reverse; }
+  .accion { width: 100%; }
   .instalar span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .instalar { padding: var(--espacio-2) var(--espacio-3); }
 }

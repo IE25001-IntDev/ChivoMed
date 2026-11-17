@@ -207,8 +207,8 @@ describe('<vista-login>: invitación a instalar', () => {
 });
 
 // La invitación sale de la vista real y la recibe el <install-prompt> real (no se lanza desde document).
-describe('<vista-login> + <install-prompt>: invitación de extremo a extremo', () => {
-    test('"Ingresar" válido abre la invitación y el login continúa', async () => {
+describe('<vista-login> + <install-prompt>: ventana para instalar', () => {
+    test('"Ingresar" válido abre la ventana, el login continúa e "Instalar" llama a prompt()', async () => {
         const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
         const { ControladorInstalacion } = await import('../src/js/boundary/pwa/controlador_instalacion.js');
         const ventana = new EventTarget();
@@ -219,6 +219,8 @@ describe('<vista-login> + <install-prompt>: invitación de extremo a extremo', (
         const instalador = new InstallPrompt();
         instalador.controlador = new ControladorInstalacion({ ventana });
         conectar(instalador);
+        const $i = id => instalador.shadowRoot.getElementById(id);
+        assert.ok($i('invitacion'), '<install-prompt> trae su <dialog id="invitacion">');
         const bip = new Event('beforeinstallprompt', { cancelable: true });
         bip.llamadas = 0;
         bip.prompt = () => { bip.llamadas++; return Promise.resolve(); };
@@ -233,11 +235,16 @@ describe('<vista-login> + <install-prompt>: invitación de extremo a extremo', (
             ctx.$('numero').value = '01000001-1';
             ctx.$('numero').dispatchEvent(new Event('input'));
             ctx.enviar();
-            assert.equal(bip.llamadas, 1, 'el evento de la vista llega a <install-prompt>');
             await asentar();
+            assert.equal($i('invitacion').open, true, 'el evento de la vista abre la ventana');
+            assert.equal(instalador.shadowRoot.activeElement, $i('invitacion-instalar'));
             await asentar();
             assert.equal(ctx.llamadas.login.length, 1, 'el login continúa');
             assert.equal(ctx.eventos.length, 1, 'y navega');
+            $i('invitacion-instalar').click();
+            assert.equal(bip.llamadas, 1);
+            await asentar();
+            assert.equal($i('invitacion').open, false);
         } finally {
             desconectar(ctx.vista);
             desconectar(instalador);
