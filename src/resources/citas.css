@@ -50,9 +50,11 @@
   .barra-busqueda { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .acciones-busqueda > #buscar { justify-self: stretch; }
 }
+/* Lado a lado, cada fecha mide unos 160 px y necesitan 332 px de interior: solo caben desde 460 px
+   de ventana. En una columna, "Desde" va arriba y "Hasta" abajo, cada una a todo el ancho. */
 @media (max-width: 460px) {
   .barra-busqueda { grid-template-columns: minmax(0, 1fr); }
-  .rango-fechas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio-3); }
+  .rango-fechas { display: grid; grid-template-columns: 1fr; gap: var(--espacio-3); }
 }
 
 /* Recuadro único de avisos de la búsqueda: errores de los campos en lista. */

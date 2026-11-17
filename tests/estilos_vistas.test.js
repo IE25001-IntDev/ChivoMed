@@ -56,3 +56,16 @@ test('el detector reconoce los casos que importan', () => {
     assert.deepEqual(hostsConDisplay(':host { color: red; }'), []);
     assert.equal(OCULTO.test(':host([hidden]) { display: none; }'), false, 'sin !important no basta');
 });
+
+// Medido en Chromium: cada campo de fecha mide unos 160 px por sí solo, así que lado a lado
+// necesitan 332 px de interior en la barra, que solo hay a 460 px de ventana. Con la barra en una
+// columna (max-width: 460px), "Desde" y "Hasta" van una debajo de la otra, a todo el ancho.
+test('citas.css: con la barra en una columna, las fechas van una debajo de la otra', async () => {
+    const css = (await readFile(join(SRC, 'resources/citas.css'), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const bloque = css.match(/@media\s*\(max-width:\s*460px\)\s*\{((?:[^{}]*\{[^{}]*\})*)[^{}]*\}/)?.[1] ?? '';
+    assert.match(bloque, /\.barra-busqueda\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/, 'la barra va en una columna');
+    const fechas = bloque.match(/\.rango-fechas\s*\{([^}]*)\}/)?.[1] ?? '';
+    assert.match(fechas, /display:\s*grid/, '.rango-fechas es una cuadrícula');
+    assert.match(fechas, /grid-template-columns:\s*1fr\s*(;|$)/, `.rango-fechas tiene una sola columna (hoy: "${fechas.trim()}")`);
+    assert.doesNotMatch(css, /\.rango-fechas[^{]*\{[^}]*min-width:\s*0/, 'no se aprietan con min-width: 0');
+});
