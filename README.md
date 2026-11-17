@@ -106,7 +106,9 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
 2. En DevTools → Network, marca **Offline** y recarga (F5).
 3. El shell se carga desde el service worker.
    - En `#/citas` se ve la última búsqueda con "Sin conexión. Mostrando la búsqueda de las
-     HH:MM"; no se puede buscar ni descargar el ticket.
+     HH:MM"; no se puede buscar ni descargar el ticket. La búsqueda guardada solo se usa sin
+     conexión: si la app se abre con red, se borra y el formulario arranca vacío. Si la red se
+     pierde con la página abierta, la búsqueda que está en pantalla se queda.
    - El dashboard y la última consulta abierta se ven en **solo lectura**, con el aviso "Sin
      conexión. Mostrando … guardadas a las HH:MM". Las consultas de hoy que te tocan ofrecen
      **"Ver sin conexión"** y se abren en solo lectura. Las acciones que escriben se deshabilitan
@@ -124,14 +126,18 @@ queda un solo juego `chivomed-*` más `chivomed-vigente`.
   consultas de hoy que le tocan al rol activo. Se guardan al ingresar y al cambiar de rol.
   Caducan a las 8 horas y se borran al cerrar sesión o al entrar con otra cuenta.
 - Paciente (HU1): la última búsqueda con éxito (tipo, número, clínica, rango y resultados).
-  Caduca a las 8 horas, se borra con "Limpiar búsqueda" y cuando entra un empleado.
+  Solo se restaura si la app carga sin red; si carga con red, se borra. Caduca a las 8 horas,
+  se borra con "Limpiar búsqueda" y cuando entra un empleado.
 
 ## Instalación
 
 El botón **"Instalar app"** de la cabecera aparece cuando el navegador lo permite. Además, al
-pulsar "Buscar citas" o "Ingresar" con datos válidos, la app ofrece instalarse una sola vez por
-sesión. No lo vuelve a ofrecer si ya está instalada, si el navegador no lo permite o si se
-rechazó en esa sesión. La búsqueda y el login siguen igual aunque se rechace.
+pulsar "Buscar citas" o "Ingresar" con datos válidos, se abre la ventana **"Instalar ChivoMed"**
+con los botones **Instalar** (abre el diálogo de instalación del navegador) y **Ahora no**.
+"Ahora no", Esc o un clic fuera de la ventana cuentan como rechazo: no se vuelve a ofrecer en esa
+sesión (pestaña), aunque se recargue. Al cerrarla, el foco vuelve a donde estaba. No se abre si
+la app ya está instalada ni si el navegador no permite instalarla. La búsqueda y el login siguen
+por detrás sin esperar.
 
 ## Qué es normal ver en la consola del navegador
 
