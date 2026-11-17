@@ -64,10 +64,19 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
 
 ## Recorrido por historia de usuario
 
-- **HU1, búsqueda de citas** (`#/citas`, sin sesión). Es un asistente de 5 pasos:
-  tipo de documento, número (Ana), clínica, rango de fechas y resultado. Muestra las citas como
-  tarjetas con fecha, hora, clínica y procedimientos. "Descargar ticket" baja el PDF que genera
-  el backend.
+- **HU1, búsqueda de citas** (`#/citas`, sin sesión). Los campos se desbloquean en orden:
+  - el número se activa al elegir el tipo y tiene una máscara sacada de la expresión regular del
+    tipo: en el DUI no entran letras y el guion se pone solo; en el Pasaporte la minúscula pasa a
+    mayúscula; no se puede escribir más allá del largo, y lo pegado se limpia igual;
+  - la clínica se activa cuando el número está completo y es válido (ahí se piden sus clínicas);
+    las fechas, al elegir clínica; "Buscar citas", cuando todo es válido. Un texto junto al botón
+    dice qué falta;
+  - cambiar el tipo, el número o la clínica vacía lo que sigue (las fechas vuelven a hoy −30/+30).
+
+  Los errores salen en un solo recuadro arriba del formulario y el campo con error queda marcado.
+  Un documento sin clínicas como paciente (por ejemplo, `12345678-9`) muestra "No encontramos
+  ese documento registrado como paciente.". El resultado son tarjetas con fecha, hora, clínica y
+  procedimientos; "Descargar ticket" baja el PDF que genera el backend.
 - **HU2, login** (`#/login`). Entra cualquier empleado, es decir, cualquier rol activo excepto
   Paciente. Ana y Pedro son rechazados.
 - **HU3, dashboard** (`#/dashboard`).
@@ -92,18 +101,37 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
 
 ## Modo sin conexión
 
-1. Con red, entra con una cuenta de empleado y abre el dashboard. Si quieres probar también la
-   HU4 sin red, abre una consulta.
+1. Con red, haz una búsqueda de citas (HU1) o entra con una cuenta de empleado y abre el
+   dashboard.
 2. En DevTools → Network, marca **Offline** y recarga (F5).
-3. El shell se carga desde el service worker. El dashboard y la última consulta abierta se ven
-   en **solo lectura**, con el aviso "Sin conexión. Mostrando … guardadas a las HH:MM". Las
-   acciones que escriben se deshabilitan con su motivo.
+3. El shell se carga desde el service worker.
+   - En `#/citas` se ve la última búsqueda con "Sin conexión. Mostrando la búsqueda de las
+     HH:MM"; no se puede buscar ni descargar el ticket.
+   - El dashboard y la última consulta abierta se ven en **solo lectura**, con el aviso "Sin
+     conexión. Mostrando … guardadas a las HH:MM". Las consultas de hoy que te tocan ofrecen
+     **"Ver sin conexión"** y se abren en solo lectura. Las acciones que escriben se deshabilitan
+     con su motivo.
 4. Al volver la red, la sesión se verifica de nuevo y los datos se actualizan solos.
 
-La copia sin conexión vive en IndexedDB. Guarda solo la sesión verificada (sin token), el
-último dashboard y la consulta abierta. Caduca a las 8 horas y se borra al cerrar sesión o al
-entrar con otra cuenta. La búsqueda pública de citas (HU1) no se guarda en disco: sin red
-muestra solo la última búsqueda hecha mientras la página sigue abierta.
+**Caché de archivos.** Cada vez que la app arranca con red, el service worker descarga de nuevo
+todos los archivos del shell y el catálogo de tipos de documento en un caché nuevo. Solo cuando
+la copia está completa cambia a ella y borra las anteriores; si la descarga falla a medias, se
+queda con la anterior. Sin red no se borra nada. En DevTools → Application → Cache Storage
+queda un solo juego `chivomed-*` más `chivomed-vigente`.
+
+**Datos en IndexedDB.**
+- Empleado: la sesión verificada (sin token), el último dashboard, la consulta abierta y las
+  consultas de hoy que le tocan al rol activo. Se guardan al ingresar y al cambiar de rol.
+  Caducan a las 8 horas y se borran al cerrar sesión o al entrar con otra cuenta.
+- Paciente (HU1): la última búsqueda con éxito (tipo, número, clínica, rango y resultados).
+  Caduca a las 8 horas, se borra con "Limpiar búsqueda" y cuando entra un empleado.
+
+## Instalación
+
+El botón **"Instalar app"** de la cabecera aparece cuando el navegador lo permite. Además, al
+pulsar "Buscar citas" o "Ingresar" con datos válidos, la app ofrece instalarse una sola vez por
+sesión. No lo vuelve a ofrecer si ya está instalada, si el navegador no lo permite o si se
+rechazó en esa sesión. La búsqueda y el login siguen igual aunque se rechace.
 
 ## Qué es normal ver en la consola del navegador
 
