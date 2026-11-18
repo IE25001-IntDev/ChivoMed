@@ -42,6 +42,12 @@ export class AuthError extends Error {
 }
 
 export const CODIGO_SIN_RED = "conexion.error";
+/**
+ * Un solo criterio de "sin conexión con el servidor": 502, 503 y 504 (el proxy del servidor de
+ * desarrollo sin backend, o el backend caído) se tratan como un fallo de red, con status 0 y
+ * CODIGO_SIN_RED. Lo usan auth_service y DefaultService.
+ */
+export const STATUS_SIN_SERVIDOR = Object.freeze([502, 503, 504]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_NUMERO_DOCUMENTO = 50;
@@ -107,6 +113,10 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesio
         throw new AuthError(error.name === "TimeoutError" || error.name === "AbortError"
             ? "La solicitud tardó demasiado. Inténtalo de nuevo."
             : "No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
+    }
+    // 502, 503 y 504: sin conexión con el servidor, igual que un fallo de red (como en DefaultService).
+    if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
+        throw new AuthError("No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
     }
     if (!respuesta.ok) {
         if (respuesta.status === 401 && tipo === "sesion" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));

@@ -155,7 +155,7 @@ test("los tipos de documento se piden sin sesión y solo se devuelven los activo
 
 test("si los tipos de documento fallan se informa sin avisar sesión expirada", async () => {
     const expiraciones = contarExpiraciones();
-    for (const respuesta of [new Response(null, { status: 401 }), new Response(null, { status: 503 }),
+    for (const respuesta of [new Response(null, { status: 401 }), new Response(null, { status: 500 }),
         Response.json({ no: "es una lista" }), new Response("<html></html>")]) {
         globalThis.fetch = async () => respuesta;
         await assert.rejects(listarTiposDocumento(), /tipos de documento|no está disponible/);
@@ -193,7 +193,7 @@ test("un POST de login correcto no basta si /me rechaza la sesión", async () =>
 
 test("distingue una sesión vencida, servicio ausente y exceso de intentos", async () => {
     for (const [status, mensaje] of [[401, /sesión ha finalizado/], [403, /autorizar/],
-        [404, /todavía no está disponible/], [429, /demasiados intentos/], [503, /más tarde/]]) {
+        [404, /todavía no está disponible/], [429, /demasiados intentos/], [500, /más tarde/]]) {
         globalThis.fetch = async () => new Response(null, { status });
         await assert.rejects(obtenerSesion(), error => error.status === status && mensaje.test(error.message));
     }
@@ -210,8 +210,17 @@ test("informa errores de conexión y tiempo de espera sin revelar detalles", asy
 test("sin respuesta del servidor el error lleva el código de red; una respuesta HTTP no", async () => {
     globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
     await assert.rejects(obtenerSesion(), error => error.status === 0 && error.code === "conexion.error");
-    globalThis.fetch = async () => new Response(null, { status: 503 });
-    await assert.rejects(obtenerSesion(), error => error.status === 503 && error.code === null);
+    globalThis.fetch = async () => new Response(null, { status: 500 });
+    await assert.rejects(obtenerSesion(), error => error.status === 500 && error.code === null);
+});
+
+test("502, 503 y 504 son sin conexión con el servidor: status 0 y el código de red, en sesión, login y catálogo", async () => {
+    for (const status of [502, 503, 504]) {
+        globalThis.fetch = async () => Response.json({ code: "sin.red" }, { status });
+        await assert.rejects(obtenerSesion(), error => error.status === 0 && error.code === "conexion.error" && /conectar/.test(error.message));
+        await assert.rejects(iniciarSesion(TIPO, "00000000-0"), error => error.status === 0 && error.code === "conexion.error");
+        await assert.rejects(listarTiposDocumento(), error => error.status === 0 && error.code === "conexion.error");
+    }
 });
 
 test("el logout envía el token CSRF y conserva el error si falla el servidor", async () => {
@@ -220,9 +229,9 @@ test("el logout envía el token CSRF y conserva el error si falla el servidor", 
         assert.equal(opciones.method, "POST");
         assert.equal(opciones.headers["X-CSRF-Token"], sesion().csrfToken);
         assert.equal(opciones.credentials, "include");
-        return new Response(null, { status: 503 });
+        return new Response(null, { status: 500 });
     };
-    await assert.rejects(cerrarSesion(sesion().csrfToken), { status: 503 });
+    await assert.rejects(cerrarSesion(sesion().csrfToken), { status: 500 });
 });
 
 test("no intenta cerrar una sesión sin token CSRF válido", async () => {

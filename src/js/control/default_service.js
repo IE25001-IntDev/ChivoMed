@@ -1,7 +1,7 @@
 import DefaultResponse from "../entities/default_response.js";
 import DefaultError from "../entities/default_error.js";
 import { API_CONFIG } from "./api_config.js";
-import { verificarSesionActual } from "./auth_service.js";
+import { verificarSesionActual, STATUS_SIN_SERVIDOR } from "./auth_service.js";
 
 /** CRUD compartido. Todas las operaciones resuelven DefaultResponse o rechazan DefaultError. */
 class DefaultService {
@@ -68,6 +68,12 @@ class DefaultService {
                 code: cancelada ? "solicitud.cancelada" : "conexion.error",
                 message: cancelada ? "La solicitud fue cancelada." : "No se pudo conectar con GalenoSV.",
                 path: url, cause });
+        }
+        // Sin conexión con el servidor (proxy sin backend o backend caído): igual que un fallo de red.
+        if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
+            throw new DefaultError({ status: 0, code: "conexion.error",
+                message: "No se pudo conectar con GalenoSV.", path: url,
+                headers: Object.fromEntries(respuesta.headers.entries()) });
         }
         const cabeceras = Object.fromEntries(respuesta.headers.entries());
         if (blob) {

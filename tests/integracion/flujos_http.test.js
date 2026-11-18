@@ -158,13 +158,13 @@ test('HU1: filtros → clínicas → citas → PDF, con datos privados solo en e
         idClinica: CLINICA, desde: '2026-10-14', hasta: '2026-12-13' });
 });
 
-test('HU1: un 503 se puede reintentar; un 429 respeta Retry-After antes de volver a enviar', async () => {
+test('HU1: un 503 (sin servidor) da el mensaje de conexión y se puede reintentar; un 429 respeta Retry-After antes de volver a enviar', async () => {
     let desbloquear;
     let espera;
     const c = await citas({ temporizador: { programar(fn, ms) { desbloquear = fn; espera = ms; }, cancelar() {} } });
     rutas.set('POST publico/citas', () => json({ code: 'servicio.error', message: 'detalle privado' }, 503));
     await c.buscar();
-    assert.equal(c.estado.mensaje, CITAS.generico);
+    assert.equal(c.estado.mensaje, CITAS.conexion);
     rutas.set('POST publico/citas', () => json({ code: 'publico.demasiadasSolicitudes' }, 429, { 'Retry-After': '2' }));
     await c.buscar();
     assert.equal(espera, 2000);

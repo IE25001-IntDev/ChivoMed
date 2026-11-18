@@ -316,6 +316,36 @@ describe('DefaultService (Suite de Pruebas Unitarias P2-2)', () => {
         });
     });
 
+    // Un 502, 503 o 504 (el proxy del servidor de desarrollo sin backend, o el backend caído) es
+    // "sin conexión con el servidor": mismo status 0 y código que el error de red.
+    test('502, 503 y 504 lanzan DefaultError status 0 y conexion.error, igual que un fallo de red', async () => {
+        for (const status of [502, 503, 504]) {
+            const servicio = new DefaultService('elementos', MockEntity, {
+                baseUrl: 'http://api.local',
+                fetchImpl: async () => new Response(JSON.stringify({ status, message: 'Bad Gateway' }), {
+                    status, headers: { 'Content-Type': 'application/json' } }),
+            });
+            await assert.rejects(servicio.listar(), (err) => {
+                assert.ok(err instanceof DefaultError);
+                assert.equal(err.status, 0, `status ${status}`);
+                assert.equal(err.code, 'conexion.error');
+                assert.equal(err.message, 'No se pudo conectar con GalenoSV.');
+                return true;
+            });
+        }
+    });
+
+    test('400, 409, 429 y 500 conservan su status y código', async () => {
+        for (const status of [400, 409, 429, 500]) {
+            const servicio = new DefaultService('elementos', MockEntity, {
+                baseUrl: 'http://api.local',
+                fetchImpl: async () => new Response(JSON.stringify({ code: `codigo.${status}`, message: 'x' }), {
+                    status, headers: { 'Content-Type': 'application/json' } }),
+            });
+            await assert.rejects(servicio.listar(), { status, code: `codigo.${status}` });
+        }
+    });
+
     test('Cancelación con AbortController real lanza DefaultError status 0 y solicitud.cancelada', async () => {
         const controller = new AbortController();
 
