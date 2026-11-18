@@ -9,7 +9,7 @@
  * (showModal), con el foco en "Instalar"; al cerrarse devuelve el foco a donde estaba. "Instalar"
  * llama a prompt() en ese clic; "Ahora no", Esc o clic fuera cuentan como rechazo. El botón no cambia.
  */
-import { ControladorInstalacion, MODOS, EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
+import { ControladorInstalacion, MODOS, EVENTO_OFRECER, DEPURAR } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { plantilla } from "../plantilla.js";
 
@@ -35,7 +35,10 @@ class InstallPrompt extends HTMLElement {
     #inyectado = null;
     #cancelar = null;
     #alPulsar = () => this.#controlador.instalar();
-    #alOfrecer = () => this.#controlador.ofrecerUnaVez();
+    #alOfrecer = () => {
+        console.debug(DEPURAR, "ofrecer-instalacion recibido"); // TEMPORAL (diagnóstico)
+        this.#controlador.ofrecerUnaVez();
+    };
     #alAceptar = () => this.#controlador.aceptarInvitacion();
     #alRechazar = () => this.#controlador.rechazarInvitacion();
     /** Esc (o cualquier cierre que no pasó por el controlador) cuenta como rechazo. */
@@ -100,6 +103,7 @@ class InstallPrompt extends HTMLElement {
         const dialogo = this.shadowRoot.getElementById("invitacion");
         if (abierta && !dialogo.open) {
             this.#focoPrevio = focoProfundo();
+            console.debug(DEPURAR, "showModal()"); // TEMPORAL (diagnóstico)
             dialogo.showModal();
             this.shadowRoot.getElementById("invitacion-instalar").focus();
         } else if (!abierta) {

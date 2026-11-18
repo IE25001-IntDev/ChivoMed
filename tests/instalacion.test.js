@@ -357,3 +357,76 @@ describe('<install-prompt>: escucha la invitación de las vistas', () => {
         assert.equal(controlador.estado.invitacion, false);
     });
 });
+
+// Diagnóstico temporal: cada salida temprana de la invitación se anuncia en console.debug.
+describe('ControladorInstalacion: diagnóstico en consola (temporal)', () => {
+    function conEspia(fn) {
+        const original = console.debug;
+        const mensajes = [];
+        console.debug = (...args) => mensajes.push(args.join(' '));
+        try { fn(mensajes); } finally { console.debug = original; }
+        return mensajes;
+    }
+    const conSesion = (opciones = {}) => {
+        const ctx = preparar(opciones);
+        const datos = new Map();
+        ctx.ventana.sessionStorage = { getItem: k => datos.get(k) ?? null, setItem: (k, v) => datos.set(k, String(v)) };
+        return ctx;
+    };
+
+    test('sin beforeinstallprompt', () => {
+        const { controlador } = conSesion();
+        const m = conEspia(() => controlador.ofrecerUnaVez());
+        assert.ok(m.some(t => t.includes('[ChivoMed instalación]') && t.includes('sin beforeinstallprompt')), JSON.stringify(m));
+    });
+
+    test('ya ofrecida en esta sesión', () => {
+        const { ventana, controlador } = conSesion();
+        ventana.dispatchEvent(crearAviso());
+        controlador.ofrecerUnaVez();
+        controlador.rechazarInvitacion();
+        const m = conEspia(() => controlador.ofrecerUnaVez());
+        assert.ok(m.some(t => t.includes('ya ofrecida en esta sesión')), JSON.stringify(m));
+    });
+
+    test('ventana ya abierta', () => {
+        const { ventana, controlador } = conSesion();
+        ventana.dispatchEvent(crearAviso());
+        controlador.ofrecerUnaVez();
+        const m = conEspia(() => controlador.ofrecerUnaVez());
+        assert.ok(m.some(t => t.includes('ventana ya abierta')), JSON.stringify(m));
+    });
+
+    test('ya instalada', () => {
+        const { ventana, controlador } = conSesion({ standalone: true });
+        ventana.dispatchEvent(crearAviso());
+        const m = conEspia(() => controlador.ofrecerUnaVez());
+        assert.ok(m.some(t => t.includes('ya instalada')), JSON.stringify(m));
+    });
+
+    test('se abre', () => {
+        const { ventana, controlador } = conSesion();
+        ventana.dispatchEvent(crearAviso());
+        const m = conEspia(() => controlador.ofrecerUnaVez());
+        assert.ok(m.some(t => t.includes('[ChivoMed instalación]') && t.includes('abre la ventana')), JSON.stringify(m));
+    });
+
+    test('<install-prompt> anuncia que recibió el evento y que abrió el <dialog>', async () => {
+        instalarDom();
+        const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
+        const ventana = crearVentana();
+        const el = new InstallPrompt();
+        el.controlador = new ControladorInstalacion({ ventana });
+        conectar(el);
+        ventana.dispatchEvent(crearAviso());
+        const original = console.debug;
+        const m = [];
+        console.debug = (...args) => m.push(args.join(' '));
+        try {
+            document.dispatchEvent(new CustomEvent('ofrecer-instalacion'));
+            await asentar();
+        } finally { console.debug = original; desconectar(el); }
+        assert.ok(m.some(t => t.includes('ofrecer-instalacion recibido')), JSON.stringify(m));
+        assert.ok(m.some(t => t.includes('showModal()')), JSON.stringify(m));
+    });
+});
