@@ -223,6 +223,28 @@ test("502, 503 y 504 son sin conexión con el servidor: status 0 y el código de
     }
 });
 
+test("avisa servidor-caido o servidor-respondio en document; la copia del service worker no cuenta como respuesta", async () => {
+    const avisos = [];
+    globalThis.document = new EventTarget();
+    for (const tipo of ["servidor-caido", "servidor-respondio"]) globalThis.document.addEventListener(tipo, () => avisos.push(tipo));
+    const casos = [
+        [async () => { throw new TypeError("Failed to fetch"); }, "servidor-caido"],
+        [async () => new Response(null, { status: 503 }), "servidor-caido"],
+        [async () => new Response(null, { status: 401 }), "servidor-respondio"],
+        [async () => Response.json(sesion()), "servidor-respondio"],
+    ];
+    for (const [fetch, esperado] of casos) {
+        avisos.length = 0;
+        globalThis.fetch = fetch;
+        await obtenerSesion().catch(() => {});
+        assert.deepEqual(avisos.filter(a => a !== "sesion-expirada"), [esperado]);
+    }
+    avisos.length = 0;
+    globalThis.fetch = async () => Response.json([{ idTipoDocumento: TIPO, nombre: "DUI" }], { headers: { "X-ChivoMed-Copia": "1" } });
+    assert.equal((await listarTiposDocumento()).length, 1, "la copia se sigue usando");
+    assert.deepEqual(avisos, ["servidor-caido"]);
+});
+
 test("el logout envía el token CSRF y conserva el error si falla el servidor", async () => {
     globalThis.fetch = async (url, opciones) => {
         assert.equal(url, "/galenosv/api/auth/logout");

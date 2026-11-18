@@ -19,7 +19,8 @@
   display: flex; align-items: center; gap: var(--espacio-2);
   padding: var(--espacio-2) clamp(1rem, 4vw, 3rem); font-weight: 600;
 }
-.estado-red[data-estado="sin-red"] { background: var(--error-fondo); color: var(--error); }
+.estado-red[data-estado="sin-red"],
+.estado-red[data-estado="sin-servidor"] { background: var(--error-fondo); color: var(--error); }
 .estado-red[data-estado="en-linea"] { background: var(--mint-soft); color: var(--accent-text); }
 .punto { flex: none; width: .6rem; height: .6rem; border-radius: 50%; background: currentColor; }
 /* Sin aviso: fuera de la vista, pero sin display:none, para que el lector de pantalla siga escuchando la región. */

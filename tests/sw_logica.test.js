@@ -166,6 +166,24 @@ describe('responder: /galenosv/api/publico/* (red primero)', () => {
         assert.deepEqual(await respuesta.json(), [{ nombre: 'DUI' }]);
     });
 
+    // La página no debe tomar la copia como una respuesta del backend (controlador_conexion.js).
+    test('la copia servida sin red lleva X-ChivoMed-Copia: 1; la respuesta de la red no', async () => {
+        const caches = crearCaches();
+        const red = await SW.responder(get(TIPOS), { fetch: crearFetch(() => json([{ nombre: 'DUI' }])), caches, base: BASE });
+        assert.equal(red.headers.get(SW.CABECERA_COPIA), null);
+        const copia = await SW.responder(get(TIPOS), { fetch: sinRed(), caches, base: BASE });
+        assert.equal(copia.headers.get(SW.CABECERA_COPIA), '1');
+        assert.equal(copia.status, 200);
+        assert.equal(copia.headers.get('Content-Type'), 'application/json');
+        assert.deepEqual(await copia.json(), [{ nombre: 'DUI' }]);
+    });
+
+    test('la cabecera de la copia es la misma que reconocen los servicios', async () => {
+        const { CABECERA_COPIA } = await import('../src/js/control/auth_service.js');
+        assert.equal(SW.CABECERA_COPIA, CABECERA_COPIA);
+        assert.equal(SW.CABECERA_COPIA, 'X-ChivoMed-Copia');
+    });
+
     test('sin red ni copia responde 503 JSON', async () => {
         const respuesta = await SW.responder(get(TIPOS), { fetch: sinRed(), caches: crearCaches(), base: BASE });
         assert.equal(respuesta.status, 503);

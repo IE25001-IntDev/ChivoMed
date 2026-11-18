@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 import { crearVentana, instalarVentana } from './dobles/ventana_doble.js';
 
-const SIN_RED = 'Sin conexión. Puedes seguir navegando; las acciones que necesitan internet están deshabilitadas.';
+const SIN_RED = 'Sin red. Puedes seguir navegando; las acciones que necesitan internet están deshabilitadas.';
+const SIN_SERVIDOR = 'Sin conexión con el servidor. Puedes ver lo guardado; las acciones que lo necesitan están deshabilitadas.';
 const RESTABLECIDA = 'Conexión restablecida.';
 
 // `conexion` (pwa/conexion.js) se crea al importarse con la `window` que haya: la ventana falsa va antes.
@@ -23,6 +24,7 @@ beforeEach(() => { mock.timers.enable({ apis: ['setTimeout'] }); });
 afterEach(() => {
     for (const e of montados.splice(0)) if (e.isConnected) desconectar(e);
     if (!ventana.navigator.onLine) ventana.cambiarRed(true);
+    document.dispatchEvent(new Event('servidor-respondio'));
     mock.timers.reset();
 });
 
@@ -99,6 +101,22 @@ describe('<estado-conexion>', () => {
         assert.equal(texto(), RESTABLECIDA, 'el temporizador cancelado no borra el texto');
         ventana.cambiarRed(false);
         assert.equal(texto(), RESTABLECIDA, 'ya no escucha la red');
+    });
+
+    test('con el servidor caído avisa "Sin conexión con el servidor", distinto de "Sin red"', () => {
+        const { estado, texto } = montar();
+        document.dispatchEvent(new Event('servidor-caido'));
+        assert.equal(estado.getAttribute('data-aviso'), 'visible');
+        assert.equal(texto(), SIN_SERVIDOR);
+        assert.equal(estado.getAttribute('data-estado'), 'sin-servidor');
+        ventana.cambiarRed(false);
+        assert.equal(texto(), SIN_RED);
+        assert.equal(estado.getAttribute('data-estado'), 'sin-red');
+        ventana.cambiarRed(true);
+        assert.equal(texto(), SIN_SERVIDOR, 'volvió la red pero el servidor sigue sin responder');
+        document.dispatchEvent(new Event('servidor-respondio'));
+        assert.equal(texto(), RESTABLECIDA);
+        assert.equal(estado.getAttribute('data-estado'), 'en-linea');
     });
 
     test('al reconectarse no duplica la región', () => {

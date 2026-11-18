@@ -31,6 +31,7 @@ afterEach(() => {
     for (const b of montados.splice(0)) if (b.isConnected) desconectar(b);
     if (!ventana.navigator.onLine) ventana.cambiarRed(true);
     globalThis.fetch = fetchOriginal;
+    document.dispatchEvent(new Event('servidor-respondio')); // `conexion` es compartida: sin servidor caído entre pruebas
 });
 
 /** fetch falso: registra cada petición y responde con `responder()`. */

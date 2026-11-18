@@ -15,14 +15,14 @@
  *    apunta a ella (caché CACHE_VIGENTE) y se borran las demás; si falla, se descarta y se conserva
  *    la anterior. `cachesVigentes()` dice siempre de dónde servir; sin puntero, los de la instalación.
  *  - /galenosv/api/publico/* → red primero; solo los catálogos de CATALOGOS_PUBLICOS se guardan
- *    en caché y se usan como respaldo. Nada de datos clínicos.
+ *    en caché y se usan como respaldo, marcados con la cabecera CABECERA_COPIA. Nada de datos clínicos.
  *  - Cualquier otra ruta de la API (auth, escrituras, datos clínicos) → nunca se toca ni se cachea.
  */
 (function (raiz) {
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-17.21";
+    const VERSION = "2026-11-17.22";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -32,6 +32,8 @@
     /** Caché con la entrada de esta versión: { shell, datos } de la copia vigente (las de otras se borran). */
     const CACHE_VIGENTE = `${PREFIJO}vigente`;
     const CLAVE_VIGENTE = `https://chivomed.vigente/${VERSION}`;
+    /** Marca una respuesta servida desde la copia: la página no la cuenta como respuesta del backend. */
+    const CABECERA_COPIA = "X-ChivoMed-Copia";
 
     /** Rutas relativas al alcance del service worker (la carpeta src/). */
     const PRECACHE = Object.freeze([
@@ -202,6 +204,13 @@
         }
     }
 
+    /** La misma respuesta con la cabecera CABECERA_COPIA (las de Cache Storage no se pueden modificar). */
+    function marcarCopia(respuesta) {
+        const headers = new Headers(respuesta.headers);
+        headers.set(CABECERA_COPIA, "1");
+        return new Response(respuesta.body, { status: respuesta.status, statusText: respuesta.statusText, headers });
+    }
+
     async function servirPublico(solicitud, { fetch, caches }) {
         const cacheable = esCatalogoCacheable(solicitud.url);
         try {
@@ -216,7 +225,7 @@
             if (cacheable) {
                 const cache = await caches.open((await cachesVigentes(caches)).datos);
                 const guardada = await cache.match(solicitud.url);
-                if (guardada) return guardada;
+                if (guardada) return marcarCopia(guardada);
             }
             return respuestaSinRed("json");
         }
@@ -312,7 +321,7 @@
     }
 
     raiz.ChivoMedSW = Object.freeze({
-        VERSION, CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
+        VERSION, CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, CABECERA_COPIA, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
         clasificar, esCatalogoCacheable, responder, precachear, limpiarVersionesViejas, limpiarDatos, atenderMensaje,
         cachesVigentes, renovar,
     });

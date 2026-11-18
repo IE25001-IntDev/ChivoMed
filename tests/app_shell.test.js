@@ -57,6 +57,7 @@ afterEach(async () => {
     for (const s of montados.splice(0)) if (s.isConnected) desconectar(s);
     if (!ventana.navigator.onLine) ventana.cambiarRed(true);
     globalThis.fetch = fetchOriginal;
+    document.dispatchEvent(new Event('servidor-respondio')); // `conexion` es compartida: sin servidor caído entre pruebas
     await pausa(5); // que terminen los setTimeout(0) de 'sesion-expirada'
 });
 
@@ -334,7 +335,8 @@ describe('<app-shell>: desconexión', () => {
         servidor(() => json(sesion()));
         ventana.cambiarRed(true);
         await pausa();
-        assert.equal(peticiones.length, 0);
+        // La verificación del servidor (?verificar=1) es de `conexion`, no del shell.
+        assert.equal(peticiones.filter(p => !p.url.includes('verificar=1')).length, 0);
         assert.equal(ctx.vista().localName, 'vista-sin-conexion');
     });
 });

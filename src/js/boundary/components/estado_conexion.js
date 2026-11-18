@@ -1,5 +1,6 @@
 /**
- * <estado-conexion>: avisa si la app está en línea o sin conexión.
+ * <estado-conexion>: avisa si la app está en línea, sin red o sin conexión con el servidor
+ * (el backend no responde: ver pwa/controlador_conexion.js).
  * La región aria-live (role="status") está siempre en el árbol de accesibilidad: nunca lleva `hidden`
  * ni display:none, porque muchos lectores no anuncian una región que aparece a la vez que su texto.
  * Solo cambia el texto; sin aviso, la franja se oculta a la vista (data-aviso="oculto", recortada como
@@ -42,9 +43,12 @@ class EstadoConexion extends HTMLElement {
     #pintar(enLinea, cambio) {
         const estado = this.shadowRoot.getElementById("estado");
         clearTimeout(this.#temporizador);
-        estado.dataset.estado = enLinea ? "en-linea" : "sin-red";
-        if (!enLinea) {
-            this.#avisar("Sin conexión. Puedes seguir navegando; las acciones que necesitan internet están deshabilitadas.");
+        const sinServidor = !enLinea && conexion.motivo === "servidor";
+        estado.dataset.estado = enLinea ? "en-linea" : sinServidor ? "sin-servidor" : "sin-red";
+        if (sinServidor) {
+            this.#avisar("Sin conexión con el servidor. Puedes ver lo guardado; las acciones que lo necesitan están deshabilitadas.");
+        } else if (!enLinea) {
+            this.#avisar("Sin red. Puedes seguir navegando; las acciones que necesitan internet están deshabilitadas.");
         } else if (cambio) {
             this.#avisar("Conexión restablecida.");
             this.#temporizador = setTimeout(() => this.#avisar(""), AVISO_RESTABLECIDA_MS);

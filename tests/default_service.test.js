@@ -346,6 +346,59 @@ describe('DefaultService (Suite de Pruebas Unitarias P2-2)', () => {
         }
     });
 
+    // Punto 2: avisos en document para el estado "servidor no disponible" (controlador_conexion.js).
+    test('avisa servidor-caido ante un fallo de red o un 502/503/504 y servidor-respondio ante una respuesta real', async () => {
+        const avisos = [];
+        globalThis.document = new EventTarget();
+        for (const tipo of ['servidor-caido', 'servidor-respondio']) document.addEventListener(tipo, () => avisos.push(tipo));
+        try {
+            const casos = [
+                [async () => { throw new TypeError('Failed to fetch'); }, 'servidor-caido'],
+                [async () => new Response(null, { status: 502 }), 'servidor-caido'],
+                [async () => new Response(null, { status: 504 }), 'servidor-caido'],
+                [async () => Response.json({ code: 'x' }, { status: 404 }), 'servidor-respondio'],
+                [async () => Response.json({ code: 'x' }, { status: 500 }), 'servidor-respondio'],
+                [async () => Response.json([]), 'servidor-respondio'],
+            ];
+            for (const [fetchImpl, esperado] of casos) {
+                avisos.length = 0;
+                const servicio = new DefaultService('elementos', MockEntity, { baseUrl: 'http://api.local', fetchImpl });
+                await servicio.listar().catch(() => {});
+                assert.deepEqual(avisos, [esperado]);
+            }
+        } finally {
+            delete globalThis.document;
+        }
+    });
+
+    test('la copia del service worker (X-ChivoMed-Copia) no cuenta como respuesta del backend', async () => {
+        const avisos = [];
+        globalThis.document = new EventTarget();
+        for (const tipo of ['servidor-caido', 'servidor-respondio']) document.addEventListener(tipo, () => avisos.push(tipo));
+        try {
+            const servicio = new DefaultService('elementos', MockEntity, { baseUrl: 'http://api.local',
+                fetchImpl: async () => Response.json([], { headers: { 'X-ChivoMed-Copia': '1' } }) });
+            await servicio.listar();
+            assert.deepEqual(avisos, ['servidor-caido']);
+        } finally {
+            delete globalThis.document;
+        }
+    });
+
+    test('una solicitud cancelada no avisa nada', async () => {
+        const avisos = [];
+        globalThis.document = new EventTarget();
+        for (const tipo of ['servidor-caido', 'servidor-respondio']) document.addEventListener(tipo, () => avisos.push(tipo));
+        try {
+            const servicio = new DefaultService('elementos', MockEntity, { baseUrl: 'http://api.local',
+                fetchImpl: async () => { throw new DOMException('cancelada', 'AbortError'); } });
+            await servicio.listar().catch(() => {});
+            assert.deepEqual(avisos, []);
+        } finally {
+            delete globalThis.document;
+        }
+    });
+
     test('Cancelación con AbortController real lanza DefaultError status 0 y solicitud.cancelada', async () => {
         const controller = new AbortController();
 

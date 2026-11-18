@@ -49,6 +49,43 @@ export const CODIGO_SIN_RED = "conexion.error";
  */
 export const STATUS_SIN_SERVIDOR = Object.freeze([502, 503, 504]);
 
+/**
+ * Cabecera con la que el service worker (sw_logica.js) marca una respuesta servida desde su copia:
+ * no es una respuesta del backend.
+ */
+export const CABECERA_COPIA = "X-ChivoMed-Copia";
+export const EVENTO_SERVIDOR_CAIDO = "servidor-caido";
+export const EVENTO_SERVIDOR_RESPONDIO = "servidor-respondio";
+
+/**
+ * Avisa en document si el backend respondió, para el estado de conexión (controlador_conexion.js).
+ * Sin respuesta (fallo de red o tiempo agotado), un 502/503/504 o la copia del service worker
+ * avisan "servidor-caido"; cualquier otra respuesta, aunque sea un error, "servidor-respondio".
+ * @param {Response|null} respuesta null si no hubo respuesta
+ */
+export function avisarServidor(respuesta) {
+    if (typeof document === "undefined") return;
+    const respondio = Boolean(respuesta) && !STATUS_SIN_SERVIDOR.includes(respuesta.status)
+        && !respuesta.headers?.get(CABECERA_COPIA);
+    document.dispatchEvent(new Event(respondio ? EVENTO_SERVIDOR_RESPONDIO : EVENTO_SERVIDOR_CAIDO));
+}
+
+/**
+ * GET liviano para saber si el backend volvió: el catálogo público con `?verificar=1`, que el
+ * service worker nunca sirve desde su copia (solo guarda el catálogo sin query). true si respondió.
+ */
+export async function verificarServidor() {
+    try {
+        const respuesta = await fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/publico/tipos-documento?verificar=1`, {
+            headers: { Accept: "application/json" }, credentials: API_CONFIG.credentials,
+            cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
+        });
+        return !STATUS_SIN_SERVIDOR.includes(respuesta.status) && !respuesta.headers.get(CABECERA_COPIA);
+    } catch {
+        return false;
+    }
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_NUMERO_DOCUMENTO = 50;
 
@@ -110,10 +147,12 @@ async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesio
             signal: AbortSignal.timeout(10000),
         });
     } catch (error) {
+        avisarServidor(null);
         throw new AuthError(error.name === "TimeoutError" || error.name === "AbortError"
             ? "La solicitud tardó demasiado. Inténtalo de nuevo."
             : "No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
     }
+    avisarServidor(respuesta);
     // 502, 503 y 504: sin conexión con el servidor, igual que un fallo de red (como en DefaultService).
     if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
         throw new AuthError("No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
