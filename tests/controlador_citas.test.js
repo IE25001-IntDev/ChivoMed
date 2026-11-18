@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     ControladorCitas, MENSAJES, CLAVE_MEMORIA, PASOS, validarNumero, validarRango, pasoAlcanzable,
@@ -8,6 +8,7 @@ import * as citas from '../src/js/boundary/vistas/controlador_citas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
 import { AuthError, CODIGO_SIN_RED } from '../src/js/control/auth_service.js';
+import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `40000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -22,7 +23,7 @@ const AHORA = Date.UTC(2026, 10, 13, 15, 30);
 
 const asentar = () => new Promise(resolve => setTimeout(resolve, 0));
 
-function preparar({ clinicas = [NORTE, SUR], citas = [CITA], tipos = [DUI, PASAPORTE], enLinea = true, memoria = new MemoriaVistas() } = {}) {
+function preparar({ clinicas = [NORTE, SUR], citas = [CITA], tipos = [DUI, PASAPORTE], enLinea = true, memoria = new MemoriaVistas(), conexion: conexionReal = null } = {}) {
     const llamadas = { tipos: 0, clinicas: [], citas: [], ticket: [] };
     const respuestas = {
         tipos: async () => tipos,
@@ -36,7 +37,7 @@ function preparar({ clinicas = [NORTE, SUR], citas = [CITA], tipos = [DUI, PASAP
         ticket: async (id, doc) => { llamadas.ticket.push({ id, doc }); return respuestas.ticket(id, doc); },
     };
     const suscriptores = new Set();
-    const conexion = { enLinea, suscribir: fn => { suscriptores.add(fn); return () => suscriptores.delete(fn); } };
+    const conexion = conexionReal ?? { enLinea, suscribir: fn => { suscriptores.add(fn); return () => suscriptores.delete(fn); } };
     const red = valor => { conexion.enLinea = valor; for (const fn of [...suscriptores]) fn(valor); };
     const reloj = { ahora: AHORA };
     const temporizadores = [];
@@ -859,5 +860,62 @@ describe('Errores de la búsqueda de citas', () => {
         await controlador.prepararClinicas();
         assert.match(estado.errores.numero, /formato de DUI\. Ocho dígitos, guion y un dígito\./);
         assert.equal(llamadas.clinicas.length, 0);
+    });
+});
+
+// Punto 3: con el servidor caído (ControladorConexion real avisado con "servidor-caido") no se busca
+// ni se descarga el ticket; si cae en medio, se muestra el error y no se reintenta.
+describe('ControladorCitas: ninguna escritura sin servidor', () => {
+    afterEach(() => detenerConexiones());
+    const sinServidor = () => new DefaultError({ status: 0, code: 'conexion.error', message: 'No se pudo conectar con GalenoSV.' });
+
+    test('buscar citas: con el servidor caído no se envía y se dice el motivo', async () => {
+        const red = conexionConServidor();
+        const ctx = preparar({ conexion: red.conexion });
+        await hastaFechas(ctx);
+        red.caer();
+        assert.equal(motivoNoBuscar(ctx.estado, AHORA), MENSAJES.sinRedBuscar);
+        await ctx.controlador.buscar();
+        assert.deepEqual(ctx.llamadas.citas, []);
+        assert.equal(ctx.estado.mensaje, MENSAJES.sinRedBuscar);
+    });
+
+    test('buscar citas: si el servidor cae en el POST, muestra el error y no reintenta al volver', async () => {
+        const red = conexionConServidor();
+        const ctx = preparar({ conexion: red.conexion });
+        ctx.respuestas.citas = async () => { red.caer(); throw sinServidor(); };
+        await hastaFechas(ctx);
+        await ctx.controlador.buscar();
+        assert.equal(ctx.estado.mensaje, MENSAJES.conexion);
+        assert.equal(ctx.estado.citas, null);
+        red.responder();
+        await asentar();
+        assert.equal(ctx.llamadas.citas.length, 1);
+    });
+
+    test('descargar el ticket: con el servidor caído no se pide el PDF y la tarjeta dice el motivo', async () => {
+        const red = conexionConServidor();
+        const ctx = preparar({ conexion: red.conexion });
+        await hastaFechas(ctx);
+        await ctx.controlador.buscar();
+        red.caer();
+        // La vista muestra MENSAJES.sinRedTicket cuando estado.enLinea es false.
+        assert.equal(ctx.estado.enLinea, false);
+        await ctx.controlador.descargarTicket(CITA.idConsulta);
+        assert.deepEqual(ctx.llamadas.ticket, []);
+        assert.equal(ctx.estado.tickets[CITA.idConsulta], undefined);
+    });
+
+    test('descargar el ticket: si el servidor cae al pedir el PDF, la tarjeta muestra el error y no reintenta', async () => {
+        const red = conexionConServidor();
+        const ctx = preparar({ conexion: red.conexion });
+        ctx.respuestas.ticket = async () => { red.caer(); throw sinServidor(); };
+        await hastaFechas(ctx);
+        await ctx.controlador.buscar();
+        await ctx.controlador.descargarTicket(CITA.idConsulta);
+        assert.deepEqual(ctx.estado.tickets[CITA.idConsulta], { estado: 'error', error: MENSAJES.conexion });
+        red.responder();
+        await asentar();
+        assert.equal(ctx.llamadas.ticket.length, 1);
     });
 });

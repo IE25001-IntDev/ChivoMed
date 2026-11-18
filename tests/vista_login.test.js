@@ -1,4 +1,4 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, before, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 
@@ -249,5 +249,56 @@ describe('<vista-login> + <install-prompt>: ventana para instalar', () => {
             desconectar(ctx.vista);
             desconectar(instalador);
         }
+    });
+});
+
+// Punto 3: con el servidor caído (DefaultService y auth_service avisan "servidor-caido" en document)
+// el login queda deshabilitado con su motivo; si el servidor cae al enviar, se muestra el error y no se reintenta.
+describe('<vista-login>: sin servidor', () => {
+    let MENSAJE_SIN_RED;
+    let AuthError;
+    before(async () => {
+        ({ MENSAJE_SIN_RED } = await import('../src/js/boundary/pwa/controlador_conexion.js'));
+        ({ AuthError } = await import('../src/js/control/auth_service.js'));
+    });
+    afterEach(() => document.dispatchEvent(new Event('servidor-respondio')));
+
+    const llenar = ctx => {
+        ctx.$('tipo').value = DUI.idTipoDocumento;
+        ctx.$('numero').value = '12345678-9';
+    };
+
+    test('con el servidor caído Ingresar se deshabilita con su motivo y enviar no llama al backend', async () => {
+        const ctx = montar();
+        conectar(ctx.vista);
+        await asentar();
+        document.dispatchEvent(new Event('servidor-caido'));
+        assert.equal(ctx.$('enviar').disabled, true);
+        assert.equal(ctx.$('sin-red').hidden, false);
+        assert.equal(ctx.$('sin-red').textContent, MENSAJE_SIN_RED);
+        llenar(ctx);
+        ctx.enviar();
+        await asentar();
+        assert.equal(ctx.llamadas.login.length, 0);
+        desconectar(ctx.vista);
+    });
+
+    test('si el servidor cae al enviar, muestra el error y no reintenta cuando vuelve', async () => {
+        const ctx = montar({ login: async () => {
+            document.dispatchEvent(new Event('servidor-caido'));
+            throw new AuthError('No pudimos conectar con el servicio. Inténtalo de nuevo.', 0, 'conexion.error');
+        } });
+        conectar(ctx.vista);
+        await asentar();
+        llenar(ctx);
+        ctx.enviar();
+        await asentar();
+        assert.equal(ctx.$('mensaje-texto').textContent, 'No pudimos conectar con el servicio. Inténtalo de nuevo.');
+        assert.equal(ctx.$('enviar').disabled, true);
+        document.dispatchEvent(new Event('servidor-respondio'));
+        await asentar();
+        assert.equal(ctx.llamadas.login.length, 1);
+        assert.equal(ctx.eventos.length, 0);
+        desconectar(ctx.vista);
     });
 });

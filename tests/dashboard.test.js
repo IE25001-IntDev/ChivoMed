@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import AtencionService from '../src/js/control/atencion_service.js';
 import DefaultError from '../src/js/entities/default_error.js';
@@ -8,6 +8,7 @@ import {
 } from '../src/js/boundary/vistas/controlador_dashboard.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import { MENSAJE_SIN_RED } from '../src/js/boundary/pwa/controlador_conexion.js';
+import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';
 
 // Datos inventados; nunca datos reales de pacientes ni de personal.
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -117,12 +118,11 @@ function conexionDoble(enLinea = true) {
 /** Prepara el controlador con dobles de servicio, /auth/me, conexión, memoria real y reloj fijo. */
 function preparar({ asignaciones = async () => ASIGNACIONES, cambiarRol = async id => ({ idPersonaRol: id, idConsulta: null }),
     contexto = async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: null }), salirDeConsulta = async () => null,
-    obtenerSesion, enLinea = true, memoria = new MemoriaVistas(), reloj = () => new Date(2026, 10, 13, 9, 30) } = {}) {
+    obtenerSesion, enLinea = true, conexion = conexionDoble(enLinea), memoria = new MemoriaVistas(), reloj = () => new Date(2026, 10, 13, 9, 30) } = {}) {
     const llamadas = { asignaciones: 0, cambiarRol: [], obtenerSesion: 0, contexto: 0, salirDeConsulta: 0 };
     const estados = [];
     const sesionesNuevas = [];
     let ultimoCambio = null;
-    const conexion = conexionDoble(enLinea);
     const controlador = new ControladorDashboard({
         servicio: {
             asignaciones: async () => { llamadas.asignaciones++; return { data: await asignaciones() }; },
@@ -610,5 +610,60 @@ describe('ControladorDashboard: consulta en curso (F8)', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE));
         assert.equal(llamadas.contexto, 0);
         assert.equal(controlador.estado.enCurso, null);
+    });
+});
+
+// Punto 3: con el servidor caído (ControladorConexion real avisado con "servidor-caido") no se
+// cambia de rol ni se sale de la consulta en curso; si cae en medio, se muestra el error y no se reintenta.
+describe('ControladorDashboard: ninguna escritura sin servidor', () => {
+    afterEach(() => detenerConexiones());
+    const sinServidor = () => errorHttp(0, 'conexion.error', 'No se pudo conectar con GalenoSV.');
+    const conCurso = async () => ({ idPersonaRol: DOC_NORTE.idPersonaRol, idConsulta: UUID(77) });
+    const pausa = () => new Promise(resolver => setTimeout(resolver, 0));
+
+    test('cambiar de rol: con el servidor caído no se intenta y se explica por qué', async () => {
+        const red = conexionConServidor();
+        const { controlador, llamadas } = preparar({ conexion: red.conexion });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        red.caer();
+        assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
+        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.deepEqual(llamadas.cambiarRol, []);
+    });
+
+    test('cambiar de rol: si el servidor cae en el PUT, muestra el error y no reintenta al volver', async () => {
+        const red = conexionConServidor();
+        const { controlador, llamadas } = preparar({ conexion: red.conexion,
+            cambiarRol: async () => { red.caer(); throw sinServidor(); } });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
+        assert.equal(controlador.estado.error, mensajeDeError(sinServidor(), { cambio: true }));
+        assert.equal(controlador.estado.cambiando, null);
+        assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
+        red.responder();
+        await pausa();
+        assert.deepEqual(llamadas.cambiarRol, [DOC_SUR.idPersonaRol]);
+    });
+
+    test('salir de la consulta en curso: con el servidor caído no hace el DELETE y dice el motivo', async () => {
+        const red = conexionConServidor();
+        const { controlador, llamadas } = preparar({ conexion: red.conexion, contexto: conCurso });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        red.caer();
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.equal(llamadas.salirDeConsulta, 0);
+    });
+
+    test('salir de la consulta en curso: si el servidor cae en el DELETE, muestra el error y no reintenta al volver', async () => {
+        const red = conexionConServidor();
+        const { controlador, llamadas } = preparar({ conexion: red.conexion, contexto: conCurso,
+            salirDeConsulta: async () => { red.caer(); throw sinServidor(); } });
+        await controlador.iniciar(sesionCon(DOC_NORTE));
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(controlador.estado.error, mensajeDeError(sinServidor()));
+        red.responder();
+        await pausa();
+        assert.equal(llamadas.salirDeConsulta, 1);
     });
 });

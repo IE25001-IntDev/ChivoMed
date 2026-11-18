@@ -76,9 +76,8 @@ export function servicioDoble(respuestas = {}) {
     return { servicio, llamadas, nombres: () => llamadas.map(([n]) => n) };
 }
 
-export function preparar({ respuestas, enLinea = true, memoria = new MemoriaVistas(), sesion = sesionCon(), soloLectura = false } = {}) {
+export function preparar({ respuestas, enLinea = true, conexion = conexionDoble(enLinea), memoria = new MemoriaVistas(), sesion = sesionCon(), soloLectura = false } = {}) {
     const doble = servicioDoble(respuestas);
-    const conexion = conexionDoble(enLinea);
     const controlador = new ControladorConsulta({ servicio: doble.servicio, conexion, memoria, reloj: () => new Date('2026-11-13T15:30:00Z') });
     const lotes = [];
     controlador.suscribir(cambios => lotes.push([...cambios].sort()));

@@ -1,10 +1,11 @@
-import { test, describe } from 'node:test';
+import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { MENSAJES, MAX_TEXTO, textoSeleccion } from '../src/js/boundary/vistas/controlador_consulta.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import {
     UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
 } from './dobles/consulta.js';
+import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';
 
 /** Consulta con un estado que cambia como en el backend: avanzar crea el paso 3, retroceder lo borra. */
 function flujo({ respuestas = {}, ...opciones } = {}) {
@@ -455,5 +456,166 @@ describe('ControladorConsulta: acciones y cambios de contexto', () => {
         await controlador.asignarExamenes({ indicaciones: '' });
         const guardado = memoria.leer(`${UUID(801)}:consulta:${UUID(900)}:${ID_CONSULTA}`);
         assert.equal(guardado.detalle.ordenes.length, 1);
+    });
+});
+
+// Punto 3: con el servidor caído (ControladorConexion real avisado con "servidor-caido") ninguna
+// acción que escribe llama al backend y cada una dice su motivo. Si el servidor se cae en medio de
+// una acción, se muestra el error, no se reintenta y no queda nada en cola para cuando vuelva.
+describe('ControladorConsulta: ninguna escritura sin servidor', () => {
+    afterEach(() => detenerConexiones());
+    const sinServidor = () => errorHttp(0, 'conexion.error', 'No se pudo conectar con GalenoSV.');
+    const contar = (nombres, nombre) => nombres().filter(n => n === nombre).length;
+
+    /** Abre la consulta con el servidor disponible; `caer()` lo marca caído. */
+    async function abierta(opciones = {}) {
+        const red = conexionConServidor();
+        const f = flujo({ ...opciones, conexion: red.conexion });
+        await f.iniciar();
+        return { ...f, ...red };
+    }
+
+    /** Tras la falla, el servidor vuelve: la acción no se repite sola. */
+    async function vuelveSinRepetir({ responder, nombres }, nombre) {
+        assert.equal(contar(nombres, nombre), 1);
+        responder();
+        await asentar();
+        await asentar();
+        assert.equal(contar(nombres, nombre), 1, `no se reintenta ${nombre}`);
+    }
+
+    test('sesión de paso: abrir con el servidor caído no pide PUT …/sesion y explica el motivo', async () => {
+        const red = conexionConServidor();
+        red.caer();
+        const { controlador, nombres, iniciar } = flujo({ conexion: red.conexion });
+        await iniciar();
+        assert.equal(nombres().includes('retomar'), false);
+        assert.equal(controlador.estado.atendiendo, false);
+        assert.equal(controlador.estado.error, MENSAJES.sinRedCarga);
+    });
+
+    test('sesión de paso: si el servidor cae en el PUT …/sesion, muestra el error y no lo repite mientras siga caído', async () => {
+        const red = conexionConServidor();
+        const { controlador, nombres, iniciar } = flujo({ conexion: red.conexion, respuestas: { retomar: () => { red.caer(); return sinServidor(); } } });
+        await iniciar();
+        assert.equal(controlador.estado.error, MENSAJES.conexion);
+        assert.equal(controlador.estado.atendiendo, false);
+        await asentar();
+        assert.equal(contar(nombres, 'retomar'), 1);
+        // Al volver el servidor la vista se actualiza sola (vuelve a cargar), no antes.
+    });
+
+    test('finalización (y el registro del paso): con el servidor caído no llama al backend y dice el motivo', async () => {
+        const { controlador, nombres, caer } = await abierta();
+        controlador.cambiarBorrador('Registro escrito');
+        caer();
+        assert.equal(controlador.motivoNoActuar, MENSAJES.sinRed);
+        assert.equal(await controlador.avanzar(), false);
+        assert.equal(nombres().includes('completar'), false);
+        assert.equal(controlador.estado.borrador, 'Registro escrito');
+    });
+
+    test('finalización: si el servidor cae al completar, muestra el error, conserva el registro y no reintenta', async () => {
+        let caer;
+        const f = await abierta({ respuestas: { completar: () => { caer(); return sinServidor(); } } });
+        caer = f.caer;
+        f.controlador.cambiarBorrador('Registro escrito');
+        assert.equal(await f.controlador.avanzar(), false);
+        assert.equal(f.controlador.estado.errorAccion, MENSAJES.conexion);
+        assert.equal(f.controlador.estado.borrador, 'Registro escrito');
+        assert.equal(f.controlador.motivoNoActuar, MENSAJES.sinRed);
+        await vuelveSinRepetir(f, 'completar');
+    });
+
+    async function enPaso3(opciones) {
+        const f = await abierta(opciones);
+        f.controlador.cambiarBorrador('Registro del paso 2');
+        assert.equal(await f.controlador.avanzar(), true);
+        return f;
+    }
+
+    test('retroceso: con el servidor caído no llama al backend y dice el motivo', async () => {
+        const { controlador, nombres, caer } = await enPaso3();
+        caer();
+        assert.equal(controlador.motivoNoRetroceder, MENSAJES.sinRed);
+        assert.equal(await controlador.pedirRetroceso(), false);
+        assert.equal(nombres().includes('retroceder'), false);
+    });
+
+    test('retroceso: si el servidor cae al retroceder, muestra el error y no reintenta', async () => {
+        let caer;
+        const f = await enPaso3({ respuestas: { retroceder: () => { caer(); return sinServidor(); } } });
+        caer = f.caer;
+        assert.equal(await f.controlador.pedirRetroceso(), false);
+        assert.equal(f.controlador.estado.errorAccion, MENSAJES.conexion);
+        assert.equal(f.controlador.pasoActual.idConsultaProcedimientoPaso, UUID(103));
+        await vuelveSinRepetir(f, 'retroceder');
+    });
+
+    test('órdenes de examen: con el servidor caído no hay ningún POST y se dice el motivo', async () => {
+        const { controlador, nombres, caer } = await abierta();
+        controlador.alternarExamen(UUID(301), true);
+        caer();
+        assert.equal(controlador.motivoNoActuar, MENSAJES.sinRed);
+        assert.equal(await controlador.asignarExamenes(), false);
+        assert.equal(nombres().includes('ordenar'), false);
+    });
+
+    test('órdenes de examen: si el servidor cae en el primer POST, corta la serie, muestra el error y no reintenta', async () => {
+        let caer;
+        const f = await abierta({ respuestas: { ordenar: () => { caer(); return sinServidor(); } } });
+        caer = f.caer;
+        f.controlador.alternarExamen(UUID(301), true);
+        f.controlador.alternarExamen(UUID(302), true);
+        assert.equal(await f.controlador.asignarExamenes(), false);
+        assert.equal(f.controlador.estado.errorAccion, MENSAJES.conexion);
+        assert.deepEqual(f.controlador.estado.resultadoExamenes.map(r => r.mensaje), [MENSAJES.conexion, MENSAJES.noEnviado]);
+        await vuelveSinRepetir(f, 'ordenar');
+    });
+
+    async function terminada(opciones) {
+        const red = conexionConServidor();
+        const f = flujo({ ...opciones, conexion: red.conexion });
+        f.servidor.pasos = [paso(1), paso(2, { nivel: 1 })];
+        await f.iniciar();
+        return { ...f, ...red };
+    }
+
+    test('cierre: con el servidor caído no se ofrece ni llama al backend; el motivo es la falta de conexión', async () => {
+        const { controlador, nombres, caer } = await terminada();
+        caer();
+        assert.equal(controlador.bloqueo, MENSAJES.sinRed);
+        assert.equal(controlador.pedirCierre('Notas'), false);
+        assert.equal(await controlador.confirmar(), false);
+        assert.equal(nombres().includes('cerrar'), false);
+    });
+
+    test('cierre: si el servidor cae al cerrar, muestra el error y no reintenta', async () => {
+        let caer;
+        const f = await terminada({ respuestas: { cerrar: () => { caer(); return sinServidor(); } } });
+        caer = f.caer;
+        assert.equal(f.controlador.pedirCierre('Notas'), true);
+        assert.equal(await f.controlador.confirmar(), false);
+        assert.equal(f.controlador.estado.errorAccion, MENSAJES.conexion);
+        assert.equal(f.controlador.estado.consulta.fechaFin, null);
+        await vuelveSinRepetir(f, 'cerrar');
+    });
+
+    test('salir de la consulta en curso: con el servidor caído no hace el DELETE y dice el motivo', async () => {
+        const { controlador, nombres, caer } = await abierta();
+        caer();
+        assert.equal(await controlador.salirDeConsulta(), false);
+        assert.equal(controlador.estado.errorAccion, MENSAJES.sinRedSalir);
+        assert.equal(nombres().includes('salirDeConsulta'), false);
+    });
+
+    test('salir de la consulta en curso: si el servidor cae en el DELETE, muestra el error y no reintenta', async () => {
+        let caer;
+        const f = await abierta({ respuestas: { salirDeConsulta: () => { caer(); return sinServidor(); } } });
+        caer = f.caer;
+        assert.equal(await f.controlador.salirDeConsulta(), false);
+        assert.equal(f.controlador.estado.errorAccion, MENSAJES.conexion);
+        assert.equal(f.controlador.estado.navegarA, null);
+        await vuelveSinRepetir(f, 'salirDeConsulta');
     });
 });

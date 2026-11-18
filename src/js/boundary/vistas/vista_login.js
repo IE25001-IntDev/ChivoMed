@@ -172,6 +172,8 @@ class VistaLogin extends HTMLElement {
 
     async #enviar(event) {
         event.preventDefault();
+        // Sin red o sin servidor no se envía, aunque el submit llegue sin pasar por el botón deshabilitado.
+        if (!conexion.enLinea) return;
         const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
         // Invitación a instalar (<install-prompt> abre su ventana); el login no la espera.
         const invalido = this.#controlador.validar(datos);
