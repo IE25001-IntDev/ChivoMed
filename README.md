@@ -101,33 +101,46 @@ En la HU1 y la HU2, el selector de tipo de documento muestra los tipos activos: 
 
 ## Modo sin conexión
 
-1. Con red, haz una búsqueda de citas (HU1) o entra con una cuenta de empleado y abre el
-   dashboard.
-2. En DevTools → Network, marca **Offline** y recarga (F5).
+La app trata igual **sin red** y **sin conexión con el servidor**: un fallo de red, un tiempo
+agotado o un 502, 503 o 504 (p. ej. el proxy de `npm start` con el backend apagado). En los dos
+casos muestra lo guardado y deshabilita toda acción que escribe, con su motivo. La franja de
+arriba dice "Sin red" o "Sin conexión con el servidor".
+
+1. Con red y backend, haz una búsqueda de citas (HU1) o entra con una cuenta de empleado y abre
+   el dashboard.
+2. Apaga el backend (o en DevTools → Network marca **Offline**) y recarga (F5).
 3. El shell se carga desde el service worker.
-   - En `#/citas` se ve la última búsqueda con "Sin conexión. Mostrando la búsqueda de las
-     HH:MM"; no se puede buscar ni descargar el ticket. La búsqueda guardada solo se usa sin
-     conexión: si la app se abre con red, se borra y el formulario arranca vacío. Si la red se
-     pierde con la página abierta, la búsqueda que está en pantalla se queda.
-   - El dashboard y la última consulta abierta se ven en **solo lectura**, con el aviso "Sin
-     conexión. Mostrando … guardadas a las HH:MM". Las consultas de hoy que te tocan ofrecen
-     **"Ver sin conexión"** y se abren en solo lectura. Las acciones que escriben se deshabilitan
-     con su motivo.
-4. Al volver la red, la sesión se verifica de nuevo y los datos se actualizan solos.
+   - En `#/citas` se ve la última búsqueda con "Sin conexión con el servidor. Mostrando lo
+     guardado a las HH:MM."; no se puede buscar ni descargar el ticket. Si no hay nada
+     guardado: "No se puede conectar con el servidor y no hay datos guardados."
+   - El dashboard y la última consulta abierta se ven en **solo lectura**, con el mismo aviso.
+     Las consultas de hoy que te tocan ofrecen **"Ver sin conexión"** y se abren en solo
+     lectura. Cambiar de rol, la sesión del paso, avanzar (con el registro), retroceder, las
+     órdenes de examen, el cierre, salir de la consulta, el login, buscar citas y el ticket se
+     deshabilitan con su motivo.
+   - Si el servidor se cae en medio de una acción, se muestra el error; no se reintenta ni se
+     guarda nada para después.
+4. Mientras no hay servidor, la app lo revisa cada 20 segundos, al volver la red y al volver a la
+   pestaña (`GET /api/publico/tipos-documento?verificar=1`, que el service worker no responde
+   desde su copia). Cuando responde, se desbloquea sola en menos de 20 segundos: la sesión se
+   verifica de nuevo y los datos se actualizan.
 
 **Caché de archivos.** Cada vez que la app arranca con red, el service worker descarga de nuevo
 todos los archivos del shell y el catálogo de tipos de documento en un caché nuevo. Solo cuando
-la copia está completa cambia a ella y borra las anteriores; si la descarga falla a medias, se
-queda con la anterior. Sin red no se borra nada. En DevTools → Application → Cache Storage
-queda un solo juego `chivomed-*` más `chivomed-vigente`.
+la copia está completa cambia a ella y borra las anteriores; si la descarga falla a medias (o el
+backend no responde el catálogo), se queda con la anterior. Sin red no se borra nada. Sin red o
+con un 502, 503 o 504, el catálogo sale de la copia, marcada con la cabecera
+`X-ChivoMed-Copia: 1`: la app no la cuenta como respuesta del backend. En DevTools →
+Application → Cache Storage queda un solo juego `chivomed-*` más `chivomed-vigente`.
 
 **Datos en IndexedDB.**
 - Empleado: la sesión verificada (sin token), el último dashboard, la consulta abierta y las
   consultas de hoy que le tocan al rol activo. Se guardan al ingresar y al cambiar de rol.
   Caducan a las 8 horas y se borran al cerrar sesión o al entrar con otra cuenta.
-- Paciente (HU1): la última búsqueda con éxito (tipo, número, clínica, rango y resultados).
-  Solo se restaura si la app carga sin red; si carga con red, se borra. Caduca a las 8 horas,
-  se borra con "Limpiar búsqueda" y cuando entra un empleado.
+- Paciente (HU1): la última búsqueda con éxito (tipo, número, clínica, rango y resultados). Al
+  abrir la app se restaura aunque haya red, pero `#/citas` solo la muestra sin conexión. Se borra
+  cuando el backend responde al cargar, salvo que ya se haya mostrado sin conexión (lo que se ve
+  se queda). Caduca a las 8 horas, se borra con "Limpiar búsqueda" y cuando entra un empleado.
 
 ## Instalación
 
