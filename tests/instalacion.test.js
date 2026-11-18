@@ -302,11 +302,17 @@ describe('ControladorInstalacion: invitar una vez al buscar o al ingresar', () =
         assert.equal(controlador.estado.modo, MODOS.DISPONIBLE, 'el botón "Instalar app" sigue disponible');
     });
 
-    test('no se abre si ya está instalada ni sin beforeinstallprompt', () => {
+    test('no se abre si ya está instalada; sin beforeinstallprompt se abre con instrucciones', () => {
         const instalada = conSesion({ standalone: true });
         instalada.ventana.dispatchEvent(crearAviso());
         assert.equal(instalada.controlador.ofrecerUnaVez(), false);
-        assert.equal(conSesion().controlador.ofrecerUnaVez(), false);
+        assert.equal(conSesion({ standalone: true }).controlador.ofrecerUnaVez(), false);
+        const sinAviso = conSesion();
+        assert.equal(sinAviso.controlador.ofrecerUnaVez(), true);
+        assert.equal(sinAviso.controlador.estado.instrucciones, true);
+        assert.equal(sinAviso.controlador.aceptarInvitacion(), null, 'sin beforeinstallprompt no hay prompt() que llamar');
+        sinAviso.controlador.rechazarInvitacion();
+        assert.equal(sinAviso.controlador.ofrecerUnaVez(), false, 'una vez por sesión');
     });
 
     test('si la persona la rechazó en el diálogo del navegador, no se abre después', async () => {

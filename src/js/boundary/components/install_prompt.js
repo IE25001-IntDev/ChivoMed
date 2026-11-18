@@ -6,12 +6,17 @@
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea uno por conexión.
  * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas y el login) y pide al
  * controlador que invite a instalar una sola vez por sesión. Con `invitacion` abre su <dialog> modal
- * (showModal), con el foco en "Instalar"; al cerrarse devuelve el foco a donde estaba. "Instalar"
- * llama a prompt() en ese clic; "Ahora no", Esc o clic fuera cuentan como rechazo. El botón no cambia.
+ * (showModal); al cerrarse devuelve el foco a donde estaba. Con beforeinstallprompt muestra
+ * "Instalar" (llama a prompt() en ese clic, foco inicial) y "Ahora no"; con `instrucciones`, el texto
+ * para instalar desde el menú del navegador y un solo botón "Entendido" (foco inicial). "Ahora no",
+ * "Entendido", Esc o clic fuera cuentan como rechazo de la sesión. El botón "Instalar app" no cambia.
  */
 import { ControladorInstalacion, MODOS, EVENTO_OFRECER, DEPURAR } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { plantilla } from "../plantilla.js";
+
+const TEXTO_INVITACION = "¿Quieres instalar ChivoMed en este dispositivo? Podrás abrirla como una aplicación y consultar tus datos guardados sin conexión.";
+const TEXTO_INSTRUCCIONES = "Para instalar ChivoMed, abre el menú del navegador y elige Instalar ChivoMed o Agregar a la pantalla de inicio.";
 
 const PLANTILLA = plantilla(`
 <button class="instalar" id="instalar" type="button" hidden>
@@ -26,6 +31,7 @@ const PLANTILLA = plantilla(`
     <div class="invitacion-acciones">
       <button class="accion accion-secundaria" id="invitacion-no" type="button">Ahora no</button>
       <button class="accion accion-principal" id="invitacion-instalar" type="button" autofocus>Instalar</button>
+      <button class="accion accion-principal" id="invitacion-entendido" type="button" hidden>Entendido</button>
     </div>
   </div>
 </dialog>`);
@@ -87,6 +93,7 @@ class InstallPrompt extends HTMLElement {
         const $ = id => this.shadowRoot.getElementById(id);
         $("invitacion-instalar")[metodo]("click", this.#alAceptar);
         $("invitacion-no")[metodo]("click", this.#alRechazar);
+        $("invitacion-entendido")[metodo]("click", this.#alRechazar);
         $("invitacion")[metodo]("close", this.#alCerrarDialogo);
         $("invitacion")[metodo]("click", this.#alClicDialogo);
     }
@@ -96,16 +103,21 @@ class InstallPrompt extends HTMLElement {
         boton.hidden = estado.modo !== MODOS.DISPONIBLE && estado.modo !== MODOS.INSTALANDO;
         boton.disabled = estado.modo === MODOS.INSTALANDO;
         this.shadowRoot.getElementById("estado").textContent = estado.mensaje ?? "";
-        this.#pintarInvitacion(estado.invitacion);
+        this.#pintarInvitacion(estado.invitacion, estado.instrucciones);
     }
 
-    #pintarInvitacion(abierta) {
-        const dialogo = this.shadowRoot.getElementById("invitacion");
+    #pintarInvitacion(abierta, instrucciones) {
+        const $ = id => this.shadowRoot.getElementById(id);
+        const dialogo = $("invitacion");
         if (abierta && !dialogo.open) {
+            $("invitacion-texto").textContent = instrucciones ? TEXTO_INSTRUCCIONES : TEXTO_INVITACION;
+            $("invitacion-instalar").hidden = instrucciones;
+            $("invitacion-no").hidden = instrucciones;
+            $("invitacion-entendido").hidden = !instrucciones;
             this.#focoPrevio = focoProfundo();
             console.debug(DEPURAR, "showModal()"); // TEMPORAL (diagnóstico)
             dialogo.showModal();
-            this.shadowRoot.getElementById("invitacion-instalar").focus();
+            $(instrucciones ? "invitacion-entendido" : "invitacion-instalar").focus();
         } else if (!abierta) {
             if (dialogo.open) dialogo.close();
             const previo = this.#focoPrevio;

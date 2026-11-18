@@ -7,9 +7,10 @@
  * Invitación (2026-11-17): al buscar citas o al ingresar, las vistas emiten EVENTO_OFRECER en
  * document; <install-prompt> llama a ofrecerUnaVez(), que pone `invitacion: true` (la vista abre su
  * ventana propia) una sola vez por sesión, nunca si ya está instalada, si el navegador no dio
- * beforeinstallprompt o si la persona ya la rechazó en esta sesión. "Instalar" llama a
- * aceptarInvitacion() (prompt() dentro de ese clic); "Ahora no", Esc o clic fuera, a
- * rechazarInvitacion(), que marca la sesión en sessionStorage.
+ * si la persona ya la rechazó en esta sesión. Con beforeinstallprompt, "Instalar" llama a
+ * aceptarInvitacion() (prompt() dentro de ese clic); sin él (Firefox, o Chrome que todavía no la
+ * ofrece), la ventana da instrucciones (`instrucciones: true`) con un solo botón "Entendido".
+ * "Ahora no", "Entendido", Esc o clic fuera llaman a rechazarInvitacion(), que marca la sesión.
  */
 import { crearEstado } from "../../control/estado_reactivo.js";
 
@@ -42,7 +43,7 @@ export class ControladorInstalacion {
      */
     constructor({ ventana }) {
         this.#ventana = ventana;
-        const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null, invitacion: false });
+        const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null, invitacion: false, instrucciones: false });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
         this.estado = estado;
         /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
@@ -95,22 +96,22 @@ export class ControladorInstalacion {
         const salir = motivo => { console.debug(DEPURAR, `no se abre: ${motivo}`); return false; };
         if (this.estado.invitacion) return salir("ventana ya abierta");
         if (this.#yaOfrecida()) return salir("ya ofrecida en esta sesión (sessionStorage o rechazo)");
-        if (this.yaInstalada()) return salir("ya instalada (display-mode standalone)");
-        if (!this.#evento) return salir(`sin beforeinstallprompt (modo ${this.estado.modo})`);
-        if (this.estado.modo !== MODOS.DISPONIBLE) return salir(`modo ${this.estado.modo}`);
-        console.debug(DEPURAR, "abre la ventana");
-        this.#actualizar({ invitacion: true });
+        if (this.yaInstalada() || this.estado.modo === MODOS.INSTALADA) return salir("ya instalada (display-mode standalone)");
+        if (this.estado.modo === MODOS.INSTALANDO) return salir("instalación en curso");
+        const instrucciones = !this.#evento;
+        console.debug(DEPURAR, instrucciones ? "abre la ventana con instrucciones (sin beforeinstallprompt)" : "abre la ventana");
+        this.#actualizar({ invitacion: true, instrucciones });
         return true;
     }
 
     /** "Instalar" en la ventana: la cierra y llama a prompt() dentro de ese clic. */
     aceptarInvitacion() {
-        if (!this.estado.invitacion) return null;
+        if (!this.estado.invitacion || this.estado.instrucciones) return null;
         this.#actualizar({ invitacion: false });
         return this.instalar();
     }
 
-    /** "Ahora no", Esc o clic fuera: la cierra y no se vuelve a ofrecer en la sesión. */
+    /** "Ahora no", "Entendido", Esc o clic fuera: la cierra y no se vuelve a ofrecer en la sesión. */
     rechazarInvitacion() {
         if (!this.estado.invitacion) return;
         this.#marcarOfrecida();

@@ -430,7 +430,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     /** Abre la página con beforeinstallprompt y pulsa "Buscar citas" con el foco en el botón. */
     async function buscarConAviso(pagina = cargarPagina(), bip = aviso()) {
         const ctx = montar();
-        pagina.ventana.dispatchEvent(bip);
+        if (bip) pagina.ventana.dispatchEvent(bip);
         await asentar();
         conectar(ctx.vista);
         await asentar();
@@ -524,18 +524,66 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         } finally { segunda.cerrar(); }
     });
 
-    test('no se abre sin beforeinstallprompt ni si la app ya está instalada', async () => {
-        const pagina = cargarPagina();
-        const ctx = montar();
+    test('con beforeinstallprompt se ve "Instalar" y "Ahora no", sin "Entendido"', async () => {
+        const p = await buscarConAviso();
         try {
-            await llenarFiltros(ctx);
-            assert.equal(pagina.dialogo.open, false, 'sin beforeinstallprompt');
-            assert.equal(ctx.llamadas.citas, 1);
-        } finally { desconectar(ctx.vista); desconectar(pagina.instalador); }
-        const instalada = await buscarConAviso(cargarPagina(new Map(), { instalada: true }));
+            assert.equal(p.$i('invitacion-instalar').hidden, false);
+            assert.equal(p.$i('invitacion-no').hidden, false);
+            assert.equal(p.$i('invitacion-entendido')?.hidden, true, 'existe "Entendido" y está oculto');
+        } finally { p.cerrar(); }
+    });
+
+    test('sin beforeinstallprompt y sin instalar, la ventana da instrucciones con un solo botón "Entendido"', async () => {
+        const p = await buscarConAviso(cargarPagina(), null);
         try {
-            assert.equal(instalada.dialogo.open, false, 'ya instalada');
-            assert.equal(instalada.bip.llamadas, 0);
-        } finally { instalada.cerrar(); }
+            assert.equal(p.dialogo.open, true, 'la ventana se abre igual');
+            assert.equal(p.dialogo.getAttribute('aria-labelledby'), 'invitacion-titulo');
+            assert.equal(p.dialogo.getAttribute('aria-describedby'), 'invitacion-texto');
+            assert.equal(p.$i('invitacion-titulo').textContent.trim(), 'Instalar ChivoMed');
+            assert.equal(p.$i('invitacion-texto').textContent.trim(),
+                'Para instalar ChivoMed, abre el menú del navegador y elige Instalar ChivoMed o Agregar a la pantalla de inicio.');
+            assert.equal(p.$i('invitacion-entendido')?.hidden, false);
+            assert.equal(p.$i('invitacion-entendido').textContent.trim(), 'Entendido');
+            assert.equal(p.$i('invitacion-instalar').hidden, true);
+            assert.equal(p.$i('invitacion-no').hidden, true);
+            assert.equal(p.instalador.shadowRoot.activeElement, p.$i('invitacion-entendido'), 'el foco inicial va a "Entendido"');
+            await asentar();
+            assert.equal(p.ctx.llamadas.citas, 1, 'la búsqueda sigue');
+            p.$i('invitacion-entendido').click();
+            await asentar();
+            await asentar();
+            assert.equal(p.dialogo.open, false);
+            assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'), 'el foco vuelve');
+            p.ctx.enviar();
+            await asentar();
+            assert.equal(p.dialogo.open, false, 'una vez por sesión');
+        } finally { p.cerrar(); }
+        const recargada = await buscarConAviso(cargarPagina(p.pestana), null);
+        try {
+            assert.equal(recargada.dialogo.open, false, 'tras recargar, en la misma sesión, tampoco');
+        } finally { recargada.cerrar(); }
+    });
+
+    test('las instrucciones también se cierran con Esc y cuentan para la sesión', async () => {
+        const p = await buscarConAviso(cargarPagina(), null);
+        try {
+            p.dialogo.dispatchEvent(new Event('cancel'));
+            p.dialogo.close();
+            await asentar();
+            await asentar();
+            assert.equal(p.dialogo.open, false);
+        } finally { p.cerrar(); }
+        const recargada = await buscarConAviso(cargarPagina(p.pestana), null);
+        try { assert.equal(recargada.dialogo.open, false); } finally { recargada.cerrar(); }
+    });
+
+    test('si la app ya está instalada (standalone) no sale nada, con o sin beforeinstallprompt', async () => {
+        for (const bip of [aviso(), null]) {
+            const instalada = await buscarConAviso(cargarPagina(new Map(), { instalada: true }), bip);
+            try {
+                assert.equal(instalada.dialogo.open, false);
+                assert.equal(instalada.ctx.llamadas.citas, 1);
+            } finally { instalada.cerrar(); }
+        }
     });
 });
