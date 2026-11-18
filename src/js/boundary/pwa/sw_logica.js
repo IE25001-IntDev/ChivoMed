@@ -15,14 +15,15 @@
  *    apunta a ella (caché CACHE_VIGENTE) y se borran las demás; si falla, se descarta y se conserva
  *    la anterior. `cachesVigentes()` dice siempre de dónde servir; sin puntero, los de la instalación.
  *  - /galenosv/api/publico/* → red primero; solo los catálogos de CATALOGOS_PUBLICOS se guardan
- *    en caché y se usan como respaldo, marcados con la cabecera CABECERA_COPIA. Nada de datos clínicos.
+ *    en caché y se usan como respaldo (sin red o con un 502/503/504), marcados con la cabecera
+ *    CABECERA_COPIA. Nada de datos clínicos.
  *  - Cualquier otra ruta de la API (auth, escrituras, datos clínicos) → nunca se toca ni se cachea.
  */
 (function (raiz) {
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-17.24";
+    const VERSION = "2026-11-17.25";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -34,6 +35,8 @@
     const CLAVE_VIGENTE = `https://chivomed.vigente/${VERSION}`;
     /** Marca una respuesta servida desde la copia: la página no la cuenta como respuesta del backend. */
     const CABECERA_COPIA = "X-ChivoMed-Copia";
+    /** Respuestas que significan que el backend no responde (como STATUS_SIN_SERVIDOR de auth_service.js). */
+    const STATUS_SIN_SERVIDOR = Object.freeze([502, 503, 504]);
 
     /** Rutas relativas al alcance del service worker (la carpeta src/). */
     const PRECACHE = Object.freeze([
@@ -211,24 +214,32 @@
         return new Response(respuesta.body, { status: respuesta.status, statusText: respuesta.statusText, headers });
     }
 
+    /** La copia guardada del catálogo, marcada como copia, o null si no es cacheable o no hay. */
+    async function copiaPublica(solicitud, cacheable, caches) {
+        if (!cacheable) return null;
+        const cache = await caches.open((await cachesVigentes(caches)).datos);
+        const guardada = await cache.match(solicitud.url);
+        return guardada ? marcarCopia(guardada) : null;
+    }
+
     async function servirPublico(solicitud, { fetch, caches }) {
         const cacheable = esCatalogoCacheable(solicitud.url);
+        let respuesta;
         try {
-            const respuesta = await fetch(solicitud);
-            const esJson = respuesta.headers.get("Content-Type")?.includes("application/json");
-            if (cacheable && respuesta.status === 200 && esJson) {
-                const cache = await caches.open((await cachesVigentes(caches)).datos);
-                await cache.put(solicitud.url, respuesta.clone());
-            }
-            return respuesta;
+            respuesta = await fetch(solicitud);
         } catch {
-            if (cacheable) {
-                const cache = await caches.open((await cachesVigentes(caches)).datos);
-                const guardada = await cache.match(solicitud.url);
-                if (guardada) return marcarCopia(guardada);
-            }
-            return respuestaSinRed("json");
+            return (await copiaPublica(solicitud, cacheable, caches)) ?? respuestaSinRed("json");
         }
+        // 502, 503 y 504: el backend no responde (p. ej. el proxy sin backend); igual que sin red.
+        if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
+            return (await copiaPublica(solicitud, cacheable, caches)) ?? respuesta;
+        }
+        const esJson = respuesta.headers.get("Content-Type")?.includes("application/json");
+        if (cacheable && respuesta.status === 200 && esJson) {
+            const cache = await caches.open((await cachesVigentes(caches)).datos);
+            await cache.put(solicitud.url, respuesta.clone());
+        }
+        return respuesta;
     }
 
     /** Devuelve una promesa de Response, o null si el navegador debe manejar la petición solo. */
@@ -321,7 +332,7 @@
     }
 
     raiz.ChivoMedSW = Object.freeze({
-        VERSION, CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, CABECERA_COPIA, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
+        VERSION, CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, CABECERA_COPIA, STATUS_SIN_SERVIDOR, PREFIJO, PREFIJO_DATOS, RUTA_API, CATALOGOS_PUBLICOS, PRECACHE, ESTRATEGIAS,
         clasificar, esCatalogoCacheable, responder, precachear, limpiarVersionesViejas, limpiarDatos, atenderMensaje,
         cachesVigentes, renovar,
     });

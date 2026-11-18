@@ -184,6 +184,39 @@ describe('responder: /galenosv/api/publico/* (red primero)', () => {
         assert.equal(SW.CABECERA_COPIA, 'X-ChivoMed-Copia');
     });
 
+    test('el service worker usa el mismo criterio de "sin servidor" que los servicios', async () => {
+        const { STATUS_SIN_SERVIDOR } = await import('../src/js/control/auth_service.js');
+        assert.deepEqual(SW.STATUS_SIN_SERVIDOR, STATUS_SIN_SERVIDOR);
+    });
+
+    // Punto 5: un 502, 503 o 504 (el proxy sin backend o el backend caído) usa la copia igual que un fallo de red.
+    for (const status of [502, 503, 504]) {
+        test(`un ${status} del servidor usa la copia guardada del catálogo, marcada como copia`, async () => {
+            const caches = crearCaches();
+            await SW.responder(get(TIPOS), { fetch: crearFetch(() => json([{ nombre: 'DUI' }])), caches, base: BASE });
+            const respuesta = await SW.responder(get(TIPOS), { fetch: crearFetch(() => json({ status, message: 'Bad Gateway' }, status)), caches, base: BASE });
+            assert.equal(respuesta.status, 200);
+            assert.equal(respuesta.headers.get(SW.CABECERA_COPIA), '1');
+            assert.deepEqual(await respuesta.json(), [{ nombre: 'DUI' }]);
+            assert.deepEqual(caches.registro.puestos, [[SW.CACHE_DATOS, url(TIPOS)]], 'el error no reemplaza la copia');
+        });
+    }
+
+    test('un 502 sin copia guardada devuelve la respuesta del servidor', async () => {
+        const respuesta = await SW.responder(get(TIPOS), { fetch: crearFetch(() => json({ code: 'x' }, 502)), caches: crearCaches(), base: BASE });
+        assert.equal(respuesta.status, 502);
+    });
+
+    test('un 500 o un 404 no usan la copia: son respuestas del backend', async () => {
+        for (const status of [404, 500]) {
+            const caches = crearCaches();
+            await SW.responder(get(TIPOS), { fetch: crearFetch(() => json([{ nombre: 'DUI' }])), caches, base: BASE });
+            const respuesta = await SW.responder(get(TIPOS), { fetch: crearFetch(() => json({ code: 'x' }, status)), caches, base: BASE });
+            assert.equal(respuesta.status, status);
+            assert.equal(respuesta.headers.get(SW.CABECERA_COPIA), null);
+        }
+    });
+
     test('sin red ni copia responde 503 JSON', async () => {
         const respuesta = await SW.responder(get(TIPOS), { fetch: sinRed(), caches: crearCaches(), base: BASE });
         assert.equal(respuesta.status, 503);
@@ -340,6 +373,22 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         assert.equal(await SW.renovar({ caches, fetch, base: BASE }), false);
         assert.deepEqual(await nombresChivomed(caches), ['chivomed-shell-2026-01-01.1', SW.CACHE_DATOS, SW.CACHE_SHELL].sort());
         assert.equal(await sinRedIndice(caches), 'instalado /index.html');
+    });
+
+    test('con el backend caído (502/503/504 o sin respuesta en el catálogo, el shell bien) no se borra nada', async () => {
+        for (const caida of [() => json({ code: 'x' }, 502), () => json({ code: 'x' }, 503), () => json({ code: 'x' }, 504), () => new TypeError('Failed to fetch')]) {
+            const caches = inicial();
+            assert.equal(await SW.renovar({ caches, fetch: fetchNuevo('primera'), base: BASE }), true);
+            const antes = await nombresChivomed(caches);
+            const borradosAntes = caches.registro.borrados.length;
+            const fetch = crearFetch(destino => (destino === TIPOS_URL ? caida() : new Response(`segunda ${new URL(destino).pathname}`)));
+            assert.equal(await SW.renovar({ caches, fetch, base: BASE }), false);
+            assert.deepEqual(await nombresChivomed(caches), antes);
+            const borrados = caches.registro.borrados.slice(borradosAntes);
+            assert.ok(borrados.every(n => !antes.includes(n)), `solo se descarta la copia nueva: ${borrados}`);
+            assert.equal(await sinRedIndice(caches), 'primera /index.html');
+            assert.deepEqual(await sinRedTipos(caches), [{ nombre: 'DUI primera' }]);
+        }
     });
 
     test('sin red no se borra nada', async () => {
