@@ -1,6 +1,10 @@
 import { test, describe, afterEach, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorConexion, MENSAJE_SIN_RED, INTERVALO_VERIFICACION_MS } from '../src/js/boundary/pwa/controlador_conexion.js';
+import { ControladorConexion, MENSAJE_SIN_RED, INTERVALO_VERIFICACION_MS, motivoSinConexion } from '../src/js/boundary/pwa/controlador_conexion.js';
+import { MENSAJES as MENSAJES_CONSULTA } from '../src/js/boundary/vistas/controlador_consulta.js';
+import { MENSAJES as MENSAJES_CONSULTAS } from '../src/js/boundary/vistas/controlador_consultas.js';
+import { MENSAJES as MENSAJES_CITAS } from '../src/js/boundary/vistas/controlador_citas.js';
+import { MENSAJES as MENSAJES_DASHBOARD } from '../src/js/boundary/vistas/controlador_dashboard.js';
 import { verificarServidor, CABECERA_COPIA } from '../src/js/control/auth_service.js';
 import { conexion } from '../src/js/boundary/pwa/conexion.js';
 import { registrarServiceWorker } from '../src/js/boundary/pwa/registro_sw.js';
@@ -60,6 +64,18 @@ describe('ControladorConexion', () => {
 
     test('la instancia compartida funciona fuera del navegador', () => assert.equal(conexion.enLinea, true));
     test('el mensaje explica por qué la acción está deshabilitada', () => assert.match(MENSAJE_SIN_RED, /Sin conexión/));
+
+    // La causa puede ser la red o el servidor: un solo formato de motivo para los dos casos.
+    test('motivoSinConexion: "Sin conexión: necesitas conexión con el servidor para …"', () => {
+        assert.equal(motivoSinConexion('registrar la atención'), 'Sin conexión: necesitas conexión con el servidor para registrar la atención.');
+    });
+
+    test('ningún motivo de las vistas habla solo de la red', () => {
+        const textos = [MENSAJES_CONSULTA, MENSAJES_CONSULTAS, MENSAJES_CITAS, MENSAJES_DASHBOARD, { MENSAJE_SIN_RED }]
+            .flatMap(m => Object.entries(m)).filter(([, v]) => typeof v === 'string');
+        const malos = textos.filter(([, v]) => /necesitas red|requiere red|internet|vuelvas a conectarte|^Necesitas conexión/i.test(v));
+        assert.deepEqual(malos, []);
+    });
 });
 
 // Punto 2: "servidor no disponible". DefaultService y auth_service avisan en document con

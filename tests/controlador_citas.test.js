@@ -105,6 +105,9 @@ describe('ControladorCitas: funciones puras', () => {
 
     test('motivoNoBuscar: sin red, bloqueo por límite o ninguno', () => {
         assert.equal(motivoNoBuscar({ enLinea: false, bloqueadoHasta: null }, AHORA), MENSAJES.sinRedBuscar);
+        assert.equal(MENSAJES.sinRedBuscar, 'Sin conexión: necesitas conexión con el servidor para buscar.');
+        assert.equal(MENSAJES.sinRedTicket, 'Sin conexión: necesitas conexión con el servidor para descargar el ticket.');
+        assert.equal(MENSAJES.tiposSinRed, 'Sin conexión: necesitas conexión con el servidor para cargar los tipos de documento.');
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA + 60000 }, AHORA), MENSAJES.limite(formatearHoraSV(AHORA + 60000)));
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA - 1 }, AHORA), null);
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: null }, AHORA), null);

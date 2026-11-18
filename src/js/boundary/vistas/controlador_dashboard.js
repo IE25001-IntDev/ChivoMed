@@ -11,7 +11,7 @@ import AtencionService from "../../control/atencion_service.js";
 import { obtenerSesion as obtenerSesionHttp, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../../control/auth_service.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_RED, MENSAJE_SIN_DATOS, mensajeGuardado } from "../pwa/controlador_conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { ZONA_SV } from "../fechas_sv.js";
 
@@ -31,7 +31,7 @@ export const MENSAJES = Object.freeze({
     cerrarAntes: "Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.",
     salioDeConsulta: "Saliste de la consulta. Ya puedes cambiar de rol.",
     sesionNoActualizada: "Cambiaste de rol, pero no pudimos actualizar tu sesión. Recarga la página.",
-    soloLectura: "Estás sin conexión: puedes ver tus roles, pero cambiar de rol requiere red.",
+    soloLectura: motivoSinConexion("cambiar de rol"),
     sinAsignaciones: "No tienes roles de empleado activos en ninguna clínica.",
 });
 
@@ -248,7 +248,8 @@ export class ControladorDashboard {
         const destino = this.#asignaciones.find(a => a.idPersonaRol === idPersonaRol);
         if (!destino || destino.idPersonaRol === this.estado.activa?.idPersonaRol) return false;
         if (this.estado.soloLectura || !this.#conexion.enLinea) {
-            this.#actualizar({ aviso: this.estado.soloLectura ? MENSAJES.soloLectura : MENSAJE_SIN_RED });
+            // Sin red, sin servidor o en solo lectura: el mismo motivo.
+            this.#actualizar({ aviso: MENSAJES.soloLectura });
             return false;
         }
         this.#actualizar({ cambiando: idPersonaRol, error: null, aviso: null });
@@ -296,7 +297,8 @@ export class ControladorDashboard {
     async salirDeConsulta() {
         if (this.estado.saliendo || this.estado.cambiando) return false;
         if (this.estado.soloLectura || !this.#conexion.enLinea) {
-            this.#actualizar({ aviso: this.estado.soloLectura ? MENSAJES.soloLectura : MENSAJE_SIN_RED });
+            // Sin red, sin servidor o en solo lectura: el mismo motivo.
+            this.#actualizar({ aviso: MENSAJES.soloLectura });
             return false;
         }
         this.#actualizar({ saliendo: true, error: null, confirmacion: null });

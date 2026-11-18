@@ -9,6 +9,11 @@
  */
 import { EVENTO_SERVIDOR_CAIDO, EVENTO_SERVIDOR_RESPONDIO } from "../../control/auth_service.js";
 
+/**
+ * Motivo de una acción deshabilitada sin red o sin servidor: un solo texto para los dos casos.
+ * @param {string} accion p. ej. "registrar la atención".
+ */
+export const motivoSinConexion = accion => `Sin conexión: necesitas conexión con el servidor para ${accion}.`;
 export const MENSAJE_SIN_RED = "Sin conexión con el servidor. Esta acción estará disponible cuando vuelva la conexión.";
 export const INTERVALO_VERIFICACION_MS = 20000;
 /** Aviso de las vistas que muestran lo guardado sin conexión. `hora` es "HH:MM" (o vacía). */

@@ -162,6 +162,8 @@ describe('motivoNoAtender', () => {
     test('sin red o en solo lectura no se puede atender', () => {
         assert.equal(motivoNoAtender(abierta, { enLinea: false }), MENSAJES.sinRedAtender);
         assert.equal(motivoNoAtender(abierta, { soloLectura: true }), MENSAJES.sinRedAtender);
+        assert.equal(MENSAJES.sinRedAtender, 'Sin conexión: necesitas conexión con el servidor para atender una consulta.');
+        assert.equal(MENSAJES.sinRedRegistro, 'Sin conexión: necesitas conexión con el servidor para ver este registro.');
     });
     test('no depende del rol activo: no hay lista fija de roles que atienden', () => {
         assert.equal(Object.hasOwn(MENSAJES, 'soloDoctor'), false);

@@ -25,7 +25,7 @@ import { crearEstado } from "../../control/estado_reactivo.js";
 import { hoySV, sumarDias, diasEntre, esFechaISO, ZONA_SV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado } from "../pwa/controlador_conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
 
 /** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
 export const CLAVE_MEMORIA = CLAVE_PUBLICA_CITAS;
@@ -59,9 +59,9 @@ export const MENSAJES = Object.freeze({
     generico: "No pudimos completar la búsqueda. Inténtalo de nuevo más tarde.",
     ticketNoExiste: "No pudimos generar el ticket de esta cita.",
     ticketFallido: "No pudimos descargar el ticket. Inténtalo de nuevo.",
-    tiposSinRed: "Necesitas conexión para cargar los tipos de documento.",
-    sinRedBuscar: "Necesitas conexión para buscar.",
-    sinRedTicket: "Necesitas conexión para descargar el ticket.",
+    tiposSinRed: motivoSinConexion("cargar los tipos de documento"),
+    sinRedBuscar: motivoSinConexion("buscar"),
+    sinRedTicket: motivoSinConexion("descargar el ticket"),
     faltaTipo: "Falta elegir el tipo de documento.",
     faltaNumero: "Falta completar el número de documento.",
     faltaClinica: "Falta elegir la clínica.",

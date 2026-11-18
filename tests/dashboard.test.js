@@ -10,6 +10,9 @@ import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import { MENSAJE_SIN_RED } from '../src/js/boundary/pwa/controlador_conexion.js';
 import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';
 
+// Sin red o sin servidor, en solo lectura o no, cambiar de rol muestra un solo motivo.
+const MOTIVO_AVISO = 'Sin conexión: necesitas conexión con el servidor para cambiar de rol.';
+
 // Datos inventados; nunca datos reales de pacientes ni de personal.
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -417,7 +420,7 @@ describe('ControladorDashboard: sin conexión', () => {
         const { controlador, llamadas } = preparar({ memoria, enLinea: false });
         await controlador.iniciar(sesionCon(DOC_NORTE));
         assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
-        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.equal(controlador.estado.aviso, MOTIVO_AVISO);
         assert.deepEqual(llamadas.cambiarRol, []);
     });
 
@@ -426,7 +429,7 @@ describe('ControladorDashboard: sin conexión', () => {
         const { controlador, llamadas } = preparar({ memoria });
         await controlador.iniciar(sesionCon(DOC_NORTE), { soloLectura: true });
         assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
-        assert.equal(controlador.estado.aviso, MENSAJES.soloLectura);
+        assert.equal(controlador.estado.aviso, MOTIVO_AVISO);
         assert.deepEqual(llamadas.cambiarRol, []);
     });
 
@@ -581,7 +584,7 @@ describe('ControladorDashboard: consulta en curso (F8)', () => {
         conexion.emitir(false);
         assert.equal(await controlador.salirDeConsulta(), false);
         assert.equal(llamadas.salirDeConsulta, 0);
-        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.equal(controlador.estado.aviso, MOTIVO_AVISO);
         assert.equal(controlador.estado.enCurso, EN_CURSO);
     });
 
@@ -590,7 +593,7 @@ describe('ControladorDashboard: consulta en curso (F8)', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE), { soloLectura: true });
         assert.equal(await controlador.salirDeConsulta(), false);
         assert.equal(llamadas.salirDeConsulta, 0);
-        assert.equal(controlador.estado.aviso, MENSAJES.soloLectura);
+        assert.equal(controlador.estado.aviso, MOTIVO_AVISO);
     });
 
     test('enCurso no se escribe en MemoriaVistas ni en IndexedDB', async () => {
@@ -629,7 +632,7 @@ describe('ControladorDashboard: ninguna escritura sin servidor', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE));
         red.caer();
         assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
-        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.equal(controlador.estado.aviso, MOTIVO_AVISO);
         assert.deepEqual(llamadas.cambiarRol, []);
     });
 
@@ -653,7 +656,7 @@ describe('ControladorDashboard: ninguna escritura sin servidor', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE));
         red.caer();
         assert.equal(await controlador.salirDeConsulta(), false);
-        assert.equal(controlador.estado.aviso, MENSAJE_SIN_RED);
+        assert.equal(controlador.estado.aviso, MOTIVO_AVISO);
         assert.equal(llamadas.salirDeConsulta, 0);
     });
 

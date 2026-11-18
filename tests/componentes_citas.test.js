@@ -113,9 +113,9 @@ describe('<tarjeta-cita>', () => {
         assert.equal($('estado-ticket').textContent, 'No pudimos generar el ticket de esta cita.');
         assert.match($('estado-ticket').className, /error/);
 
-        el.modelo = { cita: CITA, ticket: null, motivoTicket: 'Necesitas conexión para descargar el ticket.' };
+        el.modelo = { cita: CITA, ticket: null, motivoTicket: 'Sin conexión: necesitas conexión con el servidor para descargar el ticket.' };
         assert.equal($('descargar').disabled, true);
-        assert.equal($('estado-ticket').textContent, 'Necesitas conexión para descargar el ticket.');
+        assert.equal($('estado-ticket').textContent, 'Sin conexión: necesitas conexión con el servidor para descargar el ticket.');
     });
 
     test('al desconectarse deja de escuchar el botón', () => {

@@ -452,7 +452,7 @@ describe('ControladorConsultas.marcarEnCurso (F8)', () => {
 // Punto 6: sin red, "Ver sin conexión" abre la consulta guardada.
 describe('Ver sin conexión', () => {
     test('<tarjeta-consulta-dashboard>: con verSinConexion el botón se habilita y dice "Ver sin conexión"', () => {
-        const { el, eventos, $ } = tarjeta(normal(1), { motivo: 'Sin conexión: para atender una consulta necesitas red.' });
+        const { el, eventos, $ } = tarjeta(normal(1), { motivo: 'Sin conexión: necesitas conexión con el servidor para atender una consulta.' });
         assert.equal($('atender').disabled, true);
         el.verSinConexion = true;
         assert.equal($('atender').disabled, false);

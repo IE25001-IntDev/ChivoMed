@@ -16,7 +16,7 @@ import AtencionService from "../../control/atencion_service.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS } from "../pwa/controlador_conexion.js";
+import { MENSAJE_SIN_DATOS, motivoSinConexion } from "../pwa/controlador_conexion.js";
 import { hoySV, esFechaISO, diasEntre, formatearFecha } from "../fechas_sv.js";
 
 export const MAX_DIAS = 31;
@@ -30,7 +30,7 @@ export const MENSAJES = Object.freeze({
     rangoExcedido: `Elige un rango de ${MAX_DIAS} días como máximo, contando el primero y el último.`,
     conexion: "No pudimos conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
     sinRed: MENSAJE_SIN_DATOS,
-    sinRedRegistro: "Sin conexión. Podrás ver este registro cuando vuelvas a conectarte.",
+    sinRedRegistro: motivoSinConexion("ver este registro"),
     sesionFinalizada: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
     sinRol: "Tu sesión no tiene un rol activo. Elige un rol arriba.",
     sinAsignacion: "Tu rol activo ya no está autorizado. Elige otro rol o comunícate con tu clínica.",
@@ -40,7 +40,7 @@ export const MENSAJES = Object.freeze({
     registroGenerico: "No pudimos cargar el registro. Inténtalo de nuevo.",
     cerrada: "Esta consulta ya está cerrada.",
     sinPendiente: "No tienes pasos pendientes en esta consulta.",
-    sinRedAtender: "Sin conexión: para atender una consulta necesitas red.",
+    sinRedAtender: motivoSinConexion("atender una consulta"),
     futura: "Esta consulta está programada para una fecha futura. Podrás atenderla el día indicado.",
     otroRol: "Este paso lo atiende otro rol.",
     soloFinalizador: "Cierra la consulta quien completó el paso de finalización.",

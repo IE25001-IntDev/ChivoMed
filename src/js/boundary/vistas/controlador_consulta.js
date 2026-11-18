@@ -24,7 +24,7 @@ import ProcedimientoPasoService from "../../control/procedimiento_paso_service.j
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado } from "../pwa/controlador_conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
 import { normalizarConsultas, motivoNoAtender, esPasoDeMiRol, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
 
 export const MAX_TEXTO = 255;
@@ -41,12 +41,12 @@ export const MENSAJES = Object.freeze({
     sinSeleccion: "No pudimos seleccionar esta consulta para atenderla. Vuelve a intentarlo.",
     cerrada: "Esta consulta ya está cerrada.",
     cerradaAhora: "Consulta cerrada.",
-    sinRed: "Sin conexión: necesitas red para registrar la atención.",
+    sinRed: motivoSinConexion("registrar la atención"),
     sinRedCarga: MENSAJE_SIN_DATOS,
     desdeMemoria: mensajeGuardado,
     /** F8: texto propio para consulta.cerrarAntesRetomar; se ignora el message del backend. */
     enCurso: "Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.",
-    sinRedSalir: "Sin conexión: necesitas red para salir de la consulta.",
+    sinRedSalir: motivoSinConexion("salir de la consulta"),
     noEncontrada: "No encontramos esta consulta en tu clínica.",
     sinPermiso: "No tienes permiso para atender esta consulta.",
     sesionFinalizada: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",

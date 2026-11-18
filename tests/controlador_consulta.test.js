@@ -94,6 +94,8 @@ describe('motivos y reglas de las acciones', () => {
         assert.equal(motivoBloqueo({ consulta: cerrada, atendiendo: true, enLinea: false }), MENSAJES.cerrada);
         assert.equal(motivoBloqueo({ consulta: ajena, enLinea: false }), 'Le corresponde a Lucía Pérez.');
         assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true, enLinea: false }), MENSAJES.sinRed);
+        assert.equal(MENSAJES.sinRed, 'Sin conexión: necesitas conexión con el servidor para registrar la atención.');
+        assert.equal(MENSAJES.sinRedSalir, 'Sin conexión: necesitas conexión con el servidor para salir de la consulta.');
         assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true, soloLectura: true }), MENSAJES.sinRed);
         assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: false }), MENSAJES.sinSeleccion);
         assert.equal(Object.hasOwn(MENSAJES, 'soloDoctor'), false);
