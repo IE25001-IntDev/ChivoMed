@@ -24,8 +24,6 @@ export const MODOS = Object.freeze({
 /** Evento que emiten las vistas (en document) para invitar a instalar dentro del clic. */
 export const EVENTO_OFRECER = "ofrecer-instalacion";
 const CLAVE_OFRECIDA = "chivomed:instalacion-ofrecida";
-/** TEMPORAL (diagnóstico): prefijo de los console.debug de la invitación. */
-export const DEPURAR = "[ChivoMed instalación]";
 
 export class ControladorInstalacion {
     #ventana;
@@ -92,14 +90,9 @@ export class ControladorInstalacion {
      * abrirla: una ventana sin respuesta (p. ej. se recargó) no gasta la invitación.
      */
     ofrecerUnaVez() {
-        // TEMPORAL (diagnóstico): cada salida temprana se anuncia en la consola.
-        const salir = motivo => { console.debug(DEPURAR, `no se abre: ${motivo}`); return false; };
-        if (this.estado.invitacion) return salir("ventana ya abierta");
-        if (this.#yaOfrecida()) return salir("ya ofrecida en esta sesión (sessionStorage o rechazo)");
-        if (this.yaInstalada() || this.estado.modo === MODOS.INSTALADA) return salir("ya instalada (display-mode standalone)");
-        if (this.estado.modo === MODOS.INSTALANDO) return salir("instalación en curso");
+        if (this.estado.invitacion || this.#yaOfrecida() || this.yaInstalada()
+            || this.estado.modo === MODOS.INSTALADA || this.estado.modo === MODOS.INSTALANDO) return false;
         const instrucciones = !this.#evento;
-        console.debug(DEPURAR, instrucciones ? "abre la ventana con instrucciones (sin beforeinstallprompt)" : "abre la ventana");
         this.#actualizar({ invitacion: true, instrucciones });
         return true;
     }

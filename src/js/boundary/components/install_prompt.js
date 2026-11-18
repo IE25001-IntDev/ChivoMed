@@ -11,7 +11,7 @@
  * para instalar desde el menú del navegador y un solo botón "Entendido" (foco inicial). "Ahora no",
  * "Entendido", Esc o clic fuera cuentan como rechazo de la sesión. El botón "Instalar app" no cambia.
  */
-import { ControladorInstalacion, MODOS, EVENTO_OFRECER, DEPURAR } from "../pwa/controlador_instalacion.js";
+import { ControladorInstalacion, MODOS, EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { plantilla } from "../plantilla.js";
 
@@ -41,10 +41,7 @@ class InstallPrompt extends HTMLElement {
     #inyectado = null;
     #cancelar = null;
     #alPulsar = () => this.#controlador.instalar();
-    #alOfrecer = () => {
-        console.debug(DEPURAR, "ofrecer-instalacion recibido"); // TEMPORAL (diagnóstico)
-        this.#controlador.ofrecerUnaVez();
-    };
+    #alOfrecer = () => this.#controlador.ofrecerUnaVez();
     #alAceptar = () => this.#controlador.aceptarInvitacion();
     #alRechazar = () => this.#controlador.rechazarInvitacion();
     /** Esc (o cualquier cierre que no pasó por el controlador) cuenta como rechazo. */
@@ -115,7 +112,6 @@ class InstallPrompt extends HTMLElement {
             $("invitacion-no").hidden = instrucciones;
             $("invitacion-entendido").hidden = !instrucciones;
             this.#focoPrevio = focoProfundo();
-            console.debug(DEPURAR, "showModal()"); // TEMPORAL (diagnóstico)
             dialogo.showModal();
             $(instrucciones ? "invitacion-entendido" : "invitacion-instalar").focus();
         } else if (!abierta) {
