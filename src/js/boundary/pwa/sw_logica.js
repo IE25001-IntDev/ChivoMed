@@ -11,9 +11,10 @@
  *  - Archivos del shell (lista PRECACHE) → red primero, precache como respaldo. El fetch no
  *    reescribe el precache: offline siempre hay un conjunto coherente.
  *  - Renovación ({ tipo: "renovar" }, en cada inicio con red): descarga de nuevo todo el precache y
- *    los catálogos públicos en cachés nuevos (`…-{generación}`). Solo si la copia queda completa se
- *    apunta a ella (caché CACHE_VIGENTE) y se borran las demás; si falla, se descarta y se conserva
- *    la anterior. `cachesVigentes()` dice siempre de dónde servir; sin puntero, los de la instalación.
+ *    los catálogos públicos en cachés nuevos (`…-{generación}`). Solo si la copia queda completa y
+ *    esta versión sigue siendo la activa se apunta a ella (caché CACHE_VIGENTE) y se borran las
+ *    demás de su misma versión (las de otras versiones las borra limpiarVersionesViejas al
+ *    activarse); si falla, o ya hay otra versión activa, se descarta y se conserva lo anterior. `cachesVigentes()` dice siempre de dónde servir; sin puntero, los de la instalación.
  *  - /galenosv/api/publico/* → red primero; solo los catálogos de CATALOGOS_PUBLICOS se guardan
  *    en caché y se usan como respaldo (sin red o con un 502/503/504), marcados con la cabecera
  *    CABECERA_COPIA. Nada de datos clínicos.
@@ -23,7 +24,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-17.26";
+    const VERSION = "2026-11-17.27";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -261,17 +262,23 @@
     let generaciones = 0;
     let renovacionEnCurso = null;
 
+    /** true si `nombre` es un caché de esta versión: el de la instalación o una de sus generaciones. */
+    function esDeEstaVersion(nombre) {
+        return [CACHE_SHELL, CACHE_DATOS].some(base => nombre === base || nombre.startsWith(`${base}-`));
+    }
+
     /**
      * Renueva la copia sin conexión. Resuelve true si cambió a una copia nueva completa y false si
-     * algo falló (sin red, un archivo o un catálogo): entonces se descarta lo nuevo y no se borra
-     * nada más. Mientras hay una en curso, otra llamada (otra pestaña) recibe la misma promesa.
+     * algo falló (sin red, un archivo o un catálogo) o si al terminar `esActiva()` dice que ya hay
+     * otra versión activa: entonces se descarta lo nuevo y no se borra nada más. Mientras hay una en
+     * curso, otra llamada (otra pestaña) recibe la misma promesa.
      */
     function renovar(opciones) {
         renovacionEnCurso ??= ejecutarRenovacion(opciones).finally(() => { renovacionEnCurso = null; });
         return renovacionEnCurso;
     }
 
-    async function ejecutarRenovacion({ caches, fetch, base, crearSolicitud = url => new Request(url, { cache: "reload" }) }) {
+    async function ejecutarRenovacion({ caches, fetch, base, esActiva = () => true, crearSolicitud = url => new Request(url, { cache: "reload" }) }) {
         const generacion = `${Date.now()}-${++generaciones}`;
         const nuevos = { shell: `${CACHE_SHELL}-${generacion}`, datos: `${CACHE_DATOS}-${generacion}` };
         const descargar = async (url, valida) => {
@@ -288,6 +295,8 @@
             for (const [url, respuesta] of archivos) await shell.put(url, respuesta);
             const datos = await caches.open(nuevos.datos);
             for (const [url, respuesta] of catalogos) await datos.put(url, respuesta);
+            // Otra versión se activó mientras se descargaba: el puntero y sus cachés son suyos.
+            if (!esActiva()) throw new Error("Ya hay otra versión activa.");
             await (await caches.open(CACHE_VIGENTE)).put(CLAVE_VIGENTE, new Response(JSON.stringify(nuevos), {
                 headers: { "Content-Type": "application/json" },
             }));
@@ -295,8 +304,8 @@
             await Promise.all([caches.delete(nuevos.shell), caches.delete(nuevos.datos)]);
             return false;
         }
-        const conservar = new Set([nuevos.shell, nuevos.datos, CACHE_VIGENTE]);
-        const anteriores = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO) && !conservar.has(nombre));
+        const conservar = new Set([nuevos.shell, nuevos.datos]);
+        const anteriores = (await caches.keys()).filter(nombre => esDeEstaVersion(nombre) && !conservar.has(nombre));
         await Promise.all(anteriores.map(nombre => caches.delete(nombre)));
         await limpiarPuntero(caches);
         return true;
@@ -323,11 +332,12 @@
      * Mensaje de una página. { tipo: "reclamar" }: una página cargada con Ctrl+Shift+R queda sin
      * control del SW y activate no vuelve a correr; clients.claim() la toma para que, sin red, sus
      * hojas de estilo y módulos salgan del precache. { tipo: "renovar" }: la página arrancó con red
-     * y pide renovar la copia sin conexión. Devuelve la promesa, o null si se ignora.
+     * y pide renovar la copia sin conexión; `esActiva()` dice si esta versión sigue siendo la activa.
+     * Devuelve la promesa, o null si se ignora.
      */
-    function atenderMensaje(datos, { clients, caches, fetch, base }) {
+    function atenderMensaje(datos, { clients, caches, fetch, base, esActiva }) {
         if (datos?.tipo === "reclamar") return clients.claim();
-        if (datos?.tipo === "renovar" && caches && fetch && base) return renovar({ caches, fetch, base });
+        if (datos?.tipo === "renovar" && caches && fetch && base) return renovar({ caches, fetch, base, esActiva });
         return null;
     }
 

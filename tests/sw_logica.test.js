@@ -318,7 +318,9 @@ describe('atenderMensaje: reclamar una página sin control (Ctrl+Shift+R)', () =
         const { readFileSync } = await import('node:fs');
         const codigo = readFileSync(new URL('../src/sw.js', import.meta.url), 'utf8');
         assert.match(codigo, /addEventListener\(\s*["']message["']/);
-        assert.match(codigo, /atenderMensaje\(\s*event\.data\s*,\s*\{\s*clients:\s*self\.clients\s*,\s*caches\s*,\s*fetch:[^}]*,\s*base\s*\}\s*\)/);
+        assert.match(codigo, /atenderMensaje\(\s*event\.data\s*,\s*\{\s*clients:\s*self\.clients\s*,\s*caches\s*,\s*fetch:[^}]*,\s*base\s*,\s*esActiva\s*\}\s*\)/);
+        // La versión activa es la del registro; sin self.serviceWorker (navegadores viejos) se asume activa.
+        assert.match(codigo, /const esActiva = \(\) => !self\.serviceWorker \|\| self\.registration\.active === self\.serviceWorker;/);
         assert.match(codigo, /event\.waitUntil\(/);
     });
 });
@@ -349,10 +351,54 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         const vigentes = await SW.cachesVigentes(caches);
         assert.notEqual(vigentes.shell, SW.CACHE_SHELL);
         assert.equal(caches.almacen.get(vigentes.shell).size, SW.PRECACHE.length);
-        assert.deepEqual(await nombresChivomed(caches), [SW.CACHE_VIGENTE, vigentes.datos, vigentes.shell].sort());
+        // Los de otra versión (chivomed-shell-2026-01-01.1) los borra limpiarVersionesViejas al activarse.
+        assert.deepEqual(await nombresChivomed(caches), [SW.CACHE_VIGENTE, vigentes.datos, vigentes.shell, 'chivomed-shell-2026-01-01.1'].sort());
         assert.ok((await caches.keys()).includes('otra-app-v1'), 'los cachés ajenos no se tocan');
         assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
         assert.deepEqual(await sinRedTipos(caches), [{ nombre: 'DUI nuevo' }]);
+    });
+
+    // Al subir la VERSION, el SW viejo puede seguir renovando mientras el nuevo se instala y se activa.
+    describe('una renovación de la versión vieja que termina después de instalada la nueva', () => {
+        const NUEVA = '2099-01-01.1';
+        const PUNTERO_NUEVA = `https://chivomed.vigente/${NUEVA}`;
+        const conVersionNueva = () => {
+            const caches = inicial();
+            caches.almacen.set(`chivomed-shell-${NUEVA}`, new Map([[url('/index.html'), new Response('nueva /index.html')]]));
+            caches.almacen.set(`chivomed-datos-${NUEVA}`, new Map([[TIPOS_URL, json([{ nombre: 'DUI nueva' }])]]));
+            caches.almacen.set(`chivomed-shell-${NUEVA}-1-1`, new Map([[url('/index.html'), new Response('nueva renovada')]]));
+            caches.almacen.set(SW.CACHE_VIGENTE, new Map([[PUNTERO_NUEVA, json({ shell: `chivomed-shell-${NUEVA}-1-1`, datos: `chivomed-datos-${NUEVA}` })]]));
+            return caches;
+        };
+        const deLaNueva = caches => [...caches.almacen.keys()].filter(n => n.includes(NUEVA)).sort();
+
+        test('si ya no es la versión activa, no borra el shell ni el catálogo de la nueva ni escribe el puntero', async () => {
+            const caches = conVersionNueva();
+            const antes = deLaNueva(caches);
+            assert.equal(await SW.renovar({ caches, fetch: fetchNuevo('vieja'), base: BASE, esActiva: () => false }), false);
+            assert.deepEqual(deLaNueva(caches), antes);
+            assert.equal(caches.almacen.get(`chivomed-shell-${NUEVA}`).size, 1);
+            assert.equal(caches.almacen.get(`chivomed-datos-${NUEVA}`).size, 1);
+            assert.deepEqual([...caches.almacen.get(SW.CACHE_VIGENTE).keys()], [PUNTERO_NUEVA], 'el puntero sigue siendo solo de la nueva');
+            assert.deepEqual([...caches.almacen.keys()].filter(n => n.startsWith(`${SW.CACHE_SHELL}-`) || n.startsWith(`${SW.CACHE_DATOS}-`)), [],
+                'la copia que hizo la vieja se descarta');
+        });
+
+        test('aunque siga activa, al terminar solo borra los cachés de su misma versión', async () => {
+            const caches = conVersionNueva();
+            const antes = deLaNueva(caches);
+            assert.equal(await SW.renovar({ caches, fetch: fetchNuevo('vieja'), base: BASE, esActiva: () => true }), true);
+            assert.deepEqual(deLaNueva(caches), antes);
+            assert.equal(caches.almacen.has(SW.CACHE_SHELL), false, 'el shell de la instalación de su versión sí se borra');
+            assert.ok((await caches.keys()).includes('chivomed-shell-2026-01-01.1'), 'el de una versión anterior lo borra limpiarVersionesViejas');
+        });
+
+        test('atenderMensaje pasa esActiva a la renovación', async () => {
+            const caches = conVersionNueva();
+            const antes = deLaNueva(caches);
+            assert.equal(await SW.atenderMensaje({ tipo: 'renovar' }, { caches, fetch: fetchNuevo('vieja'), base: BASE, esActiva: () => false }), false);
+            assert.deepEqual(deLaNueva(caches), antes);
+        });
     });
 
     test('fallo a medias: se descarta la copia nueva y se conserva la anterior', async () => {
@@ -411,7 +457,8 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         assert.equal(a, b, 'la segunda pestaña espera la misma renovación');
         assert.equal(await a, true);
         assert.equal(fetch.llamadas.length, SW.PRECACHE.length + SW.CATALOGOS_PUBLICOS.length);
-        assert.equal((await nombresChivomed(caches)).length, 3);
+        // Un juego de esta versión más el puntero; el de otra versión lo borra limpiarVersionesViejas.
+        assert.deepEqual((await nombresChivomed(caches)).filter(n => !n.includes('2026-01-01.1')).length, 3);
         assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
     });
 
@@ -461,7 +508,8 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         await SW.renovar({ caches, fetch: fetchNuevo(), base: BASE });
         const antes = await nombresChivomed(caches);
         await SW.limpiarVersionesViejas(caches);
-        assert.deepEqual(await nombresChivomed(caches), antes);
+        assert.deepEqual(await nombresChivomed(caches), antes.filter(n => n !== 'chivomed-shell-2026-01-01.1'),
+            'solo se borra el de la otra versión');
         assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
     });
 });

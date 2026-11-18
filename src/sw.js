@@ -3,6 +3,8 @@ importScripts("./js/boundary/pwa/sw_logica.js");
 
 const { responder, precachear, limpiarVersionesViejas, atenderMensaje } = self.ChivoMedSW;
 const base = self.registration.scope;
+// Al subir la VERSION, el SW anterior puede seguir renovando cuando el nuevo ya está activo.
+const esActiva = () => !self.serviceWorker || self.registration.active === self.serviceWorker;
 
 self.addEventListener("install", event => {
     event.waitUntil(precachear({ caches, base }).then(() => self.skipWaiting()));
@@ -15,7 +17,7 @@ self.addEventListener("activate", event => {
 // Una página sin control (cargada con Ctrl+Shift+R) pide que se la reclame, y cada inicio con red
 // pide renovar la copia sin conexión; ver registro_sw.js.
 self.addEventListener("message", event => {
-    const promesa = atenderMensaje(event.data, { clients: self.clients, caches, fetch: solicitud => fetch(solicitud), base });
+    const promesa = atenderMensaje(event.data, { clients: self.clients, caches, fetch: solicitud => fetch(solicitud), base, esActiva });
     if (promesa) event.waitUntil(promesa);
 });
 
