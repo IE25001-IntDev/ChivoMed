@@ -4,13 +4,16 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  *
- * Invitación (2026-11-17): al buscar citas o al ingresar, las vistas emiten EVENTO_OFRECER en
- * document; <install-prompt> llama a ofrecerUnaVez(), que pone `invitacion: true` (la vista abre su
- * ventana propia) una sola vez por sesión, nunca si ya está instalada, si el navegador no dio
- * si la persona ya la rechazó en esta sesión. Con beforeinstallprompt, "Instalar" llama a
+ * Invitación: al buscar citas o al ingresar, las vistas emiten EVENTO_OFRECER en document y
+ * <install-prompt> llama a invitar(), que pone `invitacion: true` (la vista abre su ventana propia)
+ * cada vez, hasta que la app se instale. Con beforeinstallprompt, "Instalar" llama a
  * aceptarInvitacion() (prompt() dentro de ese clic); sin él (Firefox, o Chrome que todavía no la
  * ofrece), la ventana da instrucciones (`instrucciones: true`) con un solo botón "Entendido".
- * "Ahora no", "Entendido", Esc o clic fuera llaman a rechazarInvitacion(), que marca la sesión.
+ * "Ahora no", "Entendido", Esc o clic fuera llaman a cerrarInvitacion(): la cierran solo esa vez.
+ *
+ * Instalada: en modo standalone nunca se invita. appinstalled guarda CLAVE_INSTALADA en localStorage
+ * y desde ahí no se invita, ni en una pestaña normal; beforeinstallprompt significa que no está
+ * instalada y borra la marca. navigator.getInstalledRelatedApps(), si existe, sirve de apoyo.
  */
 import { crearEstado } from "../../control/estado_reactivo.js";
 
@@ -23,13 +26,14 @@ export const MODOS = Object.freeze({
 
 /** Evento que emiten las vistas (en document) para invitar a instalar dentro del clic. */
 export const EVENTO_OFRECER = "ofrecer-instalacion";
-const CLAVE_OFRECIDA = "chivomed:instalacion-ofrecida";
+/** Marca en localStorage: ChivoMed se instaló desde este navegador. */
+export const CLAVE_INSTALADA = "chivomed:instalada";
 
 export class ControladorInstalacion {
     #ventana;
     #evento = null;
-    /** Respaldo si sessionStorage no existe o falla: una vez por instancia. */
-    #ofrecida = false;
+    /** getInstalledRelatedApps() la encontró instalada (y no llegó beforeinstallprompt después). */
+    #relacionada = false;
     #consulta = null;
     #alOfrecer = evento => this.#ofrecer(evento);
     #alInstalar = () => this.#instalada();
@@ -64,6 +68,18 @@ export class ControladorInstalacion {
         this.#consulta = v.matchMedia?.("(display-mode: standalone)") ?? null;
         this.#consulta?.addEventListener?.("change", this.#alCambiarModo);
         if (this.yaInstalada()) this.#actualizar({ modo: MODOS.INSTALADA, mensaje: null });
+        this.#consultarRelacionadas();
+    }
+
+    /** Apoyo: si el navegador dice que ChivoMed está instalada, no se invita. Si no existe o falla, nada. */
+    async #consultarRelacionadas() {
+        const navegador = this.#ventana?.navigator;
+        if (typeof navegador?.getInstalledRelatedApps !== "function") return;
+        try {
+            const apps = await navegador.getInstalledRelatedApps();
+            // Un beforeinstallprompt llegado mientras tanto manda: no está instalada.
+            if (Array.isArray(apps) && apps.length > 0 && !this.#evento) this.#relacionada = true;
+        } catch { /* Se sigue con la marca. */ }
     }
 
     detener() {
@@ -74,23 +90,23 @@ export class ControladorInstalacion {
         this.#consulta?.removeEventListener?.("change", this.#alCambiarModo);
     }
 
-    #yaOfrecida() {
-        if (this.#ofrecida) return true;
-        try { return this.#ventana?.sessionStorage?.getItem(CLAVE_OFRECIDA) === "1"; } catch { return false; }
+    #marcaInstalada() {
+        try { return this.#ventana?.localStorage?.getItem(CLAVE_INSTALADA) === "1"; } catch { return false; }
     }
 
-    #marcarOfrecida() {
-        this.#ofrecida = true;
-        try { this.#ventana?.sessionStorage?.setItem(CLAVE_OFRECIDA, "1"); } catch { /* queda la marca en memoria */ }
+    #guardarMarca(instalada) {
+        try {
+            if (instalada) this.#ventana?.localStorage?.setItem(CLAVE_INSTALADA, "1");
+            else this.#ventana?.localStorage?.removeItem(CLAVE_INSTALADA);
+        } catch { /* localStorage bloqueado: en esta página manda el modo. */ }
     }
 
     /**
-     * Invitación al buscar o al ingresar: abre la ventana propia (`invitacion: true`) solo una vez por
-     * sesión. Devuelve true si la abrió. La sesión se marca cuando la persona la rechaza, no al
-     * abrirla: una ventana sin respuesta (p. ej. se recargó) no gasta la invitación.
+     * Invitación al buscar o al ingresar: abre la ventana propia (`invitacion: true`) cada vez, hasta
+     * que la app se instale. Devuelve true si la abrió.
      */
-    ofrecerUnaVez() {
-        if (this.estado.invitacion || this.#yaOfrecida() || this.yaInstalada()
+    invitar() {
+        if (this.estado.invitacion || this.yaInstalada() || this.#marcaInstalada() || this.#relacionada
             || this.estado.modo === MODOS.INSTALADA || this.estado.modo === MODOS.INSTALANDO) return false;
         const instrucciones = !this.#evento;
         this.#actualizar({ invitacion: true, instrucciones });
@@ -104,11 +120,9 @@ export class ControladorInstalacion {
         return this.instalar();
     }
 
-    /** "Ahora no", "Entendido", Esc o clic fuera: la cierra y no se vuelve a ofrecer en la sesión. */
-    rechazarInvitacion() {
-        if (!this.estado.invitacion) return;
-        this.#marcarOfrecida();
-        this.#actualizar({ invitacion: false });
+    /** "Ahora no", "Entendido", Esc o clic fuera: la cierra solo esa vez. */
+    cerrarInvitacion() {
+        if (this.estado.invitacion) this.#actualizar({ invitacion: false });
     }
 
     /** Muestra el diálogo del navegador. Devuelve "accepted", "dismissed" o null si no se pudo. */
@@ -124,7 +138,6 @@ export class ControladorInstalacion {
                 // appinstalled confirma; mientras tanto se informa que se está instalando.
                 if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: "Instalando ChivoMed…" });
             } else {
-                this.#marcarOfrecida(); // Rechazada en esta sesión: no se vuelve a invitar.
                 if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: null });
             }
             return outcome;
@@ -138,6 +151,9 @@ export class ControladorInstalacion {
 
     #ofrecer(evento) {
         evento.preventDefault?.(); // Se muestra nuestro botón en vez del aviso automático del navegador.
+        // El navegador solo lo ofrece si no está instalada: se borra la marca.
+        this.#relacionada = false;
+        this.#guardarMarca(false);
         if (this.estado.modo === MODOS.INSTALADA || this.yaInstalada()) return;
         this.#evento = evento;
         this.#actualizar({ modo: MODOS.DISPONIBLE, mensaje: null });
@@ -145,6 +161,7 @@ export class ControladorInstalacion {
 
     #instalada() {
         this.#evento = null;
+        this.#guardarMarca(true);
         this.#actualizar({ modo: MODOS.INSTALADA, mensaje: "ChivoMed quedó instalada en este dispositivo.", invitacion: false });
     }
 

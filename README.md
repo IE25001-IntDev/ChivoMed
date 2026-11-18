@@ -131,13 +131,19 @@ queda un solo juego `chivomed-*` más `chivomed-vigente`.
 
 ## Instalación
 
-El botón **"Instalar app"** de la cabecera aparece cuando el navegador lo permite. Además, al
-pulsar "Buscar citas" o "Ingresar" con datos válidos, se abre la ventana **"Instalar ChivoMed"**
-con los botones **Instalar** (abre el diálogo de instalación del navegador) y **Ahora no**.
-"Ahora no", Esc o un clic fuera de la ventana cuentan como rechazo: no se vuelve a ofrecer en esa
-sesión (pestaña), aunque se recargue. Al cerrarla, el foco vuelve a donde estaba. No se abre si
-la app ya está instalada ni si el navegador no permite instalarla. La búsqueda y el login siguen
-por detrás sin esperar.
+El botón **"Instalar app"** de la cabecera aparece cuando el navegador lo permite. Además, cada
+vez que se pulsa "Buscar citas" o "Ingresar" con datos válidos se abre la ventana **"Instalar
+ChivoMed"**, hasta que la app se instale:
+- Si el navegador permite instalar directo (Chrome, Edge), trae los botones **Instalar** (abre el
+  diálogo de instalación del navegador) y **Ahora no**.
+- Si no (Firefox, o Chrome que todavía no la ofrece), explica cómo instalarla desde el menú del
+  navegador, con un solo botón **Entendido**.
+
+"Ahora no", "Entendido", Esc o un clic fuera la cierran solo esa vez; al cerrarla, el foco vuelve
+a donde estaba. Al instalarse, el navegador guarda la marca `chivomed:instalada` en localStorage y
+la ventana ya no sale, ni en una pestaña normal; si el navegador vuelve a ofrecer la instalación
+(por ejemplo, tras desinstalarla), la marca se borra. Abierta como app instalada, no sale nunca.
+La búsqueda y el login siguen por detrás sin esperar.
 
 ## Qué es normal ver en la consola del navegador
 

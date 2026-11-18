@@ -5,11 +5,11 @@
  * Se suscribe a su estado reactivo al conectarse y cancela al desconectarse.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea uno por conexión.
  * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas y el login) y pide al
- * controlador que invite a instalar una sola vez por sesión. Con `invitacion` abre su <dialog> modal
+ * controlador que invite a instalar (cada vez, hasta que la app se instale). Con `invitacion` abre su <dialog> modal
  * (showModal); al cerrarse devuelve el foco a donde estaba. Con beforeinstallprompt muestra
  * "Instalar" (llama a prompt() en ese clic, foco inicial) y "Ahora no"; con `instrucciones`, el texto
  * para instalar desde el menú del navegador y un solo botón "Entendido" (foco inicial). "Ahora no",
- * "Entendido", Esc o clic fuera cuentan como rechazo de la sesión. El botón "Instalar app" no cambia.
+ * "Entendido", Esc o clic fuera la cierran solo esa vez. El botón "Instalar app" no cambia.
  */
 import { ControladorInstalacion, MODOS, EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
@@ -41,13 +41,13 @@ class InstallPrompt extends HTMLElement {
     #inyectado = null;
     #cancelar = null;
     #alPulsar = () => this.#controlador.instalar();
-    #alOfrecer = () => this.#controlador.ofrecerUnaVez();
+    #alOfrecer = () => this.#controlador.invitar();
     #alAceptar = () => this.#controlador.aceptarInvitacion();
-    #alRechazar = () => this.#controlador.rechazarInvitacion();
-    /** Esc (o cualquier cierre que no pasó por el controlador) cuenta como rechazo. */
-    #alCerrarDialogo = () => { if (this.#controlador.estado.invitacion) this.#controlador.rechazarInvitacion(); };
+    #alRechazar = () => this.#controlador.cerrarInvitacion();
+    /** Esc (o cualquier cierre que no pasó por el controlador) la cierra esa vez. */
+    #alCerrarDialogo = () => { if (this.#controlador.estado.invitacion) this.#controlador.cerrarInvitacion(); };
     /** El cuerpo llena la ventana: un clic cuyo destino es el <dialog> mismo cayó en el fondo. */
-    #alClicDialogo = event => { if (event.target === this.shadowRoot.getElementById("invitacion")) this.#controlador.rechazarInvitacion(); };
+    #alClicDialogo = event => { if (event.target === this.shadowRoot.getElementById("invitacion")) this.#controlador.cerrarInvitacion(); };
     /** Elemento con el foco antes de abrir la ventana, para devolvérselo al cerrarla. */
     #focoPrevio = null;
 

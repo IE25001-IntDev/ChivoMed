@@ -215,7 +215,7 @@ describe('<vista-login> + <install-prompt>: ventana para instalar', () => {
         ventana.matchMedia = () => ({ matches: false });
         ventana.navigator = {};
         const pestana = new Map();
-        ventana.sessionStorage = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)) };
+        ventana.localStorage = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)), removeItem: k => pestana.delete(k) };
         const instalador = new InstallPrompt();
         instalador.controlador = new ControladorInstalacion({ ventana });
         conectar(instalador);

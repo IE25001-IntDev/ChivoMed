@@ -405,12 +405,18 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         ({ ControladorInstalacion } = await import('../src/js/boundary/pwa/controlador_instalacion.js'));
     });
 
-    /** Una "carga de página": ventana doble con la sessionStorage de la pestaña e install-prompt real. */
-    function cargarPagina(pestana = new Map(), { instalada = false } = {}) {
+    /**
+     * Una "carga de página": ventana doble con el localStorage del navegador (`pestana`, compartido
+     * entre cargas) e install-prompt real. `bloqueado`: localStorage lanza; `relacionadas`: lo que
+     * resuelve navigator.getInstalledRelatedApps() (o un Error para rechazar).
+     */
+    function cargarPagina(pestana = new Map(), { instalada = false, bloqueado = false, relacionadas } = {}) {
         const ventana = new EventTarget();
         ventana.matchMedia = q => ({ matches: instalada && q === '(display-mode: standalone)' });
-        ventana.navigator = {};
-        ventana.sessionStorage = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)) };
+        ventana.navigator = relacionadas === undefined ? {}
+            : { getInstalledRelatedApps: async () => { if (relacionadas instanceof Error) throw relacionadas; return relacionadas; } };
+        const almacen = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)), removeItem: k => pestana.delete(k) };
+        Object.defineProperty(ventana, 'localStorage', { get() { if (bloqueado) throw new Error('SecurityError'); return almacen; } });
         const instalador = new InstallPrompt();
         instalador.controlador = new ControladorInstalacion({ ventana });
         conectar(instalador);
@@ -483,7 +489,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         ['Esc', p => { p.dialogo.dispatchEvent(new Event('cancel')); p.dialogo.close(); }],
         ['clic fuera', p => { const e = new Event('click'); Object.defineProperty(e, 'target', { value: p.dialogo }); p.dialogo.dispatchEvent(e); }],
     ]) {
-        test(`${nombre} cierra la ventana, devuelve el foco y no vuelve a abrirse en la sesión`, async () => {
+        test(`${nombre} cierra la ventana solo esa vez y devuelve el foco; la siguiente búsqueda la abre otra vez`, async () => {
             const p = await buscarConAviso();
             try {
                 rechazar(p);
@@ -494,11 +500,11 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
                 assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'));
                 p.ctx.enviar();
                 await asentar();
-                assert.equal(p.dialogo.open, false, 'otra búsqueda en la misma página no la abre');
+                assert.equal(p.dialogo.open, true, 'otra búsqueda en la misma página la abre de nuevo');
             } finally { p.cerrar(); }
             const recargada = await buscarConAviso(cargarPagina(p.pestana));
             try {
-                assert.equal(recargada.dialogo.open, false, 'tras recargar, en la misma sesión, tampoco');
+                assert.equal(recargada.dialogo.open, true, 'y tras recargar también');
                 assert.equal(recargada.$i('instalar').hidden, false);
             } finally { recargada.cerrar(); }
         });
@@ -515,7 +521,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         } finally { p.cerrar(); }
     });
 
-    test('una ventana sin respuesta (se recargó) no gasta la invitación de la sesión', async () => {
+    test('una ventana sin respuesta (se recargó) vuelve a salir al recargar', async () => {
         const primera = await buscarConAviso();
         primera.cerrar();
         const segunda = await buscarConAviso(cargarPagina(primera.pestana));
@@ -556,15 +562,11 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
             assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'), 'el foco vuelve');
             p.ctx.enviar();
             await asentar();
-            assert.equal(p.dialogo.open, false, 'una vez por sesión');
+            assert.equal(p.dialogo.open, true, '"Entendido" la cierra solo esa vez');
         } finally { p.cerrar(); }
-        const recargada = await buscarConAviso(cargarPagina(p.pestana), null);
-        try {
-            assert.equal(recargada.dialogo.open, false, 'tras recargar, en la misma sesión, tampoco');
-        } finally { recargada.cerrar(); }
     });
 
-    test('las instrucciones también se cierran con Esc y cuentan para la sesión', async () => {
+    test('las instrucciones también se cierran con Esc solo esa vez', async () => {
         const p = await buscarConAviso(cargarPagina(), null);
         try {
             p.dialogo.dispatchEvent(new Event('cancel'));
@@ -574,7 +576,83 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
             assert.equal(p.dialogo.open, false);
         } finally { p.cerrar(); }
         const recargada = await buscarConAviso(cargarPagina(p.pestana), null);
-        try { assert.equal(recargada.dialogo.open, false); } finally { recargada.cerrar(); }
+        try { assert.equal(recargada.dialogo.open, true); } finally { recargada.cerrar(); }
+    });
+
+    test('sale dos veces seguidas: al buscar y luego al ingresar', async () => {
+        const { default: VistaLogin } = await import('../src/js/boundary/vistas/vista_login.js');
+        const { ControladorLogin } = await import('../src/js/boundary/vistas/controlador_login.js');
+        const p = await buscarConAviso();
+        const login = new VistaLogin();
+        login.contexto = { query: new URLSearchParams() };
+        login.controlador = new ControladorLogin({ servicio: {
+            listarTiposDocumento: async () => [DUI],
+            iniciarSesion: async () => ({ usuario: { idUsuario: UUID(90) }, rolActivo: { idPersonaRol: UUID(91), codigo: 'DOCTOR' }, csrfToken: 'csrf-prueba' }),
+            cerrarSesion: async () => {},
+        } });
+        const $l = id => login.shadowRoot.getElementById(id);
+        try {
+            assert.equal(p.dialogo.open, true, 'primera vez: "Buscar citas"');
+            p.$i('invitacion-no').click();
+            await asentar();
+            await asentar();
+            assert.equal(p.dialogo.open, false);
+            conectar(login);
+            await asentar();
+            $l('tipo').value = DUI.idTipoDocumento;
+            $l('tipo').dispatchEvent(new Event('change'));
+            $l('numero').value = '01000001-1';
+            $l('numero').dispatchEvent(new Event('input'));
+            $l('formulario').dispatchEvent(new Event('submit', { cancelable: true }));
+            await asentar();
+            assert.equal(p.dialogo.open, true, 'segunda vez: "Ingresar"');
+        } finally { desconectar(login); p.cerrar(); }
+    });
+
+    test('tras appinstalled no vuelve a salir, ni en una pestaña normal; beforeinstallprompt la devuelve', async () => {
+        const navegador = new Map();
+        const primera = cargarPagina(navegador);
+        primera.ventana.dispatchEvent(aviso());
+        primera.ventana.dispatchEvent(new Event('appinstalled'));
+        assert.equal(navegador.get('chivomed:instalada'), '1', 'guarda la marca en localStorage');
+        desconectar(primera.instalador);
+        const normal = await buscarConAviso(cargarPagina(navegador), null);
+        try {
+            assert.equal(normal.dialogo.open, false, 'pestaña normal sin beforeinstallprompt: no sale');
+            assert.equal(normal.ctx.llamadas.citas, 1, 'la búsqueda sigue');
+        } finally { normal.cerrar(); }
+        const desinstalada = await buscarConAviso(cargarPagina(navegador));
+        try {
+            assert.equal(navegador.has('chivomed:instalada'), false, 'beforeinstallprompt borra la marca');
+            assert.equal(desinstalada.dialogo.open, true, 'y la ventana vuelve a salir');
+        } finally { desinstalada.cerrar(); }
+    });
+
+    test('getInstalledRelatedApps sirve de apoyo: si la encuentra no sale; si falla, sigue con la marca', async () => {
+        const encontrada = cargarPagina(new Map(), { relacionadas: [{ platform: 'webapp', url: 'http://localhost:3000/manifest.webmanifest' }] });
+        await asentar();
+        desconectar(encontrada.instalador);
+        const conApoyo = await buscarConAviso(cargarPagina(new Map(), { relacionadas: [{ platform: 'webapp' }] }), null);
+        try { assert.equal(conApoyo.dialogo.open, false, 'la encontró instalada'); } finally { conApoyo.cerrar(); }
+        const falla = await buscarConAviso(cargarPagina(new Map(), { relacionadas: new Error('NotSupported') }), null);
+        try { assert.equal(falla.dialogo.open, true, 'si falla, sale (no hay marca)'); } finally { falla.cerrar(); }
+        const vacia = await buscarConAviso(cargarPagina(new Map(), { relacionadas: [] }), null);
+        try { assert.equal(vacia.dialogo.open, true, 'sin apps relacionadas, sale'); } finally { vacia.cerrar(); }
+    });
+
+    test('con localStorage bloqueado no se rompe', async () => {
+        const p = await buscarConAviso(cargarPagina(new Map(), { bloqueado: true }));
+        try {
+            assert.equal(p.dialogo.open, true);
+            p.$i('invitacion-no').click();
+            await asentar();
+            await asentar();
+            p.ventana.dispatchEvent(new Event('appinstalled'));
+            await asentar();
+            p.ctx.enviar();
+            await asentar();
+            assert.equal(p.dialogo.open, false, 'instalada en esta página: no sale');
+        } finally { p.cerrar(); }
     });
 
     test('si la app ya está instalada (standalone) no sale nada, con o sin beforeinstallprompt', async () => {

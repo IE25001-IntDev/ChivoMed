@@ -261,22 +261,26 @@ describe('<install-prompt>', () => {
     });
 });
 
-// Punto 7: invitación a instalar al buscar o al ingresar, una vez por sesión, con ventana propia.
-describe('ControladorInstalacion: invitar una vez al buscar o al ingresar', () => {
-    const conSesion = (opciones = {}) => {
+// Punto 7: invitación a instalar al buscar o al ingresar, en cada vez, hasta que la app se instale.
+describe('ControladorInstalacion: invitar hasta que la app se instale', () => {
+    const conAlmacen = (opciones = {}, { bloqueado = false } = {}) => {
         const ctx = preparar(opciones);
         const datos = new Map();
-        ctx.ventana.sessionStorage = { getItem: k => datos.get(k) ?? null, setItem: (k, v) => datos.set(k, String(v)) };
-        return ctx;
+        const almacen = { getItem: k => datos.get(k) ?? null, setItem: (k, v) => datos.set(k, String(v)), removeItem: k => datos.delete(k) };
+        Object.defineProperty(ctx.ventana, 'localStorage', { get() { if (bloqueado) throw new Error('SecurityError'); return almacen; } });
+        assert.equal(typeof ctx.controlador.invitar, 'function', 'existe invitar()');
+        assert.equal(typeof ctx.controlador.cerrarInvitacion, 'function', 'existe cerrarInvitacion()');
+        return { ...ctx, datos };
     };
 
-    test('ofrecerUnaVez() abre la invitación sin llamar a prompt(); aceptarla lo llama en ese clic', async () => {
-        const { ventana, controlador } = conSesion();
+    test('invitar() abre la ventana sin llamar a prompt(); aceptarla lo llama en ese clic', async () => {
+        const { ventana, controlador } = conAlmacen();
         const aviso = crearAviso('dismissed');
         ventana.dispatchEvent(aviso);
         await asentar();
-        assert.equal(controlador.ofrecerUnaVez(), true);
+        assert.equal(controlador.invitar(), true);
         assert.equal(controlador.estado.invitacion, true);
+        assert.equal(controlador.estado.instrucciones, false);
         assert.equal(aviso.llamadasPrompt, 0);
         const promesa = controlador.aceptarInvitacion();
         assert.equal(aviso.llamadasPrompt, 1, 'sin esperar: el navegador exige el gesto del usuario');
@@ -284,62 +288,86 @@ describe('ControladorInstalacion: invitar una vez al buscar o al ingresar', () =
         assert.equal(await promesa, 'dismissed');
     });
 
-    test('rechazarla no la vuelve a abrir en la sesión, aunque llegue otro beforeinstallprompt o se recargue', async () => {
-        const { ventana, controlador } = conSesion();
+    test('cerrarla vale solo esa vez: sale de nuevo en la siguiente', () => {
+        const { ventana, controlador } = conAlmacen();
         ventana.dispatchEvent(crearAviso());
-        await asentar();
-        controlador.ofrecerUnaVez();
-        controlador.rechazarInvitacion();
+        assert.equal(controlador.invitar(), true);
+        controlador.cerrarInvitacion();
         assert.equal(controlador.estado.invitacion, false);
-        ventana.dispatchEvent(crearAviso());
-        assert.equal(controlador.ofrecerUnaVez(), false);
-        const otro = new ControladorInstalacion({ ventana });
-        otro.iniciar();
-        const tercero = crearAviso();
-        ventana.dispatchEvent(tercero);
-        assert.equal(otro.ofrecerUnaVez(), false, 'otra instancia en la misma sesión tampoco ofrece');
-        assert.equal(tercero.llamadasPrompt, 0);
-        assert.equal(controlador.estado.modo, MODOS.DISPONIBLE, 'el botón "Instalar app" sigue disponible');
+        assert.equal(controlador.invitar(), true);
+        assert.equal(controlador.invitar(), false, 'no se abre encima de sí misma');
     });
 
-    test('no se abre si ya está instalada; sin beforeinstallprompt se abre con instrucciones', () => {
-        const instalada = conSesion({ standalone: true });
-        instalada.ventana.dispatchEvent(crearAviso());
-        assert.equal(instalada.controlador.ofrecerUnaVez(), false);
-        assert.equal(conSesion({ standalone: true }).controlador.ofrecerUnaVez(), false);
-        const sinAviso = conSesion();
-        assert.equal(sinAviso.controlador.ofrecerUnaVez(), true);
-        assert.equal(sinAviso.controlador.estado.instrucciones, true);
-        assert.equal(sinAviso.controlador.aceptarInvitacion(), null, 'sin beforeinstallprompt no hay prompt() que llamar');
-        sinAviso.controlador.rechazarInvitacion();
-        assert.equal(sinAviso.controlador.ofrecerUnaVez(), false, 'una vez por sesión');
+    test('sin beforeinstallprompt se abre con instrucciones y sin prompt() que llamar', () => {
+        const { controlador } = conAlmacen();
+        assert.equal(controlador.invitar(), true);
+        assert.equal(controlador.estado.instrucciones, true);
+        assert.equal(controlador.aceptarInvitacion(), null);
     });
 
-    test('si la persona la rechazó en el diálogo del navegador, no se abre después', async () => {
-        const { ventana, controlador } = conSesion();
-        ventana.dispatchEvent(crearAviso('dismissed'));
-        await asentar();
-        await controlador.instalar();
+    test('appinstalled guarda chivomed:instalada y desde ahí no sale, tampoco en otra carga', () => {
+        const { ventana, controlador, datos } = conAlmacen();
         ventana.dispatchEvent(crearAviso());
-        assert.equal(controlador.ofrecerUnaVez(), false);
-    });
-
-    test('appinstalled con la invitación abierta la cierra', async () => {
-        const { ventana, controlador } = conSesion();
-        ventana.dispatchEvent(crearAviso());
-        controlador.ofrecerUnaVez();
         ventana.dispatchEvent(new Event('appinstalled'));
-        assert.equal(controlador.estado.invitacion, false);
+        assert.equal(datos.get('chivomed:instalada'), '1');
+        assert.equal(controlador.invitar(), false);
+        const otra = new ControladorInstalacion({ ventana });
+        otra.iniciar();
+        assert.equal(otra.invitar(), false, 'pestaña normal, sin beforeinstallprompt');
+        assert.equal(otra.estado.modo, MODOS.NO_DISPONIBLE, 'el botón de la cabecera no cambia');
     });
 
-    test('sin sessionStorage (o si falla) solo se ofrece una vez por instancia', () => {
-        const { ventana, controlador } = preparar();
-        ventana.sessionStorage = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
+    test('beforeinstallprompt borra la marca: no está instalada', () => {
+        const { ventana, controlador, datos } = conAlmacen();
+        datos.set('chivomed:instalada', '1');
+        assert.equal(controlador.invitar(), false);
         ventana.dispatchEvent(crearAviso());
-        assert.equal(controlador.ofrecerUnaVez(), true);
-        controlador.rechazarInvitacion();
+        assert.equal(datos.has('chivomed:instalada'), false);
+        assert.equal(controlador.invitar(), true);
+    });
+
+    test('en modo standalone no sale nunca', () => {
+        const { ventana, controlador, datos } = conAlmacen({ standalone: true });
+        assert.equal(controlador.invitar(), false);
         ventana.dispatchEvent(crearAviso());
-        assert.equal(controlador.ofrecerUnaVez(), false);
+        assert.equal(controlador.invitar(), false);
+        assert.equal(datos.has('chivomed:instalada'), false);
+    });
+
+    test('getInstalledRelatedApps: con resultados no sale; si falla o no existe, sigue con la marca', async () => {
+        const conApoyo = conAlmacen();
+        conApoyo.ventana.navigator.getInstalledRelatedApps = async () => [{ platform: 'webapp' }];
+        const c1 = new ControladorInstalacion({ ventana: conApoyo.ventana });
+        c1.iniciar();
+        await asentar();
+        assert.equal(c1.invitar(), false);
+        conApoyo.ventana.dispatchEvent(crearAviso());
+        assert.equal(c1.invitar(), true, 'beforeinstallprompt manda: no está instalada');
+        const falla = conAlmacen();
+        falla.ventana.navigator.getInstalledRelatedApps = async () => { throw new Error('NotSupported'); };
+        const c2 = new ControladorInstalacion({ ventana: falla.ventana });
+        c2.iniciar();
+        await asentar();
+        assert.equal(c2.invitar(), true);
+        assert.equal(conAlmacen().controlador.invitar(), true, 'sin la API');
+    });
+
+    test('con localStorage bloqueado no se rompe', () => {
+        const { ventana, controlador } = conAlmacen({}, { bloqueado: true });
+        assert.doesNotThrow(() => ventana.dispatchEvent(crearAviso()));
+        assert.equal(controlador.invitar(), true);
+        controlador.cerrarInvitacion();
+        assert.doesNotThrow(() => ventana.dispatchEvent(new Event('appinstalled')));
+        assert.equal(controlador.invitar(), false, 'instalada en esta página');
+    });
+
+    test('ya no usa sessionStorage', () => {
+        const { ventana, controlador } = conAlmacen();
+        ventana.sessionStorage = { getItem() { throw new Error('no se usa'); }, setItem() { throw new Error('no se usa'); } };
+        ventana.dispatchEvent(crearAviso());
+        assert.equal(controlador.invitar(), true);
+        controlador.cerrarInvitacion();
+        assert.equal(controlador.invitar(), true);
     });
 });
 
