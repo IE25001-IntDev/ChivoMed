@@ -81,3 +81,10 @@ test('citas.css: la fila de cinco campos solo se usa desde 1093 px', async () =>
     assert.equal(Number(tres[1]), 1092, `el acomodo de tres columnas llega hasta ${tres[1]} px`);
     assert.match(css, /\.barra-busqueda\s*\{[^}]*grid-template-columns:\s*repeat\(5,/, 'la fila de cinco sigue siendo el acomodo ancho');
 });
+
+// Sin reservar el espacio de la barra de scroll vertical, al aparecer o desaparecer (p. ej. al ocultarse
+// "Falta completar el número…" mientras se escribe) todo el contenido se recentra unos 7 px.
+test('app.css: html reserva siempre el espacio de la barra de scroll', async () => {
+    const css = (await readFile(join(SRC, 'resources/app.css'), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.match(css, /(^|\})\s*html\s*\{[^}]*scrollbar-gutter:\s*stable\s*(;|\})/);
+});
