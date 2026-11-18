@@ -464,6 +464,22 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         assert.equal(c.estado.numeroDocumento, NUMERO);
     });
 
+    test('si se mostró sin servidor y después el backend vuelve, lo que se ve se queda en disco', async () => {
+        const fabrica = crearIndexedDbDoble();
+        await buscarConExito(nuevaMemoria(fabrica));
+        await asentar();
+        const documento = new EventTarget();
+        const recargada = nuevaMemoria(fabrica, 60 * 60 * 1000, { documento });
+        await recargada.hidratar();
+        const sinRed = citas(recargada, { enLinea: false, desfase: 60 * 60 * 1000 });
+        await sinRed.controlador.iniciar();
+        assert.deepEqual(sinRed.estado.citas, [CITA]);
+        documento.dispatchEvent(new Event('servidor-respondio'));
+        await asentar();
+        assert.ok(recargada.leer(CLAVE_CITAS), 'sigue en memoria');
+        assert.ok(disco(fabrica)[memoriaVistas.RANURA_PUBLICO], 'sigue en disco');
+    });
+
     test('al cargar la app sin red se restaura (y sigue en disco)', async () => {
         const fabrica = crearIndexedDbDoble();
         await buscarConExito(nuevaMemoria(fabrica));

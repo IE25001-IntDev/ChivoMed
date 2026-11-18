@@ -22,8 +22,8 @@
  * a las 8 horas de la búsqueda (`en`), se borra con "Nueva búsqueda" y al entrar un empleado.
  * Al cargar la app se restaura aunque haya red, porque el backend puede estar caído: #/citas solo la
  * muestra sin conexión (`esCopiaDeDisco`). Se borra cuando el backend responde por primera vez
- * ("servidor-respondio" en el documento, que la copia del service worker no emite); si la conexión
- * se pierde con la página abierta, lo que se ve se queda.
+ * ("servidor-respondio" en el documento, que la copia del service worker no emite), salvo que ya
+ * se haya mostrado sin conexión (`conservarCopiaDeDisco`): lo que se ve se queda.
  *
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
@@ -89,6 +89,14 @@ export class MemoriaVistas {
         this.#persistencia = persistencia;
         this.#reloj = reloj;
         this.#documento = documento;
+    }
+
+    /**
+     * La vista mostró la copia del disco sin conexión: desde ahora es lo que se ve y no se borra
+     * cuando el backend vuelve (sí con "Nueva búsqueda", al caducar o en la próxima carga con backend).
+     */
+    conservarCopiaDeDisco(clave) {
+        if (this.esCopiaDeDisco(clave)) this.#publicaDeDisco = null;
     }
 
     /** true si lo guardado en `clave` es la búsqueda que vino del disco al cargar y el backend aún no respondió. */

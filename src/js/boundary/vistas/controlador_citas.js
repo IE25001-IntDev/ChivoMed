@@ -369,6 +369,8 @@ export class ControladorCitas {
         const guardado = this.#memoria.leer(CLAVE_MEMORIA);
         if (!guardado) return;
         if (this.#conexion.enLinea && this.#memoria.esCopiaDeDisco?.(CLAVE_MEMORIA)) return;
+        // Mostrada sin conexión, es lo que se ve: no se borra cuando el backend vuelva.
+        if (!this.#conexion.enLinea) this.#memoria.conservarCopiaDeDisco?.(CLAVE_MEMORIA);
         const { criterios, clinicas, citas, en } = guardado;
         const edad = this.#reloj().getTime() - en;
         if (!(edad >= 0 && edad <= VIGENCIA_MS)) { this.#memoria.guardar(CLAVE_MEMORIA, null); return; }
