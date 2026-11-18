@@ -77,6 +77,12 @@ describe('<vista-sin-conexion>', () => {
         assert.equal(eventos[0].detail.ruta, '/');
     });
 
+    test('explica que no hay servidor ni datos guardados', () => {
+        const { $ } = montar('vista-sin-conexion', { path: '/dashboard' });
+        assert.ok($('detalle'), 'hay un párrafo con el detalle');
+        assert.match($('detalle').textContent, /^No se puede conectar con el servidor y no hay datos guardados\./);
+    });
+
     test('el botón no se deshabilita: navigator.onLine puede equivocarse', () => {
         const { $ } = montar('vista-sin-conexion', { path: '/dashboard' });
         assert.equal($('reintentar').disabled, false);

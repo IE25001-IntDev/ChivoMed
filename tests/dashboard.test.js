@@ -384,7 +384,7 @@ describe('ControladorDashboard: sin conexión', () => {
         assert.equal(controlador.estado.desdeMemoria, true);
         assert.deepEqual(controlador.estado.actualizadoEn, new Date(2026, 10, 13, 9, 30));
         assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
-        assert.match(mensajeMemoria(controlador.estado.actualizadoEn), /^Sin conexión\. Mostrando tus roles guardados a las .+\.$/);
+        assert.match(mensajeMemoria(controlador.estado.actualizadoEn), /^Sin conexión con el servidor\. Mostrando lo guardado a las \d{2}:\d{2}\.$/);
     });
 
     test('si la petición falla por red y hay memoria, se queda con lo guardado', async () => {
@@ -407,6 +407,8 @@ describe('ControladorDashboard: sin conexión', () => {
         const { controlador } = preparar({ memoria, enLinea: false });
         await controlador.iniciar(sesionCon(DOC_NORTE, 2));
         assert.equal(controlador.estado.error, MENSAJES.sinRed);
+        assert.equal(MENSAJES.sinRed, 'No se puede conectar con el servidor y no hay datos guardados.');
+        assert.equal(mensajeMemoria(null), 'Sin conexión con el servidor. Mostrando lo guardado.');
         assert.deepEqual(controlador.estado.grupos, []);
     });
 

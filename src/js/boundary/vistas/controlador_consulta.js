@@ -24,6 +24,7 @@ import ProcedimientoPasoService from "../../control/procedimiento_paso_service.j
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado } from "../pwa/controlador_conexion.js";
 import { normalizarConsultas, motivoNoAtender, esPasoDeMiRol, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
 
 export const MAX_TEXTO = 255;
@@ -41,8 +42,8 @@ export const MENSAJES = Object.freeze({
     cerrada: "Esta consulta ya está cerrada.",
     cerradaAhora: "Consulta cerrada.",
     sinRed: "Sin conexión: necesitas red para registrar la atención.",
-    sinRedCarga: "Necesitas conexión para abrir esta consulta.",
-    desdeMemoria: hora => `Sin conexión. Mostrando la consulta guardada a las ${hora}.`,
+    sinRedCarga: MENSAJE_SIN_DATOS,
+    desdeMemoria: mensajeGuardado,
     /** F8: texto propio para consulta.cerrarAntesRetomar; se ignora el message del backend. */
     enCurso: "Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.",
     sinRedSalir: "Sin conexión: necesitas red para salir de la consulta.",

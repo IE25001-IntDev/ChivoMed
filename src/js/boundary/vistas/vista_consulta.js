@@ -85,7 +85,7 @@ const PLANTILLA = plantilla(`
 </div>`);
 
 const hora = fecha => (fecha instanceof Date
-    ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", timeZone: ZONA_SV }) : "");
+    ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_SV }) : "");
 
 class VistaConsulta extends HTMLElement {
     #controlador = null;

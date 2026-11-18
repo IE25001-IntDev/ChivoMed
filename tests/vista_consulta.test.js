@@ -191,7 +191,7 @@ describe('<vista-consulta>', () => {
     test('sin red y sin datos guardados: pide conexión y no deja reintentar', async () => {
         const sinDatos = await montar({ enLinea: false });
         assert.equal(sinDatos.$('error').hidden, false);
-        assert.equal(sinDatos.$('error-texto').textContent, MENSAJES.sinRedCarga);
+        assert.equal(sinDatos.$('error-texto').textContent, 'No se puede conectar con el servidor y no hay datos guardados.');
         assert.equal(sinDatos.$('reintentar').disabled, true);
         assert.equal(sinDatos.$('distribucion').hidden, true);
     });
@@ -207,7 +207,7 @@ describe('<vista-consulta>', () => {
         assert.deepEqual(nombres(), []);
         assert.equal($('error').hidden, true);
         assert.equal($('estado').hidden, false);
-        assert.match($('estado').textContent, /^Sin conexión\. Mostrando la consulta guardada a las 09:30/);
+        assert.match($('estado').textContent, /^Sin conexión con el servidor\. Mostrando lo guardado a las 09:30\./);
         assert.equal($('paciente').textContent, 'Paciente De Prueba');
         assert.equal($('bloqueo').textContent, MENSAJES.sinRed);
         assert.equal(vista.paneles.paso.hidden, false);

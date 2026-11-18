@@ -11,15 +11,16 @@ import AtencionService from "../../control/atencion_service.js";
 import { obtenerSesion as obtenerSesionHttp, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../../control/auth_service.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { MENSAJE_SIN_RED, MENSAJE_SIN_DATOS, mensajeGuardado } from "../pwa/controlador_conexion.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
+import { ZONA_SV } from "../fechas_sv.js";
 
 export const CODIGO_CERRAR_ANTES = "rolCambio.cerrarAntesCambiar";
 const CLAVE_MEMORIA = "dashboard.asignaciones";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MENSAJES = Object.freeze({
-    sinRed: "Sin conexión. Tus roles se mostrarán cuando vuelvas a conectarte.",
+    sinRed: MENSAJE_SIN_DATOS,
     conexion: "No pudimos conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
     sesionFinalizada: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
     sinPermiso: "No tienes permiso para usar esa asignación. Comunícate con tu clínica.",
@@ -39,13 +40,12 @@ const texto = valor => typeof valor === "string" && valor.trim().length > 0;
 /** Hora corta para "datos de las HH:MM". */
 export function formatearHora(fecha) {
     return fecha instanceof Date && !Number.isNaN(fecha.getTime())
-        ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit" })
+        ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_SV })
         : "";
 }
 
 export function mensajeMemoria(fecha) {
-    const hora = formatearHora(fecha);
-    return hora ? `Sin conexión. Mostrando tus roles guardados a las ${hora}.` : "Sin conexión. Mostrando tus roles guardados.";
+    return mensajeGuardado(formatearHora(fecha));
 }
 
 /**

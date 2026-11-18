@@ -230,10 +230,26 @@ describe('<vista-citas>: barra y resultados', () => {
         const sinRed = montar({ memoria, enLinea: false });
         conectar(sinRed.vista);
         await asentar();
-        assert.equal(sinRed.$('aviso-memoria').textContent, 'Sin conexión. Mostrando la búsqueda de las 09:30.');
+        assert.equal(sinRed.$('aviso-memoria').textContent, 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
         assert.equal(sinRed.vista.children.filter(h => h.localName === 'tarjeta-cita').length, 2);
         assert.equal(sinRed.$('buscar').disabled, true);
         desconectar(sinRed.vista);
+    });
+});
+
+describe('<vista-citas>: sin conexión y sin nada guardado', () => {
+    test('avisa que no se puede conectar con el servidor y no hay datos guardados', async () => {
+        const sinRed = montar({ enLinea: false });
+        conectar(sinRed.vista);
+        await asentar();
+        assert.equal(sinRed.$('aviso-memoria').hidden, false);
+        assert.equal(sinRed.$('aviso-memoria').textContent, 'No se puede conectar con el servidor y no hay datos guardados.');
+        desconectar(sinRed.vista);
+        const conRed = montar();
+        conectar(conRed.vista);
+        await asentar();
+        assert.equal(conRed.$('aviso-memoria').hidden, true);
+        desconectar(conRed.vista);
     });
 });
 

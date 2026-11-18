@@ -175,7 +175,8 @@ class VistaCitas extends HTMLElement {
         if (cambio("tickets")) this.#entregarTickets(estado);
         if (cambio("citas", "tickets", "enLinea", "bloqueadoHasta")) this.#pintarTarjetas(estado);
         this.#pintarAcciones(estado);
-        const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn)) : null;
+        const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn))
+            : !estado.enLinea && !estado.citas ? MENSAJES.sinDatos : null;
         this.$("aviso-memoria").hidden = !memoria;
         this.$("aviso-memoria").textContent = memoria ?? "";
     }

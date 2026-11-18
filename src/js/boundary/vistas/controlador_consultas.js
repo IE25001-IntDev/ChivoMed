@@ -16,6 +16,7 @@ import AtencionService from "../../control/atencion_service.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
+import { MENSAJE_SIN_DATOS } from "../pwa/controlador_conexion.js";
 import { hoySV, esFechaISO, diasEntre, formatearFecha } from "../fechas_sv.js";
 
 export const MAX_DIAS = 31;
@@ -28,7 +29,7 @@ export const MENSAJES = Object.freeze({
     rangoInvertido: "La fecha inicial no puede ser posterior a la final.",
     rangoExcedido: `Elige un rango de ${MAX_DIAS} días como máximo, contando el primero y el último.`,
     conexion: "No pudimos conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
-    sinRed: "Sin conexión. Las consultas de estas fechas se mostrarán cuando vuelvas a conectarte.",
+    sinRed: MENSAJE_SIN_DATOS,
     sinRedRegistro: "Sin conexión. Podrás ver este registro cuando vuelvas a conectarte.",
     sesionFinalizada: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
     sinRol: "Tu sesión no tiene un rol activo. Elige un rol arriba.",

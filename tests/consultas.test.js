@@ -422,6 +422,7 @@ describe('ControladorConsultas: sin conexión', () => {
         const { controlador } = preparar({ memoria, enLinea: false });
         await controlador.iniciar(sesionCon(UUID(901)));
         assert.equal(controlador.estado.error, MENSAJES.sinRed);
+        assert.equal(MENSAJES.sinRed, 'No se puede conectar con el servidor y no hay datos guardados.');
         assert.deepEqual(controlador.estado.consultas, []);
     });
 

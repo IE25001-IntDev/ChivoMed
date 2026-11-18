@@ -25,6 +25,7 @@ import { crearEstado } from "../../control/estado_reactivo.js";
 import { hoySV, sumarDias, diasEntre, esFechaISO, ZONA_SV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado } from "../pwa/controlador_conexion.js";
 
 /** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
 export const CLAVE_MEMORIA = CLAVE_PUBLICA_CITAS;
@@ -66,7 +67,8 @@ export const MENSAJES = Object.freeze({
     faltaClinica: "Falta elegir la clínica.",
     faltaFechas: "Falta escribir un rango de fechas válido.",
     limite: hora => `Hiciste muchas búsquedas seguidas. Podrás intentarlo de nuevo a las ${hora}.`,
-    memoria: hora => `Sin conexión. Mostrando la búsqueda de las ${hora}.`,
+    memoria: mensajeGuardado,
+    sinDatos: MENSAJE_SIN_DATOS,
 });
 
 const formatoHora = new Intl.DateTimeFormat("es-SV", { timeZone: ZONA_SV, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -359,9 +361,14 @@ export class ControladorCitas {
         this.#secuencia++;
     }
 
+    /**
+     * Muestra la búsqueda guardada. La que se cargó del disco al abrir la app y el backend todavía no
+     * confirmó (memoria.esCopiaDeDisco) solo se muestra sin conexión: si el backend responde, se borra.
+     */
     #restaurar() {
         const guardado = this.#memoria.leer(CLAVE_MEMORIA);
         if (!guardado) return;
+        if (this.#conexion.enLinea && this.#memoria.esCopiaDeDisco?.(CLAVE_MEMORIA)) return;
         const { criterios, clinicas, citas, en } = guardado;
         const edad = this.#reloj().getTime() - en;
         if (!(edad >= 0 && edad <= VIGENCIA_MS)) { this.#memoria.guardar(CLAVE_MEMORIA, null); return; }
@@ -375,6 +382,8 @@ export class ControladorCitas {
     #alCambiarRed(enLinea) {
         // Al volver la red no se busca sola (límite de solicitudes); solo los tipos, que no cuentan.
         this.#actualizar({ enLinea, desdeMemoria: enLinea ? false : this.estado.desdeMemoria });
+        // Sin conexión (p. ej. el servidor no respondió al cargar) se muestra lo guardado, si no hay nada en pantalla.
+        if (!enLinea && !this.estado.citas && !this.estado.cargando) this.#restaurar();
         if (enLinea && this.estado.errorTipos) this.cargarTipos();
     }
 

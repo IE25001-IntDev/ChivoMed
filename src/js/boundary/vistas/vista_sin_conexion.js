@@ -1,6 +1,6 @@
 /**
- * <vista-sin-conexion>: se monta en una ruta de empleado cuando no hay red para verificar la
- * sesión y no hay una sesión guardada en memoria. Reemplaza al login, que tampoco funcionaría sin red.
+ * <vista-sin-conexion>: se monta en una ruta de empleado cuando no hay red o el servidor no responde
+ * para verificar la sesión, y no hay una sesión guardada en memoria. Reemplaza al login, que tampoco funcionaría sin red.
  * Emite 'navegar' { ruta } (bubbles, composed) para volver a intentar la ruta pedida. El botón no se
  * deshabilita sin red: navigator.onLine puede equivocarse, y reintentar sin red solo vuelve a esta vista.
  */
@@ -10,7 +10,7 @@ import { plantilla } from "../plantilla.js";
 const PLANTILLA = plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Sin conexión</h1>
-  <p class="subtitulo">Inicia sesión cuando vuelva la red. Al reconectarte, esta página se actualiza sola.</p>
+  <p class="subtitulo" id="detalle">No se puede conectar con el servidor y no hay datos guardados. Al volver la conexión, esta página se actualiza sola.</p>
   <button class="boton boton-principal" id="reintentar" type="button">Volver a intentar</button>
 </section>`);
 

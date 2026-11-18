@@ -20,14 +20,17 @@
  * Desde el 2026-11-17 también va a disco, sin sesión, la última búsqueda pública de citas (HU1,
  * clave `publico:citas`, ranura `publico`) con su número de documento, para verla sin red. Caduca
  * a las 8 horas de la búsqueda (`en`), se borra con "Nueva búsqueda" y al entrar un empleado.
- * Solo se usa sin conexión: si la app carga con red (`navigator.onLine` al hidratar), se borra del
- * disco y #/citas arranca vacío; si la red se pierde con la página abierta, lo que se ve se queda.
+ * Al cargar la app se restaura aunque haya red, porque el backend puede estar caído: #/citas solo la
+ * muestra sin conexión (`esCopiaDeDisco`). Se borra cuando el backend responde por primera vez
+ * ("servidor-respondio" en el documento, que la copia del service worker no emite); si la conexión
+ * se pierde con la página abierta, lo que se ve se queda.
  *
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
  */
 import { crearEstado } from "../../control/estado_reactivo.js";
 import { crearAlmacenOffline } from "../pwa/almacen_offline.js";
+import { EVENTO_SERVIDOR_RESPONDIO } from "../../control/auth_service.js";
 
 const VACIO = Object.freeze(Object.create(null));
 
@@ -71,19 +74,26 @@ export class MemoriaVistas {
     #suscribir;
     #persistencia;
     #reloj;
-    #enLinea;
+    #documento;
+    /** Búsqueda pública restaurada del disco que el backend todavía no confirmó, o null. */
+    #publicaDeDisco = null;
 
     /**
      * @param {object} [opciones]
      * @param {{ leer: Function, guardar: Function, borrar: Function }|null} [opciones.persistencia] almacén en disco
      * @param {() => Date} [opciones.reloj]
-     * @param {() => boolean} [opciones.enLinea] si la app carga con red (navigator.onLine === true)
+     * @param {EventTarget|null} [opciones.documento] donde DefaultService y auth_service avisan "servidor-respondio"
      */
-    constructor({ persistencia = null, reloj = () => new Date(), enLinea = () => globalThis.navigator?.onLine === true } = {}) {
+    constructor({ persistencia = null, reloj = () => new Date(), documento = globalThis.document ?? null } = {}) {
         ({ estado: this.#estado, suscribir: this.#suscribir } = crearEstado({ sesion: null, datos: VACIO }));
         this.#persistencia = persistencia;
         this.#reloj = reloj;
-        this.#enLinea = enLinea;
+        this.#documento = documento;
+    }
+
+    /** true si lo guardado en `clave` es la búsqueda que vino del disco al cargar y el backend aún no respondió. */
+    esCopiaDeDisco(clave) {
+        return this.#publicaDeDisco !== null && this.leer(clave) === this.#publicaDeDisco;
     }
 
     /** Clave de datos atada al usuario de la sesión; null si la sesión no trae usuario. */
@@ -186,19 +196,29 @@ export class MemoriaVistas {
         return true;
     }
 
-    /** Sin red, restaura la búsqueda pública si tiene 8 horas o menos; con red, o si caducó o no es válida, la borra. */
+    /**
+     * Restaura la búsqueda pública si tiene 8 horas o menos (si caducó o no es válida, la borra), y
+     * la borra cuando el backend responde por primera vez: con el backend disponible no se usa.
+     */
     async #hidratarPublico(registro) {
         if (registro === undefined) return;
         const en = registro?.valor?.en;
         const edad = Number.isFinite(en) ? this.#reloj().getTime() - en : Number.NaN;
-        if (this.#enLinea() || registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
+        if (registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
             await this.#persistencia.guardar(RANURA_PUBLICO, null);
             return;
         }
         // Una sesión ya presente (o datos cargados mientras se leía el disco) mandan.
         if (this.#estado.sesion || Object.hasOwn(this.#estado.datos, CLAVE_PUBLICA_CITAS)) return;
+        const valor = congelarProfundo(registro.valor);
         this.#estado.datos = Object.freeze(Object.assign(Object.create(null), this.#estado.datos,
-            { [CLAVE_PUBLICA_CITAS]: congelarProfundo(registro.valor) }));
+            { [CLAVE_PUBLICA_CITAS]: valor }));
+        this.#publicaDeDisco = valor;
+        this.#documento?.addEventListener(EVENTO_SERVIDOR_RESPONDIO, () => {
+            // Solo si sigue siendo la copia del disco (no una búsqueda nueva de esta sesión).
+            if (this.esCopiaDeDisco(CLAVE_PUBLICA_CITAS)) this.guardar(CLAVE_PUBLICA_CITAS, null);
+            this.#publicaDeDisco = null;
+        }, { once: true });
     }
 }
 

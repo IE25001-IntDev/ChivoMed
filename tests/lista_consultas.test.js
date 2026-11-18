@@ -172,6 +172,7 @@ describe('<tarjeta-consulta-dashboard>', () => {
 // <lista-consultas>
 // ---------------------------------------------------------------------------------------------
 import { ControladorConsultas, MENSAJES } from '../src/js/boundary/vistas/controlador_consultas.js';
+import DefaultError from '../src/js/entities/default_error.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import { desconectar } from './dobles/dom_minimo.js';
 
@@ -204,6 +205,22 @@ function montarLista({ dashboard = async () => [consultaCruda(1), consultaCruda(
 
 describe('<lista-consultas>', () => {
     before(async () => { await import('../src/js/boundary/components/dashboard/lista_consultas.js'); });
+
+    test('si el servidor no responde al volver a buscar, muestra lo guardado con su hora', async () => {
+        let caido = false;
+        const { lista, controlador, $, tarjetas } = montarLista({ dashboard: async () => {
+            if (caido) throw new DefaultError({ status: 0, code: 'conexion.error', message: 'No se pudo conectar con GalenoSV.' });
+            return [consultaCruda(1)];
+        } });
+        conectar(lista);
+        await asentar();
+        caido = true;
+        await controlador.buscar();
+        assert.equal($('estado').hidden, false);
+        assert.equal($('estado').textContent, 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
+        assert.equal(tarjetas().length, 1);
+        desconectar(lista);
+    });
 
     test('al conectarse muestra hoy en el filtro y, al cargar, una tarjeta por consulta y el resumen', async () => {
         const { lista, $, tarjetas, llamadas } = montarLista();

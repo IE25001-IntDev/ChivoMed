@@ -456,7 +456,7 @@ describe('ControladorCitas: sin red y memoria', () => {
         assert.deepEqual(estado.citas, [CITA]);
         assert.equal(estado.numeroDocumento, NUMERO);
         assert.equal(estado.desdeMemoria, true);
-        assert.equal(MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn)), 'Sin conexión. Mostrando la búsqueda de las 09:30.');
+        assert.equal(MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn)), 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
         otra.controlador.irA(2);
         await otra.controlador.siguiente();
         assert.equal(estado.paso, 3, 'las clínicas restauradas no necesitan red');

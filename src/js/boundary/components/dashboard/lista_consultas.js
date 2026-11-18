@@ -14,6 +14,7 @@ import { ControladorConsultas, motivoNoAtender, resumenResultado } from "../../v
 import { hojaDeEstilos } from "../../vistas/estilos.js";
 import { plantilla } from "../../plantilla.js";
 import { ZONA_SV } from "../../fechas_sv.js";
+import { mensajeGuardado } from "../../pwa/controlador_conexion.js";
 import "./tarjeta_consulta_dashboard.js";
 
 const PLANTILLA = plantilla(`
@@ -46,7 +47,7 @@ const PLANTILLA = plantilla(`
 <div class="cuadricula-consultas" id="cuadricula"></div>`);
 
 const hora = fecha => (fecha instanceof Date
-    ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", timeZone: ZONA_SV }) : "");
+    ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_SV }) : "");
 
 class ListaConsultas extends HTMLElement {
     #controlador = null;
@@ -139,7 +140,7 @@ class ListaConsultas extends HTMLElement {
         }
 
         const aviso = estado.cargando && !estado.consultas.length ? "Cargando consultas…"
-            : estado.desdeMemoria ? `Sin conexión. Mostrando las consultas guardadas a las ${hora(estado.actualizadoEn)}.` : null;
+            : estado.desdeMemoria ? mensajeGuardado(hora(estado.actualizadoEn)) : null;
         this.$("estado").hidden = !aviso;
         this.$("estado").textContent = aviso ?? "";
         this.$("error").hidden = !estado.error;

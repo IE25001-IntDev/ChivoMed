@@ -11,6 +11,11 @@ import { EVENTO_SERVIDOR_CAIDO, EVENTO_SERVIDOR_RESPONDIO } from "../../control/
 
 export const MENSAJE_SIN_RED = "Sin conexión con el servidor. Esta acción estará disponible cuando vuelva la conexión.";
 export const INTERVALO_VERIFICACION_MS = 20000;
+/** Aviso de las vistas que muestran lo guardado sin conexión. `hora` es "HH:MM" (o vacía). */
+export const mensajeGuardado = hora => (hora
+    ? `Sin conexión con el servidor. Mostrando lo guardado a las ${hora}.`
+    : "Sin conexión con el servidor. Mostrando lo guardado.");
+export const MENSAJE_SIN_DATOS = "No se puede conectar con el servidor y no hay datos guardados.";
 
 export class ControladorConexion {
     #ventana;
