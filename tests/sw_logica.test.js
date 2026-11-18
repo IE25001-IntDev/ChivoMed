@@ -22,6 +22,8 @@ function crearCaches(inicial = {}) {
                 async match(solicitud) { return mapa.get(clave(solicitud))?.clone(); },
                 async put(solicitud, respuesta) { registro.puestos.push([nombre, clave(solicitud)]); mapa.set(clave(solicitud), respuesta); },
                 async addAll(solicitudes) { registro.agregados.push(...solicitudes); for (const s of solicitudes) mapa.set(clave(s), new Response('ok')); },
+                async keys() { return [...mapa.keys()].map(u => new Request(u)); },
+                async delete(solicitud) { return mapa.delete(clave(solicitud)); },
             };
         },
         async keys() { return [...almacen.keys()]; },
@@ -356,6 +358,34 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         const modulo = await SW.responder(get('/js/boundary/router.js'), { fetch: sinRed(), caches, base: BASE });
         assert.equal(await modulo.text(), 'nuevo /js/boundary/router.js');
         assert.ok(caches.almacen.has(shell));
+    });
+
+    // El puntero (chivomed-vigente) solo guarda la entrada de la versión actual.
+    const PUNTERO = `https://chivomed.vigente/${SW.VERSION}`;
+    const conPunterosViejos = () => {
+        const caches = inicial();
+        caches.almacen.set(SW.CACHE_VIGENTE, new Map([
+            ['https://chivomed.vigente/2026-11-17.7', json({ shell: 'chivomed-shell-2026-11-17.7-1', datos: 'chivomed-datos-2026-11-17.7-1' })],
+            ['https://chivomed.vigente/2026-11-17.12', json({ shell: 'chivomed-shell-2026-11-17.12-1', datos: 'chivomed-datos-2026-11-17.12-1' })],
+        ]));
+        return caches;
+    };
+    const entradasPuntero = caches => [...caches.almacen.get(SW.CACHE_VIGENTE).keys()];
+
+    test('después de renovar con una versión nueva, el puntero tiene una sola entrada', async () => {
+        const caches = conPunterosViejos();
+        assert.equal(await SW.renovar({ caches, fetch: fetchNuevo(), base: BASE }), true);
+        assert.deepEqual(entradasPuntero(caches), [PUNTERO]);
+        assert.equal(await sinRedIndice(caches), 'nuevo /index.html');
+    });
+
+    test('al activar, el puntero se queda solo con la entrada de la versión actual', async () => {
+        const caches = conPunterosViejos();
+        await SW.limpiarVersionesViejas(caches);
+        assert.deepEqual(entradasPuntero(caches), [], 'sin renovar todavía, no queda ninguna de otras versiones');
+        await SW.renovar({ caches, fetch: fetchNuevo(), base: BASE });
+        await SW.limpiarVersionesViejas(caches);
+        assert.deepEqual(entradasPuntero(caches), [PUNTERO]);
     });
 
     test('activate conserva el caché vigente y su puntero', async () => {

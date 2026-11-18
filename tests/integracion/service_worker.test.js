@@ -40,6 +40,8 @@ function worker({ fallaInstalacion = false } = {}) {
                         if (destino.includes('/galenosv/api/') && !destino.includes('/publico/tipos-documento')) assert.fail('Solo se guardan catálogos públicos');
                         cache.set(destino, respuesta);
                     },
+                    keys: async () => [...cache.keys()].map(u => new Request(u)),
+                    delete: async r => cache.delete(typeof r === 'string' ? r : r.url),
                 };
             },
         },

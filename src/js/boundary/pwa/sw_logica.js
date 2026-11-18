@@ -22,14 +22,14 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-17.17";
+    const VERSION = "2026-11-17.18";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
     const CACHE_DATOS = `${PREFIJO_DATOS}${VERSION}`;
     const RUTA_API = "/galenosv/api/";
     const CATALOGOS_PUBLICOS = Object.freeze(["tipos-documento"]);
-    /** Caché con una entrada por versión: { shell, datos } de la copia vigente. */
+    /** Caché con la entrada de esta versión: { shell, datos } de la copia vigente (las de otras se borran). */
     const CACHE_VIGENTE = `${PREFIJO}vigente`;
     const CLAVE_VIGENTE = `https://chivomed.vigente/${VERSION}`;
 
@@ -167,6 +167,14 @@
         return { shell: CACHE_SHELL, datos: CACHE_DATOS };
     }
 
+    /** Deja en el puntero (CACHE_VIGENTE) solo la entrada de esta versión, si existe el caché. */
+    async function limpiarPuntero(caches) {
+        if (!(await caches.keys()).includes(CACHE_VIGENTE)) return;
+        const puntero = await caches.open(CACHE_VIGENTE);
+        const viejas = (await puntero.keys()).filter(solicitud => solicitud.url !== CLAVE_VIGENTE);
+        await Promise.all(viejas.map(solicitud => puntero.delete(solicitud)));
+    }
+
     async function desdePrecache(urlTexto, caches) {
         const cache = await caches.open((await cachesVigentes(caches)).shell);
         return cache.match(urlTexto);
@@ -270,6 +278,7 @@
         const conservar = new Set([nuevos.shell, nuevos.datos, CACHE_VIGENTE]);
         const anteriores = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO) && !conservar.has(nombre));
         await Promise.all(anteriores.map(nombre => caches.delete(nombre)));
+        await limpiarPuntero(caches);
         return true;
     }
 
@@ -279,6 +288,7 @@
         const vigentes = new Set([CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, shell, datos]);
         const viejos = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO) && !vigentes.has(nombre));
         await Promise.all(viejos.map(nombre => caches.delete(nombre)));
+        await limpiarPuntero(caches);
         return viejos;
     }
 
