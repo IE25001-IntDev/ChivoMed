@@ -24,13 +24,13 @@ describe('DefaultService (Suite de Pruebas Unitarias P2-2)', () => {
         };
 
         const servicio = new DefaultService('elementos', MockEntity, {
-            baseUrl: 'http://api.local/galenosv',
+            baseUrl: 'http://api.local/galeno',
             fetchImpl: fakeFetch
         });
 
         const res = await servicio.listar();
         assert.equal(peticionCapturada.opts.method, 'GET');
-        assert.equal(peticionCapturada.url, 'http://api.local/galenosv/elementos');
+        assert.equal(peticionCapturada.url, 'http://api.local/galeno/elementos');
         assert.ok(res instanceof DefaultResponse);
         assert.equal(res.status, 200);
         assert.equal(res.data.length, 1);

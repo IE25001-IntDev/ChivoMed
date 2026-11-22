@@ -213,7 +213,7 @@ describe('verificarServidor (GET liviano, sin la copia del service worker)', () 
         const llamadas = [];
         globalThis.fetch = async (url, opciones) => { llamadas.push([url, opciones.cache, opciones.method ?? 'GET']); return Response.json([]); };
         assert.equal(await verificarServidor(), true);
-        assert.deepEqual(llamadas, [['/galenosv/api/publico/tipos-documento?verificar=1', 'no-store', 'GET']]);
+        assert.deepEqual(llamadas, [['/galeno/api/publico/tipos-documento?verificar=1', 'no-store', 'GET']]);
     });
 
     test('cualquier respuesta real del backend cuenta, aunque sea un error (401, 404, 500)', async () => {

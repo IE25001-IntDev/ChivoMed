@@ -54,7 +54,7 @@ before(async () => {
             const url = new URL(req.url, 'http://api.test');
             let body = '';
             for await (const trozo of req) body += trozo;
-            const peticion = { metodo: req.method, ruta: url.pathname.replace('/galenosv/api/', ''),
+            const peticion = { metodo: req.method, ruta: url.pathname.replace('/galeno/api/', ''),
                 query: Object.fromEntries(url.searchParams), headers: req.headers, body,
                 datos: body ? JSON.parse(body) : null };
             peticiones.push(peticion);
@@ -70,10 +70,10 @@ before(async () => {
             res.end();
         }
     });
-    process.env.API_URL = `${await escuchar(api)}/galenosv/api`;
+    process.env.API_URL = `${await escuchar(api)}/galeno/api`;
     ({ server: proxy } = await import('../../scripts/dev_server.js'));
     base = await escuchar(proxy);
-    API_CONFIG.baseUrl = '/galenosv/api';
+    API_CONFIG.baseUrl = '/galeno/api';
     globalThis.fetch = (url, opciones) => originalFetch(new URL(url, base), opciones);
 });
 

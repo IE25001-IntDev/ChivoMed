@@ -206,9 +206,9 @@ describe('servicioConsulta', () => {
     test('F8: salirDeConsulta usa AtencionService real: DELETE /atencion/consulta con X-CSRF-Token', async () => {
         const peticiones = [];
         const fetchImpl = async (url, opciones) => { peticiones.push({ url, opciones }); return new Response(null, { status: 204 }); };
-        const atencion = new AtencionService({ baseUrl: 'http://api.prueba/galenosv/api', fetchImpl, autenticar: async () => ({ csrfToken: 'csrf-prueba' }) });
+        const atencion = new AtencionService({ baseUrl: 'http://api.prueba/galeno/api', fetchImpl, autenticar: async () => ({ csrfToken: 'csrf-prueba' }) });
         const respuesta = await servicioConsulta({ atencion }).salirDeConsulta();
-        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/consulta');
+        assert.equal(peticiones[0].url, 'http://api.prueba/galeno/api/atencion/consulta');
         assert.equal(peticiones[0].opciones.method, 'DELETE');
         assert.equal(peticiones[0].opciones.headers.get('X-CSRF-Token'), 'csrf-prueba');
         assert.equal(respuesta.data, null);

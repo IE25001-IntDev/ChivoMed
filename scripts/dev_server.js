@@ -22,7 +22,7 @@ if (fs.existsSync(envPath)) {
 }
 
 const PORT = parseInt(process.env.PORT || env.PORT || '3000', 10);
-const API_URL = (process.env.API_URL || env.API_URL || 'http://localhost:9080/galenosv/api').replace(/\/+$/, '');
+const API_URL = (process.env.API_URL || env.API_URL || 'http://localhost:9080/galeno/api').replace(/\/+$/, '');
 const targetBackend = new URL(API_URL);
 
 const MIME_TYPES = {
@@ -39,12 +39,12 @@ const MIME_TYPES = {
 
 const server = http.createServer((req, res) => {
     // 1. Proxy para la API de GalenoSV
-    const isApiRequest = req.url === '/galenosv/api' ||
-                         req.url.startsWith('/galenosv/api/') ||
-                         req.url.startsWith('/galenosv/api?');
+    const isApiRequest = req.url === '/galeno/api' ||
+                         req.url.startsWith('/galeno/api/') ||
+                         req.url.startsWith('/galeno/api?');
 
     if (isApiRequest) {
-        const subPath = req.url.slice('/galenosv/api'.length);
+        const subPath = req.url.slice('/galeno/api'.length);
         const proxyUrl = new URL(API_URL + subPath);
 
         const headers = { ...req.headers, host: targetBackend.host };
@@ -128,6 +128,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     server.listen(PORT, '127.0.0.1', () => {
         console.log(`\n🚀 Servidor ChivoMed (Estáticos + Proxy GalenoSV) corriendo en:`);
         console.log(`👉 http://127.0.0.1:${PORT}`);
-        console.log(`🔗 Proxy configurado: /galenosv/api -> ${API_URL}\n`);
+        console.log(`🔗 Proxy configurado: /galeno/api -> ${API_URL}\n`);
     });
 }

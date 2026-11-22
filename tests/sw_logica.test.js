@@ -56,12 +56,12 @@ describe('clasificar', () => {
         ['hoja de estilos del shell', get('/resources/vistas.css'), E.RED_PRIMERO_SHELL],
         ['módulo del shell con query', get('/js/boundary/router.js?v=2'), E.NINGUNA],
         ['archivo fuera del precache', get('/js/boundary/medico.js'), E.NINGUNA],
-        ['catálogo público', get('/galenosv/api/publico/tipos-documento'), E.PUBLICO],
-        ['otro recurso público', get('/galenosv/api/publico/citas?doc=1'), E.PUBLICO],
-        ['sesión', get('/galenosv/api/auth/me'), E.NINGUNA],
-        ['datos clínicos', get('/galenosv/api/consultas/123/procedimientos'), E.NINGUNA],
-        ['login (escritura)', { method: 'POST', url: url('/galenosv/api/auth/login') }, E.NINGUNA],
-        ['escritura pública', { method: 'POST', url: url('/galenosv/api/publico/tipos-documento') }, E.NINGUNA],
+        ['catálogo público', get('/galeno/api/publico/tipos-documento'), E.PUBLICO],
+        ['otro recurso público', get('/galeno/api/publico/citas?doc=1'), E.PUBLICO],
+        ['sesión', get('/galeno/api/auth/me'), E.NINGUNA],
+        ['datos clínicos', get('/galeno/api/consultas/123/procedimientos'), E.NINGUNA],
+        ['login (escritura)', { method: 'POST', url: url('/galeno/api/auth/login') }, E.NINGUNA],
+        ['escritura pública', { method: 'POST', url: url('/galeno/api/publico/tipos-documento') }, E.NINGUNA],
         ['HEAD del shell', { method: 'HEAD', url: url('/index.html') }, E.NINGUNA],
         ['otro origen', { method: 'GET', url: 'https://otro.example/index.html', mode: 'navigate' }, E.NINGUNA],
         ['URL inválida', { method: 'GET', url: 'no es una url' }, E.NINGUNA],
@@ -76,17 +76,17 @@ describe('clasificar', () => {
 
 describe('esCatalogoCacheable', () => {
     test('solo los catálogos permitidos y sin query', () => {
-        assert.equal(SW.esCatalogoCacheable(url('/galenosv/api/publico/tipos-documento')), true);
-        assert.equal(SW.esCatalogoCacheable(url('/galenosv/api/publico/tipos-documento/')), true);
-        assert.equal(SW.esCatalogoCacheable(url('/galenosv/api/publico/tipos-documento?x=1')), false);
-        assert.equal(SW.esCatalogoCacheable(url('/galenosv/api/publico/citas')), false);
-        assert.equal(SW.esCatalogoCacheable(url('/galenosv/api/tipos-documento')), false);
+        assert.equal(SW.esCatalogoCacheable(url('/galeno/api/publico/tipos-documento')), true);
+        assert.equal(SW.esCatalogoCacheable(url('/galeno/api/publico/tipos-documento/')), true);
+        assert.equal(SW.esCatalogoCacheable(url('/galeno/api/publico/tipos-documento?x=1')), false);
+        assert.equal(SW.esCatalogoCacheable(url('/galeno/api/publico/citas')), false);
+        assert.equal(SW.esCatalogoCacheable(url('/galeno/api/tipos-documento')), false);
     });
 });
 
 describe('responder: auth, escrituras y datos clínicos', () => {
-    for (const solicitud of [get('/galenosv/api/auth/me'), get('/galenosv/api/consultas'),
-        { method: 'POST', url: url('/galenosv/api/auth/logout') }, { method: 'PUT', url: url('/galenosv/api/consultas/1/cierre') }]) {
+    for (const solicitud of [get('/galeno/api/auth/me'), get('/galeno/api/consultas'),
+        { method: 'POST', url: url('/galeno/api/auth/logout') }, { method: 'PUT', url: url('/galeno/api/consultas/1/cierre') }]) {
         test(`${solicitud.method} ${new URL(solicitud.url).pathname} no se intercepta ni toca la caché`, () => {
             const caches = crearCaches();
             const fetch = crearFetch();
@@ -149,8 +149,8 @@ describe('responder: archivos del shell', () => {
     });
 });
 
-describe('responder: /galenosv/api/publico/* (red primero)', () => {
-    const TIPOS = '/galenosv/api/publico/tipos-documento';
+describe('responder: /galeno/api/publico/* (red primero)', () => {
+    const TIPOS = '/galeno/api/publico/tipos-documento';
 
     test('en línea devuelve la red y guarda el catálogo en el caché de datos', async () => {
         const caches = crearCaches();
@@ -233,7 +233,7 @@ describe('responder: /galenosv/api/publico/* (red primero)', () => {
     }
 
     test('un recurso público que no es catálogo (p. ej. citas) nunca se guarda ni se sirve de caché', async () => {
-        const CITAS = '/galenosv/api/publico/citas?documento=00000000-0';
+        const CITAS = '/galeno/api/publico/citas?documento=00000000-0';
         const caches = crearCaches();
         await SW.responder(get(CITAS), { fetch: crearFetch(() => json([{ fecha: 'hoy' }])), caches, base: BASE });
         assert.deepEqual(caches.registro.puestos, []);
@@ -327,7 +327,7 @@ describe('atenderMensaje: reclamar una página sin control (Ctrl+Shift+R)', () =
 
 // Punto 4: caché renovado en cada inicio con red, sin perder el modo sin conexión.
 describe('renovar: copia nueva completa del precache y los catálogos', () => {
-    const TIPOS_URL = url('/galenosv/api/publico/tipos-documento');
+    const TIPOS_URL = url('/galeno/api/publico/tipos-documento');
     const fetchNuevo = (marca = 'nuevo', falla = null) => crearFetch(destino => {
         if (falla && destino.endsWith(falla)) return new TypeError('Failed to fetch');
         if (destino === TIPOS_URL) return json([{ nombre: `DUI ${marca}` }]);
@@ -339,7 +339,7 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         'chivomed-shell-2026-01-01.1': {}, 'otra-app-v1': {},
     });
     const sinRedIndice = async caches => (await SW.responder(get('/', { mode: 'navigate' }), { fetch: sinRed(), caches, base: BASE })).text();
-    const sinRedTipos = async caches => (await SW.responder(get('/galenosv/api/publico/tipos-documento'), { fetch: sinRed(), caches, base: BASE })).json();
+    const sinRedTipos = async caches => (await SW.responder(get('/galeno/api/publico/tipos-documento'), { fetch: sinRed(), caches, base: BASE })).json();
     const nombresChivomed = async caches => (await caches.keys()).filter(n => n.startsWith(SW.PREFIJO)).sort();
 
     test('renovación completa: cambia al caché nuevo y borra los anteriores', async () => {
@@ -467,7 +467,7 @@ describe('renovar: copia nueva completa del precache y los catálogos', () => {
         const caches = inicial();
         await SW.renovar({ caches, fetch: fetchNuevo(), base: BASE });
         const { datos, shell } = await SW.cachesVigentes(caches);
-        await SW.responder(get('/galenosv/api/publico/tipos-documento'), { fetch: crearFetch(() => json([{ nombre: 'DUI red' }])), caches, base: BASE });
+        await SW.responder(get('/galeno/api/publico/tipos-documento'), { fetch: crearFetch(() => json([{ nombre: 'DUI red' }])), caches, base: BASE });
         assert.deepEqual(await (await caches.almacen.get(datos).get(TIPOS_URL).clone()).json(), [{ nombre: 'DUI red' }]);
         const modulo = await SW.responder(get('/js/boundary/router.js'), { fetch: sinRed(), caches, base: BASE });
         assert.equal(await modulo.text(), 'nuevo /js/boundary/router.js');

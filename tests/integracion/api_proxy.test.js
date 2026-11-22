@@ -11,22 +11,22 @@ test("el proxy de dev_server.js conserva ruta, query, cuerpo y cookies hacia el 
     const cuerpo = { idTipoDocumento: "10000000-0000-4000-8000-000000000001", numeroDocumento: "00000000-0" };
     const backend = http.createServer(async (req, res) => {
         if (!disponible) { req.socket.destroy(); return; }
-        assert.equal(req.url, "/galenosv/api/auth/login?origen=prueba");
+        assert.equal(req.url, "/galeno/api/auth/login?origen=prueba");
         assert.equal(req.method, "POST");
         assert.equal(req.headers.cookie, "JSESSIONID=sesion-sintetica");
         let recibido = "";
         for await (const fragmento of req) recibido += fragmento;
         assert.deepEqual(JSON.parse(recibido), cuerpo);
-        res.writeHead(204, { "Set-Cookie": "JSESSIONID=nueva-sesion; Path=/galenosv; HttpOnly" });
+        res.writeHead(204, { "Set-Cookie": "JSESSIONID=nueva-sesion; Path=/galeno; HttpOnly" });
         res.end();
     });
     await new Promise(resolve => backend.listen(0, "127.0.0.1", resolve));
-    process.env.API_URL = `http://127.0.0.1:${backend.address().port}/galenosv/api`;
+    process.env.API_URL = `http://127.0.0.1:${backend.address().port}/galeno/api`;
     const { server: proxy } = await import("../../scripts/dev_server.js");
     await new Promise(resolve => proxy.listen(0, "127.0.0.1", resolve));
     t.after(() => Promise.all([cerrar(backend), cerrar(proxy)]));
 
-    const url = `http://127.0.0.1:${proxy.address().port}/galenosv/api/auth/login?origen=prueba`;
+    const url = `http://127.0.0.1:${proxy.address().port}/galeno/api/auth/login?origen=prueba`;
     const opciones = {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: "JSESSIONID=sesion-sintetica" },

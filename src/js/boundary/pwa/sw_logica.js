@@ -15,7 +15,7 @@
  *    esta versión sigue siendo la activa se apunta a ella (caché CACHE_VIGENTE) y se borran las
  *    demás de su misma versión (las de otras versiones las borra limpiarVersionesViejas al
  *    activarse); si falla, o ya hay otra versión activa, se descarta y se conserva lo anterior. `cachesVigentes()` dice siempre de dónde servir; sin puntero, los de la instalación.
- *  - /galenosv/api/publico/* → red primero; solo los catálogos de CATALOGOS_PUBLICOS se guardan
+ *  - /galeno/api/publico/* → red primero; solo los catálogos de CATALOGOS_PUBLICOS se guardan
  *    en caché y se usan como respaldo (sin red o con un 502/503/504), marcados con la cabecera
  *    CABECERA_COPIA. Nada de datos clínicos.
  *  - Cualquier otra ruta de la API (auth, escrituras, datos clínicos) → nunca se toca ni se cachea.
@@ -24,12 +24,12 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-17.28";
+    const VERSION = "2026-11-22.1";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
     const CACHE_DATOS = `${PREFIJO_DATOS}${VERSION}`;
-    const RUTA_API = "/galenosv/api/";
+    const RUTA_API = "/galeno/api/";
     const CATALOGOS_PUBLICOS = Object.freeze(["tipos-documento"]);
     /** Caché con la entrada de esta versión: { shell, datos } de la copia vigente (las de otras se borran). */
     const CACHE_VIGENTE = `${PREFIJO}vigente`;

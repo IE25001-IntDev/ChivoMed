@@ -7,7 +7,7 @@ import ConsultaService from '../src/js/control/consulta_service.js';
 
 // Datos inventados; nunca datos reales de pacientes ni de personal.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-const BASE = 'http://api.prueba/galenosv/api';
+const BASE = 'http://api.prueba/galeno/api';
 
 function fetchDoble(respuesta) {
     const peticiones = [];

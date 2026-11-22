@@ -3,12 +3,12 @@
 Frontend de **GalenoSV**: una PWA de una sola página (SPA) hecha solo con JavaScript nativo
 (ES Modules) y Web Components con Shadow DOM. No usa frameworks, librerías, bundler ni
 dependencias de npm. Consume el API REST del backend Jakarta EE
-`galenasv` (repositorio aparte, que se clona junto a este como `../galenasv`), cuyo contexto web es `/galenosv`.
+`galenasv` (repositorio aparte, que se clona junto a este como `../galenasv`), cuyo contexto web es `/galeno`.
 
 ## Requisitos
 
 - **Node.js 22.5** o superior (solo para el servidor de desarrollo y las pruebas).
-- El **backend GalenoSV** corriendo en `http://localhost:9080/galenosv`, con PostgreSQL y los
+- El **backend GalenoSV** corriendo en `http://localhost:9080/galeno`, con PostgreSQL y los
   datos demo cargados. Cómo levantarlo desde cero: `../galenasv/docs/LEVANTAR.md`.
 - El frontend debe correr en el **puerto 3000**. El backend rechaza con `403 auth.origen` las
   escrituras (incluido el login) que vengan de otro origen. No cambies `PORT`.
@@ -16,7 +16,7 @@ dependencias de npm. Consume el API REST del backend Jakarta EE
 ## Arranque
 
 ```bash
-npm start          # http://localhost:3000 (sirve src/ y hace de proxy de /galenosv/api)
+npm start          # http://localhost:3000 (sirve src/ y hace de proxy de /galeno/api)
 npm test           # primero unidad/componentes; después integración del frontend
 npm run test:unit
 npm run test:integration
@@ -29,7 +29,7 @@ efímeros. La matriz por historia de usuario, los resultados y los límites est�
 [docs/pruebas.md](docs/pruebas.md).
 
 `npm start` funciona sin `.env`. Por defecto el proxy apunta a
-`http://localhost:9080/galenosv/api`. Para otro backend, crea `.env` con `API_URL=…`.
+`http://localhost:9080/galeno/api`. Para otro backend, crea `.env` con `API_URL=…`.
 Todo el tráfico al API pasa por el proxy del puerto 3000, porque el backend no implementa CORS.
 
 Abre `http://localhost:3000`. La ruta inicial es la búsqueda pública de citas (`#/citas`). El

@@ -43,13 +43,13 @@ test("el login envía tipo y número de documento, sin contraseña, y verifica l
     };
     assert.deepEqual(await iniciarSesion(TIPO, "  00000000-0 "), sesion());
     assert.equal(llamadas.length, 2);
-    assert.equal(llamadas[0].url, "/galenosv/api/auth/login");
+    assert.equal(llamadas[0].url, "/galeno/api/auth/login");
     assert.equal(llamadas[0].opciones.method, "POST");
     assert.equal(llamadas[0].opciones.headers["Content-Type"], "application/json");
     const cuerpo = JSON.parse(llamadas[0].opciones.body);
     assert.deepEqual(cuerpo, { idTipoDocumento: TIPO, numeroDocumento: "00000000-0" });
     assert.equal("password" in cuerpo, false);
-    assert.equal(llamadas[1].url, "/galenosv/api/auth/me");
+    assert.equal(llamadas[1].url, "/galeno/api/auth/me");
     for (const { url, opciones } of llamadas) {
         assert.equal(opciones.credentials, "include");
         assert.equal(opciones.cache, "no-store");
@@ -143,7 +143,7 @@ test("los tipos de documento se piden sin sesión y solo se devuelven los activo
     };
     const tipos = await listarTiposDocumento();
     assert.equal(llamadas.length, 1);
-    assert.equal(llamadas[0].url, "/galenosv/api/publico/tipos-documento");
+    assert.equal(llamadas[0].url, "/galeno/api/publico/tipos-documento");
     assert.equal(llamadas[0].opciones.method, "GET");
     assert.equal(llamadas[0].opciones.headers["X-CSRF-Token"], undefined);
     assert.deepEqual(tipos, [
@@ -247,7 +247,7 @@ test("avisa servidor-caido o servidor-respondio en document; la copia del servic
 
 test("el logout envía el token CSRF y conserva el error si falla el servidor", async () => {
     globalThis.fetch = async (url, opciones) => {
-        assert.equal(url, "/galenosv/api/auth/logout");
+        assert.equal(url, "/galeno/api/auth/logout");
         assert.equal(opciones.method, "POST");
         assert.equal(opciones.headers["X-CSRF-Token"], sesion().csrfToken);
         assert.equal(opciones.credentials, "include");

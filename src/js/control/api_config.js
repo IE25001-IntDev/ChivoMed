@@ -2,6 +2,6 @@
 export const API_CONFIG = {
     baseUrl: globalThis.CHIVOMED_CONFIG?.baseUrl
         ?? (typeof process !== "undefined" ? process.env?.API_URL : undefined)
-        ?? "/galenosv/api",
+        ?? "/galeno/api",
     credentials: "include",
 };

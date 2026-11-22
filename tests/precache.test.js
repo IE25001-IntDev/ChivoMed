@@ -79,7 +79,7 @@ describe('Lista de precache', () => {
     test('no se precachea el service worker, las páginas viejas ni la API', () => {
         for (const ruta of SW.PRECACHE) {
             assert.ok(!/(^|\/)sw\.js$/.test(ruta), ruta);
-            assert.ok(!ruta.includes('paginas/') && !ruta.includes('galenosv/api'), ruta);
+            assert.ok(!ruta.includes('paginas/') && !ruta.includes('galeno/api'), ruta);
         }
         assert.ok(!precache.has('inicio.html') && !precache.has('portada.html'));
     });

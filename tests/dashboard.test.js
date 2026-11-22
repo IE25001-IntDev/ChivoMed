@@ -27,13 +27,13 @@ function fetchDoble(respuesta) {
 }
 
 describe('AtencionService', () => {
-    const base = { baseUrl: 'http://api.prueba/galenosv/api', autenticar: async () => ({ csrfToken: 'csrf-prueba' }) };
+    const base = { baseUrl: 'http://api.prueba/galeno/api', autenticar: async () => ({ csrfToken: 'csrf-prueba' }) };
 
     test('asignaciones() pide GET /atencion/asignaciones y devuelve los DTO planos', async () => {
         const dto = { idPersonaRol: UUID(1), codigoRol: 'DOCTOR', nombreRol: 'Doctor', idClinica: UUID(2), nombreClinica: 'Clínica Prueba Norte', activa: true };
         const { peticiones, fetchImpl } = fetchDoble(Response.json([dto]));
         const respuesta = await new AtencionService({ ...base, fetchImpl }).asignaciones();
-        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/asignaciones');
+        assert.equal(peticiones[0].url, 'http://api.prueba/galeno/api/atencion/asignaciones');
         assert.equal(peticiones[0].opciones.method, 'GET');
         assert.equal(peticiones[0].opciones.headers.has('X-CSRF-Token'), false, 'un GET no envía CSRF');
         assert.deepEqual(respuesta.data, [dto]);
@@ -43,7 +43,7 @@ describe('AtencionService', () => {
     test('cambiarRol() hace PUT /atencion/rol-activo con { idPersonaRol } y el token CSRF', async () => {
         const { peticiones, fetchImpl } = fetchDoble(Response.json({ idPersonaRol: UUID(3), idConsulta: null }));
         await new AtencionService({ ...base, fetchImpl }).cambiarRol(UUID(3));
-        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/rol-activo');
+        assert.equal(peticiones[0].url, 'http://api.prueba/galeno/api/atencion/rol-activo');
         assert.equal(peticiones[0].opciones.method, 'PUT');
         assert.equal(peticiones[0].opciones.headers.get('X-CSRF-Token'), 'csrf-prueba');
         assert.deepEqual(JSON.parse(peticiones[0].opciones.body), { idPersonaRol: UUID(3) });
@@ -52,7 +52,7 @@ describe('AtencionService', () => {
     test('dashboard() pide GET /atencion/dashboard con desde y hasta', async () => {
         const { peticiones, fetchImpl } = fetchDoble(Response.json([]));
         const respuesta = await new AtencionService({ ...base, fetchImpl }).dashboard({ desde: '2026-11-01', hasta: '2026-11-13' });
-        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/dashboard?desde=2026-11-01&hasta=2026-11-13');
+        assert.equal(peticiones[0].url, 'http://api.prueba/galeno/api/atencion/dashboard?desde=2026-11-01&hasta=2026-11-13');
         assert.equal(peticiones[0].opciones.method, 'GET');
         assert.deepEqual(respuesta.data, []);
     });
@@ -60,7 +60,7 @@ describe('AtencionService', () => {
     test('dashboard() sin fechas no envía parámetros (el backend usa hoy)', async () => {
         const { peticiones, fetchImpl } = fetchDoble(Response.json([]));
         await new AtencionService({ ...base, fetchImpl }).dashboard();
-        assert.equal(peticiones[0].url, 'http://api.prueba/galenosv/api/atencion/dashboard');
+        assert.equal(peticiones[0].url, 'http://api.prueba/galeno/api/atencion/dashboard');
     });
 
     test('valorPaso() pide el valor del paso con el id codificado y devuelve el DTO plano', async () => {
@@ -68,7 +68,7 @@ describe('AtencionService', () => {
         const { peticiones, fetchImpl } = fetchDoble(Response.json(dto));
         const servicio = new AtencionService({ ...base, fetchImpl });
         const respuesta = await servicio.valorPaso(UUID(7));
-        assert.equal(peticiones[0].url, `http://api.prueba/galenosv/api/atencion/dashboard/pasos/${UUID(7)}/valor`);
+        assert.equal(peticiones[0].url, `http://api.prueba/galeno/api/atencion/dashboard/pasos/${UUID(7)}/valor`);
         assert.deepEqual(respuesta.data, dto);
         await servicio.valorPaso('a/b');
         assert.match(peticiones[1].url, /pasos\/a%2Fb\/valor$/);

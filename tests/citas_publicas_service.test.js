@@ -13,7 +13,7 @@ const json = (cuerpo, status = 200, headers = {}) => new Response(JSON.stringify
 function preparar(responder) {
     const llamadas = [];
     const servicio = new CitasPublicasService({
-        baseUrl: '/galenosv/api',
+        baseUrl: '/galeno/api',
         fetchImpl: async (url, opts) => { llamadas.push({ url, opts, cuerpo: opts.body ? JSON.parse(opts.body) : undefined }); return responder(url, opts); },
     });
     return { servicio, llamadas };
@@ -27,7 +27,7 @@ describe('CitasPublicasService: rutas y cuerpos', () => {
         assert.ok(Object.isFrozen(clinicas) && Object.isFrozen(clinicas[0]));
         const [{ url, opts, cuerpo }] = llamadas;
         assert.equal(opts.method, 'POST');
-        assert.equal(url, '/galenosv/api/publico/clinicas');
+        assert.equal(url, '/galeno/api/publico/clinicas');
         assert.deepEqual(cuerpo, { idTipoDocumento: UUID(1), numeroDocumento: NUMERO });
         assert.ok(!url.includes(NUMERO));
     });
@@ -38,7 +38,7 @@ describe('CitasPublicasService: rutas y cuerpos', () => {
         const citas = await servicio.citas(DOC, { idClinica: UUID(10), desde: '2026-11-01', hasta: '2026-11-30' });
         assert.deepEqual(citas, [cita], 'se descartan las entradas incompletas');
         assert.ok(Object.isFrozen(citas[0].procedimientos));
-        assert.equal(llamadas[0].url, '/galenosv/api/publico/citas');
+        assert.equal(llamadas[0].url, '/galeno/api/publico/citas');
         assert.deepEqual(llamadas[0].cuerpo, { idTipoDocumento: UUID(1), numeroDocumento: NUMERO,
             idClinica: UUID(10), desde: '2026-11-01', hasta: '2026-11-30' });
         assert.ok(!llamadas[0].url.includes(NUMERO));
@@ -60,7 +60,7 @@ describe('CitasPublicasService: ticket', () => {
         const ticket = await servicio.ticket(UUID(20), DOC);
         assert.ok(ticket.blob instanceof Blob);
         assert.equal(ticket.nombre, 'ticket-cita-30000000.pdf');
-        assert.equal(llamadas[0].url, `/galenosv/api/publico/citas/${UUID(20)}/ticket`);
+        assert.equal(llamadas[0].url, `/galeno/api/publico/citas/${UUID(20)}/ticket`);
         assert.deepEqual(llamadas[0].cuerpo, { idTipoDocumento: UUID(1), numeroDocumento: NUMERO });
         assert.match(llamadas[0].opts.headers.get('Accept'), /application\/pdf/);
     });

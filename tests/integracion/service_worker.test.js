@@ -18,7 +18,7 @@ function worker({ fallaInstalacion = false } = {}) {
         fetch: async solicitud => {
             if (!enLinea) throw new TypeError('sin red');
             const destino = typeof solicitud === 'string' ? solicitud : solicitud.url;
-            return destino.includes('/galenosv/api/publico/')
+            return destino.includes('/galeno/api/publico/')
                 ? new Response('[]', { headers: { 'Content-Type': 'application/json' } })
                 : new Response('red');
         },
@@ -37,7 +37,7 @@ function worker({ fallaInstalacion = false } = {}) {
                     match: async r => cache.get(typeof r === 'string' ? r : r.url)?.clone(),
                     put: async (r, respuesta) => {
                         const destino = typeof r === 'string' ? r : r.url;
-                        if (destino.includes('/galenosv/api/') && !destino.includes('/publico/tipos-documento')) assert.fail('Solo se guardan catálogos públicos');
+                        if (destino.includes('/galeno/api/') && !destino.includes('/publico/tipos-documento')) assert.fail('Solo se guardan catálogos públicos');
                         cache.set(destino, respuesta);
                     },
                     keys: async () => [...cache.keys()].map(u => new Request(u)),
@@ -91,7 +91,7 @@ test('PWA: navegación y módulos funcionan sin red; sesión y escrituras quedan
     const navegacion = { ...request, url: 'http://localhost:3000/', mode: 'navigate' };
     assert.equal(await (await emitir(w, 'fetch', { request: navegacion })).text(), 'copia instalada');
     for (const [method, ruta] of [['GET', 'auth/me'], ['GET', 'atencion/dashboard'], ['POST', 'publico/citas'], ['PUT', 'consultas/1/cierre']]) {
-        assert.equal(emitir(w, 'fetch', { request: { method, url: `http://localhost:3000/galenosv/api/${ruta}` } }), null);
+        assert.equal(emitir(w, 'fetch', { request: { method, url: `http://localhost:3000/galeno/api/${ruta}` } }), null);
     }
 });
 
