@@ -21,6 +21,9 @@ Solo se entrega la carpeta `src` (zip). La imagen es `hp24002/galeno-frontend:1.
 | 2026-11-22 | `69ea99a` | `docker/default.conf`: sitio de nginx | Ver "Motivos de la configuración de nginx" |
 | 2026-11-22 | `65ddb8e` | `docker/Dockerfile`: `debian:stable`, nginx por apt, sin caché de apt, logs a stdout/stderr, `EXPOSE 80`, `CMD ["nginx","-g","daemon off;"]` | La imagen no copia la app: llega por el volumen en `/var/www/html` |
 | 2026-11-22 | `b68e57a` | `docker/README.md` | Cómo construir, probar y publicar la imagen |
+| 2026-11-22 | `c29e222` | Borra `src/examples/` (`example.html`, `example.js`) | Solo se entrega `src`; nada lo importa ni está en el precache |
+| 2026-11-22 | `2cc2e38` | Borra `src/js/boundary/components/citas/indicador_pasos.js` y sus 5 pruebas de `tests/componentes_citas.test.js` (quedan las 5 de `<tarjeta-cita>`) | Ninguna vista lo usa desde `6c4510a` (quitó el asistente por pasos de la HU1); solo lo cargaba la prueba. `PASOS` de `controlador_citas.js` se queda: lo usa `pasoAlcanzable` |
+| 2026-11-22 | `340ff41` | `citas.css`: quita `.solo-lectores`; versión de caché del SW `2026-11-22.1` → `2026-11-22.2` | Solo la usaba `<indicador-pasos>` (ni `vista-citas` ni `tarjeta-cita`; `pwa.css` y `app_shell.css` tienen su propia copia). `citas.css` está en el precache. No había reglas de `indicador-pasos`, `lista-pasos`, `numero-paso`, `nombre-paso` ni `boton-paso`, y `estilos.js` no tenía nada propio del indicador |
 
 `grep -rn galenosv --exclude-dir=node_modules .` después del cambio solo encuentra: el nombre de
 los paquetes Java en `CLAUDE.md`/`AGENTS.md` (correcto, los paquetes siguen siendo `galenosv`),
@@ -53,7 +56,19 @@ commits por regla del proyecto). El `.env` local (no versionado) también se act
   `url()`, iconos del manifiesto) en los `.js`, `.html`, `.css` y `.webmanifest` de `src/`; 0
   apuntan fuera de `src/` o a un archivo inexistente. Las 72 entradas de `PRECACHE` existen.
 - No hay URLs absolutas a otros servidores (ni CDN ni el puerto 9080).
-- `src/examples/` no se carga desde la SPA; se entrega igual porque está en `src`.
+- `src/examples/` no se cargaba desde la SPA; se borró después (ver "Archivos sin uso en `src/`").
+
+### Archivos sin uso en `src/`
+
+Análisis de alcanzabilidad: desde `src/index.html`, `src/sw.js` y `src/manifest.webmanifest`
+se siguen `import`, `import()`, `importScripts`, `href`, `src`, `url()`, `new URL(…, import.meta.url)`,
+cadenas con rutas relativas a `.js`/`.css`/`.png`/`.svg`/`.html`, las entradas de `PRECACHE` y
+los iconos del manifiesto. Ningún archivo se alcanzaba solo por `PRECACHE`.
+
+- Antes: 73 de 76 archivos alcanzados. Sin uso: `src/examples/example.html`,
+  `src/examples/example.js` y `src/js/boundary/components/citas/indicador_pasos.js` (este último
+  solo lo importaba `tests/componentes_citas.test.js`). Coincide con el análisis del equipo.
+- Después de `c29e222`, `2cc2e38` y `340ff41`: 73 de 73.
 
 ## Pruebas
 
@@ -112,7 +127,11 @@ eventos de respuesta del navegador). Ninguna fue al puerto 9080 ni dio 403.
 | 20 | HU4 completar el paso final y cerrar | Pasó | `PUT …/finalizacion` 200; "Confirmar cierre" → `PUT /consultas/{id}/cierre` 200; "Cerrada el 22 nov 2026, 4:44 p. m.", solo lectura |
 | 21 | PWA: recarga sin red (Chromium, red desactivada) | Pasó | Antes: SW `activated`, cachés `chivomed-shell-2026-11-22.1` y `chivomed-datos-2026-11-22.1`. Sin red: `#/citas` carga desde el precache con "Sin red. Puedes seguir navegando…"; recarga con la página controlada por el SW; `#/dashboard` muestra rol y consultas guardadas y deshabilita cambiar de rol |
 | 22 | Log de nginx | Pasó | Estáticos: 118 × 200 y 3 × 304, ningún 404. API: todo 200/201/204 salvo los 401 esperados (`/auth/me` sin sesión, login del paciente) y el 502 de la prueba 3 |
-| 23 | `zip -r src.zip src` | Pasó | 90 entradas (76 archivos), 152 224 bytes; contiene `src/index.html`, `src/sw.js` y `src/manifest.webmanifest`. No se agrega a git |
+| 23 | `zip -r src.zip src` | Pasó (reemplazado por la prueba 27) | 90 entradas (76 archivos), 152 224 bytes; contiene `src/index.html`, `src/sw.js` y `src/manifest.webmanifest`. No se agrega a git |
+| 24 | `npm test` después de borrar los archivos sin uso | Pasó | unit 904/904 (antes 909: −5 pruebas de `<indicador-pasos>`), integración 25/25 |
+| 25 | HU1 en el contenedor después de la limpieza (mismos contenedores y base de prueba) | Pasó | El SW se actualizó solo: caché `chivomed-shell-2026-11-22.2`; `indicador-pasos` no está registrado. `POST /publico/clinicas` y `/publico/citas` 200: "2 citas en Clinica Docker Prueba" (hoy y la programada de mañana); "Descargar ticket" → `POST …/ticket` 200, `ticket-cita-baa75c5e.pdf` y "Ticket descargado."; un clic = una petición y una descarga (`ticket-cita-214f3b2a.pdf`) |
+| 26 | Log de nginx tras la prueba 25 | Pasó | Estáticos: 217 × 200 y 5 × 304 (incluido el precache completo de la versión nueva), ningún 4xx; nadie pide `indicador_pasos.js`; API 10 × 200 |
+| 27 | `rm -f src.zip && zip -qr src.zip src` | Pasó | 73 archivos (86 entradas con 13 carpetas), 149 695 bytes; = 72 entradas de `PRECACHE` + `sw.js`. Sin `examples/` ni `indicador_pasos.js`. No se agrega a git |
 
 Observaciones:
 - La invitación a instalar la PWA (`<install-prompt>`, diálogo modal) apareció en `http://localhost`
