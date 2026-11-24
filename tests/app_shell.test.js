@@ -340,3 +340,41 @@ describe('<app-shell>: desconexión', () => {
         assert.equal(ctx.vista().localName, 'vista-sin-conexion');
     });
 });
+
+describe('<app-shell>: herramientas plegables', () => {
+    test('abre y colapsa los controles de la vista sin reemplazarla; se restablece al navegar', async () => {
+        const ctx = await montar('#/citas', 'vista-citas');
+        const boton = ctx.raiz.getElementById('herramientas');
+        const vista = ctx.vista();
+        assert.equal(boton.hidden, false);
+        assert.equal(boton.textContent, 'Documento y filtros');
+        assert.equal(boton.getAttribute('aria-expanded'), 'false');
+        boton.click();
+        assert.equal(vista.hasAttribute('herramientas-abiertas'), true);
+        assert.equal(boton.getAttribute('aria-expanded'), 'true');
+        boton.click();
+        assert.equal(vista.hasAttribute('herramientas-abiertas'), false);
+        assert.equal(ctx.vista(), vista);
+        ctx.shell.dispatchEvent(new Event('abrir-herramientas'));
+        assert.equal(boton.getAttribute('aria-expanded'), 'true');
+        const escape = new Event('keydown');
+        Object.defineProperty(escape, 'key', { value: 'Escape' });
+        ctx.raiz.dispatchEvent(escape);
+        assert.equal(boton.getAttribute('aria-expanded'), 'false');
+        assert.equal(ctx.raiz.activeElement, boton);
+        ventana.location.hash = '#/no-existe';
+        await ctx.esperar('vista-no-encontrada');
+        assert.equal(boton.hidden, true);
+        assert.equal(boton.getAttribute('aria-expanded'), 'false');
+    });
+
+    test('el dashboard ofrece rol y filtros junto al menú de sesión plegado', async () => {
+        servidor(() => json(sesion()));
+        const ctx = await montar('#/dashboard', 'vista-dashboard');
+        assert.equal(ctx.raiz.getElementById('herramientas').textContent, 'Rol y filtros');
+        const menu = ctx.raiz.getElementById('sesion-menu');
+        assert.equal(menu.hidden, false);
+        assert.equal(menu.hasAttribute('open'), false);
+        assert.equal(menu.querySelector('session-bar'), ctx.barra());
+    });
+});

@@ -13,7 +13,7 @@ export const errorHttp = (status, code = null, message = '') => new DefaultError
 
 export const paso = (n, extra = {}) => ({
     idConsultaProcedimientoPaso: UUID(100 + n), nombre: `Paso ${n}`, orden: n, nivel: 0, estado: 'COMPLETADO',
-    responsable: { nombre: 'Persona Responsable', rol: 'Doctor' },
+    responsable: { nombre: 'Persona Responsable', rol: 'Doctor' }, rolPaso: { idRol: UUID(700) },
     fechaInicio: '2026-11-13T08:00:00-06:00', fechaFin: '2026-11-13T08:10:00-06:00', tieneValor: true, ...extra,
 });
 export const pendiente = (n, extra = {}) => paso(n, { nivel: 1, estado: 'PENDIENTE', fechaFin: null, tieneValor: false, ...extra });
@@ -26,7 +26,7 @@ export const consultaB6 = (extra = {}) => ({
 });
 /** Identificador del rol Doctor en las pruebas que comparan `rolPaso.idRol` con el rol activo. */
 export const ID_ROL_DOCTOR = UUID(700);
-export const sesionCon = (codigo = 'DOCTOR', usuario = 1, idRol = undefined) => ({
+export const sesionCon = (codigo = 'DOCTOR', usuario = 1, idRol = UUID(700)) => ({
     usuario: { idUsuario: UUID(800 + usuario) },
     rolActivo: { idPersonaRol: UUID(900), codigo, ...(idRol ? { idRol } : {}) },
     csrfToken: 'csrf-prueba',

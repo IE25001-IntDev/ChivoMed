@@ -58,7 +58,7 @@ export function ranuraDe(nombre) {
 /** Lo que va a disco de cada ranura: la consulta sin el valor guardado del paso. */
 function paraDisco(ranura, valor) {
     if (ranura !== "consulta" || !valor?.detalle) return valor;
-    return { ...valor, detalle: { ...valor.detalle, valorGuardado: null } };
+    return { ...valor, detalle: { ...valor.detalle, valorGuardado: null, motivoRetroceso: null } };
 }
 
 function congelarProfundo(valor) {

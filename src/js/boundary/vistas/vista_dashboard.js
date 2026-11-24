@@ -32,7 +32,6 @@ const PLANTILLA = plantilla(`
   <h1 id="titulo" tabindex="-1">Dashboard</h1>
   <p class="subtitulo" id="activo" aria-live="polite"></p>
 
-  <h2 id="titulo-roles">Tu rol y clínica</h2>
   <p class="aviso" id="estado" role="status" hidden></p>
   <div class="mensaje-error" id="error" role="alert" tabindex="-1" hidden>
     <p id="error-texto"></p>
@@ -47,11 +46,21 @@ const PLANTILLA = plantilla(`
     <a class="boton boton-secundario" id="ir-en-curso"></a>
     <button class="boton boton-secundario" id="salir" type="button"></button>
   </div>
+  <div class="herramientas-vista">
+  <h2 id="titulo-roles">Tu rol y clínica</h2>
   <form id="selector" aria-labelledby="titulo-roles" novalidate>
-    <div class="grupos-clinica" id="grupos"></div>
+    <div class="campo">
+      <label for="clinica">Clínica donde estás asignado</label>
+      <select id="clinica" name="clinica"></select>
+    </div>
+    <details class="roles-desplegables" id="roles">
+      <summary id="rol-elegido"></summary>
+      <div id="grupos" class="lista-roles"></div>
+    </details>
     <p class="aviso aviso-red" id="sin-red" hidden></p>
     <button class="boton boton-principal" id="usar" type="submit" aria-describedby="sin-red">Usar este rol</button>
   </form>
+  </div>
 </section>
 
 <section class="tarjeta" id="consultas" aria-labelledby="titulo-consultas">
@@ -71,11 +80,20 @@ class VistaDashboard extends HTMLElement {
         event.stopPropagation();
         if (typeof event.detail?.titulo === "string") this.$("titulo-consultas").textContent = event.detail.titulo;
     };
-    #alElegir = () => this.#pintarBoton(this.#controlador.estado);
+    #alElegir = () => {
+        this.#pintarBoton(this.#controlador.estado);
+        this.$("roles").removeAttribute("open");
+        this.$("rol-elegido").focus();
+    };
+    #alClinica = () => {
+        this.#pintarRoles(this.#controlador.estado);
+        this.#pintarBoton(this.#controlador.estado);
+    };
     #alReintentar = () => this.#controlador.cargar();
     #alSalir = () => this.#salir();
     /** Contexto del router: { sesion, soloLectura, ... }. */
     contexto = null;
+    tituloHerramientas = "Rol y filtros";
 
     /** Controlador inyectado; solo se puede asignar antes de conectar la vista. */
     set controlador(valor) {
@@ -97,7 +115,8 @@ class VistaDashboard extends HTMLElement {
         }
         this.$ = id => raiz.getElementById(id);
         this.$("selector").addEventListener("submit", this.#alEnviar);
-        this.$("selector").addEventListener("change", this.#alElegir);
+        this.$("grupos").addEventListener("change", this.#alElegir);
+        this.$("clinica").addEventListener("change", this.#alClinica);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
         this.$("salir").addEventListener("click", this.#alSalir);
         this.addEventListener("titulo-consultas", this.#alTitular);
@@ -117,7 +136,8 @@ class VistaDashboard extends HTMLElement {
 
     disconnectedCallback() {
         this.$("selector").removeEventListener("submit", this.#alEnviar);
-        this.$("selector").removeEventListener("change", this.#alElegir);
+        this.$("grupos").removeEventListener("change", this.#alElegir);
+        this.$("clinica").removeEventListener("change", this.#alClinica);
         this.$("reintentar").removeEventListener("click", this.#alReintentar);
         this.$("salir").removeEventListener("click", this.#alSalir);
         this.removeEventListener("titulo-consultas", this.#alTitular);
@@ -186,40 +206,48 @@ class VistaDashboard extends HTMLElement {
         if (cambio("enCurso") && this.#lista) this.#lista.enCurso = enCurso;
     }
 
-    /** Un <fieldset> por clínica con un radio por rol; la activa queda marcada. */
+    /** Solo clínicas y roles que /atencion/asignaciones devuelve para esta cuenta. */
     #pintarGrupos(estado) {
-        const grupos = estado.grupos.map(grupo => {
-            const fieldset = document.createElement("fieldset");
-            fieldset.className = "grupo-clinica";
-            const legend = document.createElement("legend");
-            legend.textContent = grupo.nombreClinica;
-            fieldset.append(legend);
-            for (const rol of grupo.roles) {
-                const label = document.createElement("label");
-                label.className = "opcion-rol";
-                const radio = document.createElement("input");
-                radio.type = "radio";
-                radio.name = "asignacion";
-                radio.value = rol.idPersonaRol;
-                radio.checked = rol.activa;
-                const nombre = document.createElement("span");
-                nombre.textContent = rol.nombreRol;
-                label.append(radio, nombre);
-                if (rol.activa) {
-                    const insignia = document.createElement("span");
-                    insignia.className = "insignia";
-                    insignia.textContent = "Rol actual";
-                    label.append(insignia);
-                }
-                fieldset.append(label);
-            }
-            return fieldset;
+        const opciones = estado.grupos.map(grupo => {
+            const opcion = document.createElement("option");
+            opcion.value = grupo.idClinica;
+            opcion.textContent = grupo.nombreClinica;
+            return opcion;
         });
-        this.$("grupos").replaceChildren(...grupos);
+        this.$("clinica").replaceChildren(...opciones);
+        const actual = estado.activa?.idClinica ?? estado.sesion?.rolActivo?.idClinica;
+        this.$("clinica").value = estado.grupos.some(g => g.idClinica === actual) ? actual : "";
+        this.#pintarRoles(estado);
+    }
+
+    #pintarRoles(estado) {
+        const grupo = estado.grupos.find(g => g.idClinica === this.$("clinica").value);
+        const fieldset = document.createElement("fieldset");
+        fieldset.className = "grupo-clinica";
+        const legend = document.createElement("legend");
+        legend.textContent = "Tus roles en esta clínica";
+        fieldset.append(legend);
+        for (const rol of grupo?.roles ?? []) {
+            const label = document.createElement("label");
+            label.className = "opcion-rol";
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = "asignacion";
+            radio.value = rol.idPersonaRol;
+            radio.checked = rol.activa;
+            const nombre = document.createElement("span");
+            nombre.textContent = rol.nombreRol;
+            label.append(radio, nombre);
+            fieldset.append(label);
+        }
+        this.$("grupos").replaceChildren(fieldset);
+        this.$("roles").removeAttribute("open");
     }
 
     #seleccion() {
-        return this.shadowRoot.querySelector('input[name="asignacion"]:checked')?.value ?? null;
+        const id = this.shadowRoot.querySelector('input[name="asignacion"]:checked')?.value;
+        const grupo = this.#controlador.estado.grupos.find(g => g.idClinica === this.$("clinica").value);
+        return grupo?.roles.some(r => r.idPersonaRol === id) ? id : null;
     }
 
     #pintarBoton(estado) {
@@ -227,6 +255,11 @@ class VistaDashboard extends HTMLElement {
         const seleccion = this.#seleccion();
         boton.disabled = Boolean(estado.cambiando) || estado.soloLectura || !estado.enLinea
             || !seleccion || seleccion === estado.activa?.idPersonaRol;
+        const bloqueado = Boolean(estado.cambiando) || estado.soloLectura || !estado.enLinea;
+        this.$("clinica").disabled = bloqueado;
+        for (const radio of this.shadowRoot.querySelectorAll('input[name="asignacion"]')) radio.disabled = bloqueado;
+        const rol = estado.grupos.flatMap(g => g.roles).find(r => r.idPersonaRol === seleccion);
+        this.$("rol-elegido").textContent = rol ? `Rol: ${rol.nombreRol}` : "Selecciona tu rol";
         boton.textContent = estado.cambiando ? "Cambiando de rol…" : "Usar este rol";
     }
 
@@ -247,8 +280,7 @@ class VistaDashboard extends HTMLElement {
         const cambio = await this.#controlador.cambiar(seleccion);
         if (!this.isConnected || cambio) return;
         // Rechazado: la selección vuelve al rol vigente y el foco va al motivo.
-        const activa = this.#controlador.estado.activa?.idPersonaRol;
-        for (const radio of this.shadowRoot.querySelectorAll('input[name="asignacion"]')) radio.checked = radio.value === activa;
+        this.#pintarGrupos(this.#controlador.estado);
         this.#pintarBoton(this.#controlador.estado);
         const { aviso, error } = this.#controlador.estado;
         if (aviso) this.$("aviso").focus();

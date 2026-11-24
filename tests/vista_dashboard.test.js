@@ -73,8 +73,9 @@ describe('<vista-dashboard>: suscripción y pintado', () => {
         assert.equal($('estado').textContent, 'Cargando tus roles…');
         await asentar();
         assert.equal($('activo').textContent, 'Estás atendiendo como Doctor en Clínica Prueba Norte.');
-        const legends = vista.shadowRoot.querySelectorAll('legend').map(l => l.textContent);
-        assert.deepEqual(legends, ['Clínica Prueba Norte', 'Clínica Prueba Sur']);
+        const clinicas = $('clinica').children.map(l => l.textContent);
+        assert.deepEqual(clinicas, ['Clínica Prueba Norte', 'Clínica Prueba Sur']);
+        assert.deepEqual(radios(vista).map(r => r.value), [ADM_NORTE.idPersonaRol, DOC_NORTE.idPersonaRol]);
         assert.equal(vista.shadowRoot.querySelector('input:checked').value, DOC_NORTE.idPersonaRol);
         assert.equal($('estado').hidden, true);
         assert.equal($('usar').disabled, true, 'la selección es el rol actual');
@@ -166,9 +167,11 @@ describe('<vista-dashboard>: cambio de rol', () => {
         conectar(vista);
         await asentar();
         assert.equal(eventos.length, 0);
+        $('clinica').value = SUR.idClinica;
+        $('clinica').dispatchEvent(new Event('change'));
         const sur = radios(vista).find(r => r.value === DOC_SUR.idPersonaRol);
         sur.checked = true;
-        $('selector').dispatchEvent(new Event('change'));
+        $('grupos').dispatchEvent(new Event('change'));
         assert.equal($('usar').disabled, false);
         $('selector').dispatchEvent(new Event('submit', { cancelable: true }));
         await asentar();
@@ -361,5 +364,48 @@ describe('<vista-dashboard>: ciclo de vida', () => {
         const { vista, controlador } = montar();
         conectar(vista);
         assert.throws(() => { vista.controlador = controlador; }, /antes de conectar/);
+    });
+});
+
+describe('<vista-dashboard>: roles de la clínica elegida', () => {
+    test('cambiar clínica descarta la selección anterior y muestra solo sus asignaciones', async () => {
+        const { vista, $, eventos } = montar();
+        conectar(vista);
+        await asentar();
+        assert.equal($('clinica').value, NORTE.idClinica);
+        assert.equal($('rol-elegido').textContent, 'Rol: Doctor');
+        $('clinica').value = SUR.idClinica;
+        $('clinica').dispatchEvent(new Event('change'));
+        assert.deepEqual(radios(vista).map(r => r.value), [DOC_SUR.idPersonaRol]);
+        assert.equal($('usar').disabled, true);
+        assert.equal($('rol-elegido').textContent, 'Selecciona tu rol');
+        radios(vista)[0].checked = true;
+        $('grupos').dispatchEvent(new Event('change'));
+        assert.equal($('usar').disabled, false);
+        assert.equal($('roles').hasAttribute('open'), false);
+        // Un valor ajeno o de otra clínica nunca se envía, incluso si se altera el DOM.
+        radios(vista)[0].value = ADM_NORTE.idPersonaRol;
+        $('selector').dispatchEvent(new Event('submit', { cancelable: true }));
+        await asentar();
+        assert.equal(eventos.length, 0);
+        radios(vista)[0].value = UUID(999);
+        $('selector').dispatchEvent(new Event('submit', { cancelable: true }));
+        await asentar();
+        assert.equal(eventos.length, 0);
+    });
+
+    test('bloquea clínica y roles durante el cambio y en solo lectura', async () => {
+        const { vista, controlador, $ } = montar();
+        conectar(vista);
+        await asentar();
+        controlador.estado.cambiando = ADM_NORTE.idPersonaRol;
+        await asentar();
+        assert.equal($('clinica').disabled, true);
+        assert.ok(radios(vista).every(r => r.disabled));
+        controlador.estado.cambiando = null;
+        controlador.estado.soloLectura = true;
+        await asentar();
+        assert.equal($('clinica').disabled, true);
+        assert.ok(radios(vista).every(r => r.disabled));
     });
 });

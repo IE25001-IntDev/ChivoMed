@@ -110,3 +110,17 @@ textarea[readonly] { opacity: .8; }
 .acciones-salir { display: flex; flex-wrap: wrap; gap: var(--espacio-2) var(--espacio-3); align-items: center; margin: var(--espacio-3) 0; }
 .acciones-salir .indicaciones { flex: 1 1 16rem; }
 #error .boton { justify-self: start; }
+
+/* La acción sigue visible al revisar los exámenes; se reserva espacio para no tapar contenido. */
+:host(vista-consulta[con-accion-fija]) { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px)); }
+.accion-fija {
+  position: fixed; z-index: 4; inset: auto 0 0;
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--espacio-3);
+  padding: var(--espacio-3) max(1rem, calc((100vw - 66rem) / 2));
+  padding-bottom: calc(var(--espacio-3) + env(safe-area-inset-bottom, 0px));
+  background: var(--tarjeta); border-top: 1px solid var(--border-strong); box-shadow: var(--sombra);
+}
+.accion-fija span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.accion-fija .boton { flex-shrink: 0; width: auto; }
+.motivo-retroceso p { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--espacio-2) 0 0; }
+:focus-visible { scroll-margin-block: 1rem 8rem; }

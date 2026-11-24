@@ -35,12 +35,16 @@ const PLANTILLA = plantilla(`
     <span class="marca-icono" aria-hidden="true">+</span><span>Chivo<span class="marca-acento">Med</span></span>
   </a>
   <div class="acciones-cabecera">
+    <button id="herramientas" type="button" aria-expanded="false" aria-controls="vista-actual" hidden></button>
+    <details id="sesion-menu" hidden>
+      <summary>Mi sesión</summary>
+      <session-bar hidden></session-bar>
+    </details>
     <install-prompt></install-prompt>
     <theme-toggle></theme-toggle>
   </div>
 </header>
 <estado-conexion></estado-conexion>
-<session-bar hidden></session-bar>
 <main id="contenido" tabindex="-1"></main>
 <p class="solo-lectores" id="anuncio" aria-live="polite"></p>
 <footer class="pie"><p>ChivoMed · GalenoSV</p></footer>`);
@@ -53,6 +57,7 @@ class AppShell extends HTMLElement {
     #cancelarConexion = null;
     #alCambiarRed = enLinea => { if (enLinea && this.#montadaSinRed) this.#router.pendiente = this.#router.procesar(); };
     #alNavegar = event => { event.stopPropagation(); this.#router.navegar(event.detail.ruta); };
+    #alAbrirHerramientas = () => this.#mostrarHerramientas(true);
     #alCerrarSesion = () => this.#irAlLogin(false);
     #alActualizarSesion = event => {
         event.stopPropagation();
@@ -78,6 +83,15 @@ class AppShell extends HTMLElement {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
             raiz.append(hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
+            raiz.getElementById("herramientas").addEventListener("click", () => {
+                this.#mostrarHerramientas(raiz.getElementById("herramientas").getAttribute("aria-expanded") !== "true");
+            });
+            raiz.addEventListener("keydown", event => {
+                if (event.key === "Escape" && raiz.getElementById("herramientas").getAttribute("aria-expanded") === "true") {
+                    this.#mostrarHerramientas(false);
+                    raiz.getElementById("herramientas").focus();
+                }
+            });
             // El enlace de salto no debe cambiar el hash: el router lo interpretaría como ruta.
             raiz.querySelector(".saltar").addEventListener("click", event => {
                 event.preventDefault();
@@ -103,6 +117,7 @@ class AppShell extends HTMLElement {
             sesionSinRed: () => memoria.sesion,
             sinConexion: RUTA_SIN_CONEXION,
         });
+        this.addEventListener("abrir-herramientas", this.#alAbrirHerramientas);
         this.addEventListener("navegar", this.#alNavegar);
         this.addEventListener("sesion-cerrada", this.#alCerrarSesion);
         this.addEventListener("sesion-actualizada", this.#alActualizarSesion);
@@ -116,6 +131,7 @@ class AppShell extends HTMLElement {
 
     disconnectedCallback() {
         this.#router?.detener();
+        this.removeEventListener("abrir-herramientas", this.#alAbrirHerramientas);
         this.removeEventListener("navegar", this.#alNavegar);
         this.removeEventListener("sesion-cerrada", this.#alCerrarSesion);
         this.removeEventListener("sesion-actualizada", this.#alActualizarSesion);
@@ -135,6 +151,7 @@ class AppShell extends HTMLElement {
         const raiz = this.shadowRoot;
         const vista = document.createElement(tag);
         vista.contexto = contexto;
+        vista.id = "vista-actual";
         this.#rutaActual = contexto.ruta;
         this.#montadaSinRed = Boolean(contexto.soloLectura || contexto.ruta === RUTA_SIN_CONEXION);
         // Solo una sesión verificada con el servidor sirve de respaldo para entrar sin red.
@@ -142,7 +159,19 @@ class AppShell extends HTMLElement {
 
         this.#mostrarSesion(contexto);
         raiz.getElementById("contenido").replaceChildren(vista);
+        const herramientas = raiz.getElementById("herramientas");
+        herramientas.textContent = vista.tituloHerramientas ?? "";
+        herramientas.hidden = !vista.tituloHerramientas;
+        this.#mostrarHerramientas(false);
         this.#anunciar(contexto.ruta.titulo, vista);
+    }
+
+    #mostrarHerramientas(abiertas) {
+        const raiz = this.shadowRoot;
+        const vista = raiz.getElementById("contenido").children[0];
+        if (abiertas) vista?.setAttribute("herramientas-abiertas", "");
+        else vista?.removeAttribute("herramientas-abiertas");
+        raiz.getElementById("herramientas").setAttribute("aria-expanded", String(abiertas));
     }
 
     /** La barra de sesión solo se muestra en rutas de empleado con sesión verificada. */
@@ -152,6 +181,8 @@ class AppShell extends HTMLElement {
         const barra = this.shadowRoot.querySelector("session-bar");
         barra.sesion = protegida ? contexto.sesion : null;
         barra.hidden = !protegida;
+        this.shadowRoot.getElementById("sesion-menu").hidden = !protegida;
+        this.shadowRoot.getElementById("sesion-menu").removeAttribute("open");
     }
 
     #mostrarError(error, contexto) {
@@ -159,6 +190,8 @@ class AppShell extends HTMLElement {
         this.#montadaSinRed = false;
         const raiz = this.shadowRoot;
         this.#mostrarSesion(contexto);
+        raiz.getElementById("herramientas").hidden = true;
+        this.#mostrarHerramientas(false);
         const caja = document.createElement("section");
         caja.className = "error-ruta";
         caja.setAttribute("role", "alert");

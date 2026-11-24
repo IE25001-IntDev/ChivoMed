@@ -159,3 +159,11 @@ describe('ConsultaService (HU4): Content-Type solo con cuerpo', () => {
         assert.equal(cerrarConNotas.headers.get('Content-Type'), 'application/json');
     });
 });
+
+test('retroceder envía las notas y conserva motivoRetroceso de la respuesta', async () => {
+    const { peticiones, fetchImpl } = fetchDoble(Response.json({ motivoRetroceso: 'Motivo conservado' }));
+    const notas = { observaciones: 'Revisar', indicaciones: 'En reposo' };
+    const respuesta = await new ConsultaProcedimientoPasoService(opciones(fetchImpl)).retroceder(UUID(3), notas);
+    assert.deepEqual(JSON.parse(peticiones[0].opciones.body), notas);
+    assert.equal(respuesta.data.motivoRetroceso, 'Motivo conservado');
+});

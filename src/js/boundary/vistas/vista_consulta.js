@@ -127,7 +127,7 @@ class VistaConsulta extends HTMLElement {
         const { paso, examenes, cierre } = this.#paneles;
         this.#escuchar(paso, "cambiar-borrador", e => c().cambiarBorrador(e.detail.valor));
         this.#escuchar(paso, "avanzar", () => this.#pedir("avanzar", () => c().avanzar()));
-        this.#escuchar(paso, "retroceder", () => this.#pedir("retroceder", () => c().pedirRetroceso()));
+        this.#escuchar(paso, "retroceder", () => this.#pedir("retroceder", () => c().pedirRetroceso(examenes.hidden ? "" : examenes.indicaciones)));
         this.#escuchar(paso, "elegir-paso", e => c().elegirPaso(e.detail.idPaso));
         this.#escuchar(examenes, "cambiar-categoria", e => c().elegirCategoria(e.detail.idTipoExamen));
         this.#escuchar(examenes, "alternar-examen", e => c().alternarExamen(e.detail.idExamen, e.detail.marcado));
@@ -301,19 +301,21 @@ class VistaConsulta extends HTMLElement {
         const abierta = Boolean(consulta) && !consulta.fechaFin;
         const paso = ctrl.pasoActual;
         const motivo = ctrl.motivoNoActuar;
+        if (abierta && ctrl.atiendePaso) this.setAttribute("con-accion-fija", "");
+        else this.removeAttribute("con-accion-fija");
 
         panelPaso.hidden = !abierta;
         if (abierta) {
             const procedimiento = consulta.procedimientos.find(p => p.pasos.includes(paso))?.nombre ?? null;
             panelPaso.modelo = Object.freeze({
                 paso, procedimiento, pendientes: ctrl.pendientes, indicaFin: detalle.indicaFin === true,
-                borrador: estado.borrador, editable: atiende, aviso: estado.aviso === MENSAJES.reabierto ? estado.aviso : null,
+                borrador: estado.borrador, editable: ctrl.atiendePaso, motivoRetrocesoGuardado: detalle.motivoRetroceso, aviso: estado.aviso === MENSAJES.reabierto ? estado.aviso : null,
                 motivo, ofrecerRetroceso: puedeOfrecerRetroceso(paso), motivoRetroceso: motivoNoRetroceder(detalle),
                 confirmando: confirmando === "retroceso", accion,
             });
         }
 
-        const conExamenes = abierta && atiende && Boolean(paso) && detalle.idPaso === paso?.idConsultaProcedimientoPaso && !detalle.cargando && !detalle.error;
+        const conExamenes = abierta && ctrl.atiendePaso && Boolean(paso) && detalle.idPaso === paso?.idConsultaProcedimientoPaso && !detalle.cargando && !detalle.error;
         panelExamenes.hidden = !conExamenes;
         if (conExamenes) {
             const seleccion = estado.seleccionExamenes;
@@ -322,7 +324,7 @@ class VistaConsulta extends HTMLElement {
                 categorias: this.#categorias(detalle.asignables), filtro: estado.filtroExamenes,
                 visibles: examenesVisibles(detalle.asignables, estado.filtroExamenes), seleccion,
                 ordenados: ctrl.examenesOrdenados, textoSeleccion: textoSeleccion(seleccion.length),
-                resultado: estado.resultadoExamenes, motivo, accion,
+                resultado: estado.resultadoExamenes, motivo, accion, confirmando: confirmando === "retroceso",
                 error: this.#ultimaPedida === "orden" ? estado.errorAccion : null,
             });
         }
@@ -379,6 +381,7 @@ class VistaConsulta extends HTMLElement {
         if (cambios.has("acabado") && estado.acabado?.ok) {
             const { accion } = estado.acabado;
             if (accion === "salir") return; // se navega al dashboard
+            if (accion === "avanzar" || accion === "retroceder") examenes.limpiar?.();
             if (accion === "cierre") this.$("aviso").focus();
             else paso.enfocar?.("titulo");
             return;

@@ -29,18 +29,25 @@ const PLANTILLA = plantilla(`
       <p class="meta" id="desde"></p>
     </div>
     <p class="aviso" id="aviso" role="status" hidden></p>
-    <div class="campo">
+    <section class="aviso motivo-retroceso" id="motivo-retroceso" aria-labelledby="titulo-retroceso" hidden>
+      <h3 id="titulo-retroceso">Motivo del retroceso</h3>
+      <p id="notas-retroceso"></p>
+    </section>
+    <div class="campo" id="campo-atencion">
       <label for="valor">Atención brindada</label>
       <textarea id="valor" rows="6" aria-describedby="ayuda-valor"></textarea>
       <p class="indicaciones" id="ayuda-valor">Se guarda al completar el paso.</p>
     </div>
-    <div class="acciones-paso">
+    <div class="accion-fija" id="acciones-atencion">
+      <span id="paso-accion"></span>
       <button class="boton boton-principal" id="avanzar" type="button" aria-describedby="motivo">Avanzar</button>
+    </div>
+    <div class="acciones-paso">
       <button class="boton boton-secundario" id="retroceder" type="button" aria-describedby="motivo" hidden>Retroceder al paso anterior</button>
     </div>
     <p class="motivo" id="motivo" hidden></p>
     <div class="confirmacion" id="confirmacion" role="group" aria-labelledby="texto-confirmacion" hidden>
-      <p id="texto-confirmacion">Se descartará lo que escribiste en este paso. ¿Retroceder de todos modos?</p>
+      <p id="texto-confirmacion">Las observaciones y las indicaciones se guardarán en el paso anterior como motivo del retroceso. ¿Continuar?</p>
       <div class="acciones-paso">
         <button class="boton boton-principal" id="confirmar" type="button">Retroceder</button>
         <button class="boton boton-secundario" id="cancelar" type="button">Cancelar</button>
@@ -117,15 +124,21 @@ class PanelPasoActual extends HTMLElement {
         }
         // No se pisa lo que el usuario escribe: solo si el modelo trae otro texto.
         if (this.$("valor").value !== m.borrador) this.$("valor").value = m.borrador;
-        if (m.editable) this.$("valor").removeAttribute("readonly");
+        if (m.editable && !m.confirmando) this.$("valor").removeAttribute("readonly");
         else this.$("valor").setAttribute("readonly", "");
         this.$("aviso").hidden = !m.aviso;
         this.$("aviso").textContent = m.aviso ?? "";
 
+        this.$("campo-atencion").hidden = !m.editable;
+        this.$("acciones-atencion").hidden = !m.editable;
+        this.$("avanzar").hidden = !m.editable;
+        this.$("paso-accion").textContent = paso.nombre;
+        this.$("motivo-retroceso").hidden = !m.motivoRetrocesoGuardado;
+        this.$("notas-retroceso").textContent = m.motivoRetrocesoGuardado ?? "";
         const avanzando = m.accion === "avanzar";
         this.$("avanzar").textContent = avanzando ? "Guardando…" : (m.indicaFin ? "Completar paso" : "Avanzar");
         this.$("avanzar").disabled = Boolean(m.motivo);
-        this.$("retroceder").hidden = !m.ofrecerRetroceso;
+        this.$("retroceder").hidden = !m.editable || !m.ofrecerRetroceso;
         this.$("retroceder").textContent = m.accion === "retroceder" ? "Retrocediendo…" : "Retroceder al paso anterior";
         this.$("retroceder").disabled = Boolean(m.motivo || m.motivoRetroceso);
         // El motivo general (sin red, otro rol) explica los dos botones; si no hay, se explica por qué

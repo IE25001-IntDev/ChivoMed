@@ -121,12 +121,13 @@ describe('MemoriaVistas con copia en disco', () => {
         const m = nuevaMemoria(fabrica);
         const sesion = sesionDe(CARLOS);
         m.recordarSesion(sesion);
-        m.guardar(MemoriaVistas.clave(sesion, `consulta:${UUID(20)}`), { consulta: consultaDemo, detalle: { valorGuardado: 'PA 120/80' }, en: AHORA });
+        m.guardar(MemoriaVistas.clave(sesion, `consulta:${UUID(20)}`), { consulta: consultaDemo, detalle: { valorGuardado: 'PA 120/80', motivoRetroceso: 'Revisar medición' }, en: AHORA });
         m.guardar(MemoriaVistas.clave(sesion, `consulta:${UUID(30)}`), { consulta: { ...consultaDemo, idConsulta: UUID(30) }, detalle: { valorGuardado: 'x' }, en: AHORA });
         await asentar();
         const registro = disco(fabrica).consulta;
         assert.equal(registro.clave, `${CARLOS}:consulta:${UUID(30)}`);
         assert.equal(registro.valor.detalle.valorGuardado, null);
+        assert.equal(registro.valor.detalle.motivoRetroceso, null);
         assert.equal(m.leer(MemoriaVistas.clave(sesion, `consulta:${UUID(20)}`)).detalle.valorGuardado, 'PA 120/80', 'en memoria se conserva');
     });
 

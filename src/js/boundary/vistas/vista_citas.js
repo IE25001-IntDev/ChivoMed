@@ -23,6 +23,7 @@ const PLANTILLA = plantilla(`
     <ul class="lista-errores" id="lista-errores"></ul>
     <p id="mensaje-texto"></p>
   </div>
+  <div class="herramientas-vista">
   <form id="form-busqueda" class="barra-busqueda" novalidate>
     <div class="campo">
       <label for="tipo">Tipo de documento</label>
@@ -52,6 +53,7 @@ const PLANTILLA = plantilla(`
       <button class="boton boton-principal" id="buscar" type="submit" aria-describedby="falta motivo">Buscar citas</button>
     </div>
   </form>
+  </div>
 
   <section class="resultados-citas" aria-labelledby="h-resultados">
     <h2 id="h-resultados" tabindex="-1">Resultados</h2>
@@ -81,6 +83,7 @@ class VistaCitas extends HTMLElement {
     #escuchas = [];
     #alDescargar = e => this.#controlador.descargarTicket(e.detail?.idConsulta);
     contexto = null;
+    tituloHerramientas = "Documento y filtros";
 
     set controlador(valor) {
         if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
@@ -122,7 +125,10 @@ class VistaCitas extends HTMLElement {
             this.#escuchar(this.$(id), "change", () => c.fijarFechas({ desde: this.$("desde").value, hasta: this.$("hasta").value }));
         }
         this.#escuchar(this.$("reintentar-tipos"), "click", () => c.cargarTipos());
-        this.#escuchar(this.$("nueva"), "click", () => c.nuevaBusqueda());
+        this.#escuchar(this.$("nueva"), "click", () => {
+            this.dispatchEvent(new CustomEvent("abrir-herramientas", { bubbles: true, composed: true }));
+            c.nuevaBusqueda();
+        });
         this.#cancelar = c.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         c.iniciar();
         this.#pintar(c.estado, null);
@@ -155,7 +161,10 @@ class VistaCitas extends HTMLElement {
     /** Lleva el foco al primer campo con error. Devuelve true si había alguno. */
     #enfocarError() {
         const campo = CAMPOS_CON_ERROR.find(([clave]) => this.#controlador.estado.errores[clave])?.[1][0];
-        if (campo) this.$(campo).focus();
+        if (campo) {
+            this.dispatchEvent(new CustomEvent("abrir-herramientas", { bubbles: true, composed: true }));
+            this.$(campo).focus();
+        }
         return Boolean(campo);
     }
 

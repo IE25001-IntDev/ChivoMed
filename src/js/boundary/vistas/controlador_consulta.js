@@ -273,14 +273,14 @@ export function servicioConsulta({
         ordenes: id => pasos.ordenesExamen(id).listar(),
         asignables: id => pasos.examenesAsignables(id),
         completar: (id, valor) => pasos.completar(id, valor),
-        retroceder: id => pasos.retroceder(id),
+        retroceder: (id, notas) => pasos.retroceder(id, notas),
         ordenar: (id, datos) => pasos.ordenar(id, datos),
         cerrar: (id, notas) => consultas.cerrar(id, notas),
         salirDeConsulta: () => atencion.salirDeConsulta(),
     };
 }
 
-const SIN_DETALLE = congelar({ idPaso: null, cargando: false, error: null, valorGuardado: null, indicaFin: null, ordenes: NINGUNA, asignables: NINGUNA });
+const SIN_DETALLE = congelar({ idPaso: null, cargando: false, error: null, valorGuardado: null, motivoRetroceso: null, indicaFin: null, ordenes: NINGUNA, asignables: NINGUNA });
 
 export class ControladorConsulta {
     #servicio;
@@ -366,6 +366,8 @@ export class ControladorConsulta {
         const { consulta, atendiendo } = this.estado;
         return atendiendo && Boolean(consulta) && !consulta.fechaFin;
     }
+
+    get atiendePaso() { return this.atiende && esPasoDeMiRol(this.pasoActual, this.estado.sesion?.rolActivo); }
 
     get pendientes() { return pasosPendientes(this.estado.consulta); }
 
@@ -521,7 +523,7 @@ export class ControladorConsulta {
         const paso = this.pasoActual;
         const consulta = this.estado.consulta;
         const idDetalle = ++this.#secuenciaDetalle;
-        if (!paso || !this.atiende || consulta?.fechaFin) {
+        if (!paso || !this.atiendePaso || consulta?.fechaFin) {
             this.estado.detalle = SIN_DETALLE;
             this.estado.borrador = "";
             if (this.estado.aviso === MENSAJES.reabierto) this.estado.aviso = null;
@@ -544,6 +546,7 @@ export class ControladorConsulta {
             const valorGuardado = texto(registro?.data?.valor) ? registro.data.valor : null;
             this.estado.detalle = congelar({
                 idPaso, cargando: false, error: null, valorGuardado,
+                motivoRetroceso: texto(registro?.data?.motivoRetroceso) ? registro.data.motivoRetroceso : null,
                 indicaFin: definicion ? definicion.data?.indicaFin === true : null,
                 ordenes: normalizarOrdenes(ordenes?.data), asignables: normalizarAsignables(asignables?.data),
             });
@@ -606,6 +609,7 @@ export class ControladorConsulta {
         if (this.estado.accion) return MENSAJES.accionEnCurso;
         const paso = this.pasoActual;
         if (!paso) return MENSAJES.sinPendientes;
+        if (!this.atiendePaso) return MENSAJES.otroRol;
         const { detalle } = this.estado;
         if (detalle.error) return detalle.error;
         if (detalle.idPaso !== paso.idConsultaProcedimientoPaso || detalle.cargando) return MENSAJES.cargandoPaso;
@@ -734,10 +738,19 @@ export class ControladorConsulta {
         });
     }
 
-    /** Pide retroceder: si hay algo escrito, primero pide confirmar que se descartará. */
-    pedirRetroceso() {
+    #notasRetroceso = null;
+
+    /** Las notas se guardan con el paso anterior; cancelar o un error conserva los campos. */
+    pedirRetroceso(indicaciones = "") {
         if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
-        if (this.estado.borrador.trim()) {
+        const observaciones = this.estado.borrador.trim();
+        const instrucciones = typeof indicaciones === "string" ? indicaciones.trim() : "";
+        if (observaciones.length > 10000 || instrucciones.length > MAX_TEXTO) {
+            this.estado.errorAccion = "El retroceso admite hasta 10000 caracteres de observaciones y 255 de indicaciones.";
+            return Promise.resolve(false);
+        }
+        this.#notasRetroceso = Object.freeze({ observaciones, indicaciones: instrucciones });
+        if (observaciones || instrucciones) {
             Object.assign(this.estado, { confirmando: "retroceso", errorAccion: null });
             return Promise.resolve(false);
         }
@@ -748,10 +761,11 @@ export class ControladorConsulta {
         if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
         const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
         let anterior = null;
-        return this.#ejecutar("retroceder", async () => { anterior = (await this.#servicio.retroceder(idPaso))?.data ?? null; }, {
+        return this.#ejecutar("retroceder", async () => { anterior = (await this.#servicio.retroceder(idPaso, this.#notasRetroceso))?.data ?? null; }, {
             alTerminar: async () => {
                 this.#olvidarBorrador(idPaso);
                 const idAnterior = texto(anterior?.idConsultaProcedimientoPaso) ? anterior.idConsultaProcedimientoPaso : null;
+                this.#notasRetroceso = null;
                 // El paso reabierto muestra su valor guardado, no un borrador viejo de antes de completarlo.
                 if (idAnterior) this.#olvidarBorrador(idAnterior);
                 Object.assign(this.estado, { idElegido: idAnterior, aviso: null, borrador: "" });

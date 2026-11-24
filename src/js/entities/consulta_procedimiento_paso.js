@@ -9,6 +9,7 @@ class ConsultaProcedimientoPaso extends DefaultEntity {
             fechaFin: null,
             estado: null,
             valor: null,
+            motivoRetroceso: null,
             idConsultaProcedimiento: null,
             idPersonaRol: null,
             idProcedimientoPaso: null,
