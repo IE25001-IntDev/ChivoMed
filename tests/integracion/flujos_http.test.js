@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
 import { API_CONFIG } from '../../src/js/control/api_config.js';
-import { obtenerSesion, verificarSesionActual, fijarSesionVista } from '../../src/js/control/auth_service.js';
+import { auth } from '../../src/js/control/auth_service.js';
 import { ControladorCitas, MENSAJES as CITAS } from '../../src/js/control/controladores/controlador_citas.js';
-import { ControladorLogin, destinoTrasLogin } from '../../src/js/control/controladores/controlador_login.js';
+import { ControladorLogin } from '../../src/js/control/controladores/controlador_login.js';
 import { ControladorDashboard } from '../../src/js/control/controladores/controlador_dashboard.js';
 import { ControladorConsultas } from '../../src/js/control/controladores/controlador_consultas.js';
-import { ControladorConsulta, servicioConsulta } from '../../src/js/control/controladores/controlador_consulta.js';
+import { ControladorConsulta, ServicioConsulta } from '../../src/js/control/controladores/controlador_consulta.js';
 import { MemoriaVistas } from '../../src/js/control/memoria_vistas.js';
 import AtencionService from '../../src/js/control/atencion_service.js';
 import ConsultaService from '../../src/js/control/consulta_service.js';
@@ -90,7 +90,7 @@ beforeEach(() => {
     inesperadas = [];
     controladores = [];
     sesion = sesionInicial();
-    fijarSesionVista(null);
+    auth.fijarSesionVista(null);
     rutas = new Map([
         ['GET publico/tipos-documento', () => json([{ idTipoDocumento: TIPO, nombre: 'DUI', expresionRegular: '^[0-9]{8}-[0-9]$' }])],
         ['GET auth/me', () => json(sesion)],
@@ -103,13 +103,13 @@ beforeEach(() => {
 
 afterEach(() => {
     for (const c of controladores) c.detener();
-    fijarSesionVista(null);
+    auth.fijarSesionVista(null);
     assert.deepEqual(inesperadas, [], 'toda petición debe estar prevista por el contrato de la prueba');
 });
 
 function registrar(controlador) { controladores.push(controlador); return controlador; }
 const opciones = () => ({ conexion: conexionDoble(), memoria: new MemoriaVistas(), reloj });
-const opcionesHttp = () => ({ autenticar: verificarSesionActual });
+const opcionesHttp = () => ({ autenticar: () => auth.verificarSesionActual() });
 const escrituras = () => peticiones.filter(p => p.metodo !== 'GET');
 
 async function citas(extra = {}) {
@@ -126,7 +126,7 @@ async function autenticar() {
     const recibida = await c.enviar({ idTipoDocumento: TIPO, numeroDocumento: ` ${NUMERO} ` });
     assert.equal(c.estado.mensaje, null);
     assert.deepEqual(recibida, sesion);
-    fijarSesionVista(recibida);
+    auth.fijarSesionVista(recibida);
     return recibida;
 }
 
@@ -187,8 +187,8 @@ test('HU2: el login real del frontend normaliza el documento y vuelve a la consu
     const recibida = await autenticar();
     assert.deepEqual(peticiones.map(p => `${p.metodo} ${p.ruta}`), ['GET publico/tipos-documento', 'POST auth/login', 'GET auth/me']);
     assert.deepEqual(escrituras()[0].datos, { idTipoDocumento: TIPO, numeroDocumento: NUMERO });
-    assert.equal(destinoTrasLogin(new URLSearchParams({ volver: `/consulta/${ID_CONSULTA}` }), recibida), `/consulta/${ID_CONSULTA}`);
-    assert.equal(destinoTrasLogin(new URLSearchParams({ volver: 'https://sitio-ajeno.test' }), recibida), '/dashboard');
+    assert.equal(ControladorLogin.destinoTrasLogin(new URLSearchParams({ volver: `/consulta/${ID_CONSULTA}` }), recibida), `/consulta/${ID_CONSULTA}`);
+    assert.equal(ControladorLogin.destinoTrasLogin(new URLSearchParams({ volver: 'https://sitio-ajeno.test' }), recibida), '/dashboard');
 });
 
 test('HU2: 401 neutro conserva el formulario y no consulta una sesión inexistente', async () => {
@@ -225,7 +225,7 @@ test('HU3: cambio de clínica con CSRF y sesión refrescada; filtro local y lect
     const indice = peticiones.indexOf(cambio);
     assert.equal(peticiones[indice - 1].ruta, 'auth/me');
     assert.equal(peticiones[indice + 1].ruta, 'auth/me');
-    fijarSesionVista(c.estado.sesionCambiada);
+    auth.fijarSesionVista(c.estado.sesionCambiada);
     const opts = opciones();
     const lista = registrar(new ControladorConsultas({ ...opts, servicio }));
     await lista.iniciar(c.estado.sesionCambiada);
@@ -253,7 +253,7 @@ async function consulta({ pendienteParaMi = true } = {}) {
     rutas.set(`GET procedimientos-pasos/${DEFINICION}`, () => json({ idProcedimientoPaso: DEFINICION, indicaFin: false }));
     rutas.set(`GET consultas-procedimientos-pasos/${PASO}/ordenes-examen`, () => json([]));
     rutas.set(`GET consultas-procedimientos-pasos/${PASO}/examenes-asignables`, () => json([]));
-    const servicio = servicioConsulta({ atencion: new AtencionService(opcionesHttp()), consultas: new ConsultaService(opcionesHttp()),
+    const servicio = new ServicioConsulta({ atencion: new AtencionService(opcionesHttp()), consultas: new ConsultaService(opcionesHttp()),
         pasos: new ConsultaProcedimientoPasoService(opcionesHttp()), definiciones: new ProcedimientoPasoService(opcionesHttp()) });
     const c = registrar(new ControladorConsulta({ ...opciones(), servicio }));
     await c.iniciar(ID_CONSULTA, recibida);

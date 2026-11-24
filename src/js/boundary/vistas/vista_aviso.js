@@ -18,11 +18,11 @@
  *    Los dos eventos tienen bubbles y composed.
  *  - `alerta: true`: la tarjeta lleva role="alert".
  */
-import { hojaDeEstilos } from "../estilos.js";
+import { Estilos } from "../estilos.js";
 import { RUTA_PEDIDA } from "../rutas.js";
-import { plantilla } from "../plantilla.js";
+import { Plantilla } from "../plantilla.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1"></h1>
   <p class="subtitulo" id="detalle"></p>
@@ -64,7 +64,7 @@ class VistaAviso extends HTMLElement {
     #pintar({ titulo = "", texto = "", accion = null, destino = "", etiqueta = null, alerta = false }) {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            raiz.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
+            raiz.append(Estilos.hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
         }
         const seccion = raiz.querySelector("section");
         const h1 = raiz.getElementById("titulo");

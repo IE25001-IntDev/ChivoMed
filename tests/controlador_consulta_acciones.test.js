@@ -1,6 +1,6 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { MENSAJES, MAX_TEXTO, textoSeleccion } from '../src/js/control/controladores/controlador_consulta.js';
+import { ControladorConsulta, MENSAJES, MAX_TEXTO } from '../src/js/control/controladores/controlador_consulta.js';
 import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import {
     UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
@@ -231,9 +231,9 @@ describe('ControladorConsulta: asignar varios exámenes (F9)', () => {
         assert.equal(controlador.estado.filtroExamenes, IMG.idTipoExamen, 'una categoría que no existe se ignora');
         controlador.elegirCategoria('');
         assert.equal(controlador.estado.filtroExamenes, '');
-        assert.equal(textoSeleccion(0), 'Ningún examen seleccionado');
-        assert.equal(textoSeleccion(1), '1 seleccionado');
-        assert.equal(textoSeleccion(3), '3 seleccionados');
+        assert.equal(ControladorConsulta.textoSeleccion(0), 'Ningún examen seleccionado');
+        assert.equal(ControladorConsulta.textoSeleccion(1), '1 seleccionado');
+        assert.equal(ControladorConsulta.textoSeleccion(3), '3 seleccionados');
     });
 
     test('no se puede seleccionar un examen ajeno ni uno ya ordenado en el paso', async () => {

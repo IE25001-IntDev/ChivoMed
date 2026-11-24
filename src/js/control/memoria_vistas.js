@@ -28,8 +28,8 @@
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
  */
-import { crearEstado } from "./estado_reactivo.js";
-import { crearAlmacenOffline } from "./almacen_offline.js";
+import { EstadoReactivo } from "./estado_reactivo.js";
+import { AlmacenOffline } from "./almacen_offline.js";
 import { EVENTO_SERVIDOR_RESPONDIO } from "./auth_service.js";
 
 const VACIO = Object.freeze(Object.create(null));
@@ -46,32 +46,10 @@ const RANURAS_DATOS = Object.freeze(["dashboard", "asignaciones", "consulta", "p
 export const CLAVE_PUBLICA_CITAS = "publico:citas";
 export const RANURA_PUBLICO = "publico";
 
-/** Ranura en disco del nombre de una clave de datos, o null si no se persiste. */
-export function ranuraDe(nombre) {
-    if (nombre.startsWith("dashboard.ultimo:")) return "dashboard";
-    if (nombre === "dashboard.asignaciones") return "asignaciones";
-    if (nombre.startsWith("consulta:")) return "consulta";
-    if (nombre.startsWith("consultas.pendientes:")) return "pendientes";
-    return null;
-}
-
-/** Lo que va a disco de cada ranura: la consulta sin el valor guardado del paso. */
-function paraDisco(ranura, valor) {
-    if (ranura !== "consulta" || !valor?.detalle) return valor;
-    return { ...valor, detalle: { ...valor.detalle, valorGuardado: null } };
-}
-
-function congelarProfundo(valor) {
-    if (valor && typeof valor === "object" && !(valor instanceof Date) && !Object.isFrozen(valor)) {
-        for (const hijo of Object.values(valor)) congelarProfundo(hijo);
-        Object.freeze(valor);
-    }
-    return valor;
-}
-
 export class MemoriaVistas {
+    /** Estado reactivo { sesion, datos } (composición). */
+    #reactivo;
     #estado;
-    #suscribir;
     #persistencia;
     #reloj;
     #documento;
@@ -85,7 +63,8 @@ export class MemoriaVistas {
      *   - `documento`: donde DefaultService y auth_service avisan "servidor-respondio", o null.
      */
     constructor({ persistencia = null, reloj = () => new Date(), documento = globalThis.document ?? null } = {}) {
-        ({ estado: this.#estado, suscribir: this.#suscribir } = crearEstado({ sesion: null, datos: VACIO }));
+        this.#reactivo = new EstadoReactivo({ sesion: null, datos: VACIO });
+        this.#estado = this.#reactivo.estado;
         this.#persistencia = persistencia;
         this.#reloj = reloj;
         this.#documento = documento;
@@ -112,7 +91,7 @@ export class MemoriaVistas {
 
     /** Avisa con (cambios, { sesion, datos }) en cada cambio. Devuelve la función para cancelar. */
     suscribir(fn) {
-        return this.#suscribir(fn);
+        return this.#reactivo.suscribir(fn);
     }
 
     guardar(clave, valor) {
@@ -130,9 +109,9 @@ export class MemoriaVistas {
         }
         const id = this.#estado.sesion?.usuario?.idUsuario;
         if (!this.#persistencia || !id || !clave.startsWith(`${id}:`)) return;
-        const ranura = ranuraDe(clave.slice(id.length + 1));
+        const ranura = MemoriaVistas.ranuraDe(clave.slice(id.length + 1));
         if (!ranura) return;
-        this.#persistencia.guardar(ranura, valor == null ? null : { clave, valor: paraDisco(ranura, valor) });
+        this.#persistencia.guardar(ranura, valor == null ? null : { clave, valor: MemoriaVistas.#paraDisco(ranura, valor) });
     }
 
     leer(clave) {
@@ -204,8 +183,8 @@ export class MemoriaVistas {
         for (const ranura of RANURAS_DATOS) {
             const registro = registros[ranura];
             if (typeof registro?.clave === "string" && registro.clave.startsWith(`${id}:`)
-                && ranuraDe(registro.clave.slice(id.length + 1)) === ranura && registro.valor != null) {
-                datos[registro.clave] = congelarProfundo(registro.valor);
+                && MemoriaVistas.ranuraDe(registro.clave.slice(id.length + 1)) === ranura && registro.valor != null) {
+                datos[registro.clave] = MemoriaVistas.#congelarProfundo(registro.valor);
             }
         }
         Object.assign(this.#estado, { sesion, datos: Object.freeze(datos) });
@@ -233,7 +212,7 @@ export class MemoriaVistas {
                 resolve();
                 return;
             }
-            const valor = congelarProfundo(registro.valor);
+            const valor = MemoriaVistas.#congelarProfundo(registro.valor);
             this.#estado.datos = Object.freeze(Object.assign(Object.create(null), this.#estado.datos,
                 { [CLAVE_PUBLICA_CITAS]: valor }));
             this.#publicaDeDisco = valor;
@@ -245,7 +224,30 @@ export class MemoriaVistas {
             resolve();
         });
     }
+
+    /** Ranura en disco del nombre de una clave de datos, o null si no se persiste. */
+    static ranuraDe(nombre) {
+        if (nombre.startsWith("dashboard.ultimo:")) return "dashboard";
+        if (nombre === "dashboard.asignaciones") return "asignaciones";
+        if (nombre.startsWith("consulta:")) return "consulta";
+        if (nombre.startsWith("consultas.pendientes:")) return "pendientes";
+        return null;
+    }
+
+    /** Lo que va a disco de cada ranura: la consulta sin el valor guardado del paso. */
+    static #paraDisco(ranura, valor) {
+        if (ranura !== "consulta" || !valor?.detalle) return valor;
+        return { ...valor, detalle: { ...valor.detalle, valorGuardado: null } };
+    }
+
+    static #congelarProfundo(valor) {
+        if (valor && typeof valor === "object" && !(valor instanceof Date) && !Object.isFrozen(valor)) {
+            for (const hijo of Object.values(valor)) MemoriaVistas.#congelarProfundo(hijo);
+            Object.freeze(valor);
+        }
+        return valor;
+    }
 }
 
 /** Instancia compartida por el shell, el router y las vistas, con copia en IndexedDB si existe. */
-export const memoria = new MemoriaVistas({ persistencia: crearAlmacenOffline() });
+export const memoria = new MemoriaVistas({ persistencia: AlmacenOffline.crear() });

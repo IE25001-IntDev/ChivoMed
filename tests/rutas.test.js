@@ -2,10 +2,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import {
-    RUTAS, RUTA_NO_ENCONTRADA, RUTA_POR_DEFECTO, RUTA_LOGIN, RUTA_INICIO_EMPLEADO, inicioPorRol,
-} from '../src/js/boundary/rutas.js';
-import { resolverRuta } from '../src/js/boundary/router.js';
+import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_POR_DEFECTO, RUTA_LOGIN, RUTA_INICIO_EMPLEADO, TablaRutas } from '../src/js/boundary/rutas.js';
+import { Router } from '../src/js/boundary/router.js';
 
 const UUID = '10000000-0000-4000-8000-000000000001';
 const TODAS = [...RUTAS, RUTA_NO_ENCONTRADA];
@@ -16,29 +14,29 @@ describe('Tabla de rutas', () => {
     });
 
     test('la ruta por defecto es #/citas y es pública', () => {
-        const { ruta } = resolverRuta(`#${RUTA_POR_DEFECTO}`, RUTAS);
+        const { ruta } = Router.resolverRuta(`#${RUTA_POR_DEFECTO}`, RUTAS);
         assert.equal(RUTA_POR_DEFECTO, '/citas');
         assert.equal(ruta.empleado, undefined);
         assert.ok(!ruta.soloInvitados);
     });
 
     test('el login es solo para invitados y no exige rol', () => {
-        const { ruta } = resolverRuta(`#${RUTA_LOGIN}`, RUTAS);
+        const { ruta } = Router.resolverRuta(`#${RUTA_LOGIN}`, RUTAS);
         assert.equal(ruta.soloInvitados, true);
         assert.equal(ruta.empleado, undefined);
     });
 
     test('dashboard y consulta exigen una sesión de empleado, sin lista fija de roles (B8)', () => {
         for (const hash of [`#${RUTA_INICIO_EMPLEADO}`, `#/consulta/${UUID}`]) {
-            const { ruta } = resolverRuta(hash, RUTAS);
+            const { ruta } = Router.resolverRuta(hash, RUTAS);
             assert.equal(ruta.empleado, true, hash);
             assert.equal(ruta.roles, undefined, hash);
         }
     });
 
     test('la consulta solo acepta un UUID como :id', () => {
-        assert.equal(resolverRuta(`#/consulta/${UUID}`, RUTAS).ruta.tag, 'vista-consulta');
-        assert.equal(resolverRuta('#/consulta/1', RUTAS).ruta, null);
+        assert.equal(Router.resolverRuta(`#/consulta/${UUID}`, RUTAS).ruta.tag, 'vista-consulta');
+        assert.equal(Router.resolverRuta('#/consulta/1', RUTAS).ruta, null);
     });
 
     test('cada vista tiene un nombre de custom element válido y único', () => {
@@ -71,9 +69,9 @@ describe('inicioPorRol', () => {
     const ID = '10000000-0000-4000-8000-000000000002';
     // Doctor (Carlos), Enfermera (Lucía), Atención al público (Marta, código ADMINISTRACION) y un rol sin código.
     for (const codigo of ['DOCTOR', 'ENFERMERA', 'ADMINISTRACION', null]) {
-        test(`${codigo} inicia en el dashboard`, () => assert.equal(inicioPorRol({ rolActivo: { idPersonaRol: ID, codigo } }), '/dashboard'));
+        test(`${codigo} inicia en el dashboard`, () => assert.equal(TablaRutas.inicioPorRol({ rolActivo: { idPersonaRol: ID, codigo } }), '/dashboard'));
     }
     for (const valor of [{ rolActivo: { idPersonaRol: ID, codigo: 'PACIENTE' } }, { rolActivo: { codigo: 'DOCTOR' } }, { rolActivo: {} }, null, undefined]) {
-        test(`sin inicio para ${JSON.stringify(valor)}`, () => assert.equal(inicioPorRol(valor), null));
+        test(`sin inicio para ${JSON.stringify(valor)}`, () => assert.equal(TablaRutas.inicioPorRol(valor), null));
     }
 });

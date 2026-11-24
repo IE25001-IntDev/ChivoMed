@@ -6,11 +6,11 @@
  * `enfocarTicket()` devuelve el foco al botón "Ver ticket" (al cerrar esa ventana).
  * Los datos van con textContent; sin nombrePaciente no se muestra la línea "Paciente:".
  */
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../../control/fechas_sv.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
+import { FechasSV } from "../../../control/fechas_sv.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <article class="tarjeta-cita" aria-labelledby="fecha">
   <h3 id="fecha"></h3>
   <dl class="datos-cita">
@@ -48,7 +48,7 @@ class TarjetaCita extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("citas.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("citas.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.$("ver").addEventListener("click", this.#alVer);
         this.#pintar();
@@ -66,7 +66,7 @@ class TarjetaCita extends HTMLElement {
     #pintar() {
         const { cita, motivoTicket = null } = this.#modelo ?? {};
         if (!cita) return;
-        const fecha = formatearFechaHora(cita.fechaInicio);
+        const fecha = FechasSV.formatearFechaHora(cita.fechaInicio);
         this.$("fecha").textContent = fecha;
         this.$("clinica").textContent = cita.nombreClinica;
         const procedimientos = cita.procedimientos ?? [];

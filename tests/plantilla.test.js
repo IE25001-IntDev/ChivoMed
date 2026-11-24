@@ -2,13 +2,13 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { instalarDom } from './dobles/dom_minimo.js';
-import { plantilla } from '../src/js/boundary/plantilla.js';
+import { Plantilla } from '../src/js/boundary/plantilla.js';
 import '../src/js/boundary/pwa/sw_logica.js';
 
-describe('plantilla()', () => {
+describe('Plantilla', () => {
     test('importar y declarar una plantilla no necesita document (es perezosa)', () => {
         assert.equal(typeof globalThis.document, 'undefined');
-        assert.doesNotThrow(() => plantilla('<p id="x"></p>'));
+        assert.doesNotThrow(() => new Plantilla('<p id="x"></p>'));
     });
 
     describe('con DOM', () => {
@@ -19,7 +19,7 @@ describe('plantilla()', () => {
             let creados = 0;
             document.createElement = tag => { if (tag === 'template') creados++; return original(tag); };
             try {
-                const P = plantilla('<p id="x">Hola</p>');
+                const P = new Plantilla('<p id="x">Hola</p>');
                 const a = P.clonar();
                 const b = P.clonar();
                 assert.equal(creados, 1);
@@ -32,7 +32,7 @@ describe('plantilla()', () => {
     });
 
     test('exige el HTML como texto', () => {
-        assert.throws(() => plantilla(null), TypeError);
+        assert.throws(() => new Plantilla(null), TypeError);
     });
 });
 

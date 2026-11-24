@@ -3,13 +3,13 @@
  * Recibe la sesión por la propiedad `sesion` (la pone <app-shell>).
  * Emite 'sesion-cerrada' (bubbles, composed) al cerrar sesión o si el servidor ya la había cerrado.
  */
-import { cerrarSesion, nombreDeRol } from "../../control/auth_service.js";
-import { hojaDeEstilos } from "../estilos.js";
+import { AuthService, auth } from "../../control/auth_service.js";
+import { Estilos } from "../estilos.js";
 import { conexion } from "../../control/conexion.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
-import { plantilla } from "../plantilla.js";
+import { Plantilla } from "../plantilla.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <nav class="barra-sesion" aria-label="Tu sesión">
   <p class="identidad"><span id="nombre"></span> <span class="separador" aria-hidden="true">·</span>
     <span id="rol"></span> <span class="separador" aria-hidden="true">·</span> <span id="clinica"></span></p>
@@ -38,7 +38,7 @@ class SessionBar extends HTMLElement {
 
     connectedCallback() {
         if (!this.shadowRoot.childElementCount) {
-            this.shadowRoot.append(hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
+            this.shadowRoot.append(Estilos.hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
         }
         this.shadowRoot.getElementById("salir").addEventListener("click", this.#alSalir);
         this.#cancelarConexion = conexion.suscribir(() => this.#pintarRed());
@@ -54,7 +54,7 @@ class SessionBar extends HTMLElement {
         const raiz = this.shadowRoot;
         const { usuario, rolActivo } = this.#sesion ?? {};
         raiz.getElementById("nombre").textContent = usuario ? `${usuario.nombres} ${usuario.apellidos}`.trim() : "";
-        raiz.getElementById("rol").textContent = rolActivo ? nombreDeRol(rolActivo) : "";
+        raiz.getElementById("rol").textContent = rolActivo ? AuthService.nombreDeRol(rolActivo) : "";
         raiz.getElementById("clinica").textContent = rolActivo?.nombreClinica ?? "";
         raiz.getElementById("error").hidden = true;
         this.#pintarRed();
@@ -76,7 +76,7 @@ class SessionBar extends HTMLElement {
             this.#saliendo = true;
             boton.disabled = true;
             boton.textContent = "Cerrando sesión…";
-            resolve(new Promise(cerrar => cerrar(cerrarSesion(this.#sesion?.csrfToken)))
+            resolve(new Promise(cerrar => cerrar(auth.cerrarSesion(this.#sesion?.csrfToken)))
                 .then(() => this.#avisarCierre())
                 .catch(falla => {
                     if (falla.status === 401) { this.#avisarCierre(); return; }

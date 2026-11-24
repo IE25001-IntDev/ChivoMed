@@ -21,12 +21,11 @@ let InstallPrompt;
 let ControladorCitas;
 let MENSAJES;
 let TEXTOS;
-let detectarVisorPdf;
 
 before(async () => {
     instalarDom();
     globalThis.location = { hash: '#/citas' };
-    ({ default: VentanaTicket, TEXTOS, detectarVisorPdf } = await import('../src/js/boundary/components/citas/ventana_ticket.js'));
+    ({ default: VentanaTicket, TEXTOS } = await import('../src/js/boundary/components/citas/ventana_ticket.js'));
     ({ default: VistaCitas } = await import('../src/js/boundary/vistas/vista_citas.js'));
     ({ default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js'));
     ({ ControladorCitas, MENSAJES } = await import('../src/js/control/controladores/controlador_citas.js'));
@@ -79,10 +78,10 @@ const abierta = (ticket, extra = {}) => Object.freeze({ abierto: true, cita: cit
 
 describe('<ventana-ticket>: contenido', () => {
     test('detectarVisorPdf: solo navigator.pdfViewerEnabled === true cuenta', () => {
-        assert.equal(detectarVisorPdf({ pdfViewerEnabled: true }), true);
-        assert.equal(detectarVisorPdf({ pdfViewerEnabled: false }), false, 'Chrome de Android');
-        assert.equal(detectarVisorPdf({}), false, 'navegador sin la propiedad');
-        assert.equal(detectarVisorPdf(undefined), false);
+        assert.equal(VentanaTicket.detectarVisorPdf({ pdfViewerEnabled: true }), true);
+        assert.equal(VentanaTicket.detectarVisorPdf({ pdfViewerEnabled: false }), false, 'Chrome de Android');
+        assert.equal(VentanaTicket.detectarVisorPdf({}), false, 'navegador sin la propiedad');
+        assert.equal(VentanaTicket.detectarVisorPdf(undefined), false);
     });
 
     test('cerrada no abre el diálogo; abierta usa showModal, foco en la X y datos con textContent', () => {

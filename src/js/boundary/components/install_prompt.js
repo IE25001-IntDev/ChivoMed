@@ -4,8 +4,9 @@
  * ya está instalada o cuando se instala (appinstalled). La lógica vive en ControladorInstalacion.
  * Se suscribe a su estado reactivo al conectarse y cancela al desconectarse.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea uno por conexión.
- * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas y el login) y pide al
- * controlador que invite a instalar (cada vez, hasta que la app se instale). Con `invitacion` abre su <dialog> modal
+ * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas, el login y la apertura de la
+ * ventana del ticket en vista_citas.js) y pide al controlador que invite a instalar (cada vez, hasta
+ * que la app se instale). Con `invitacion` abre su <dialog> modal
  * (showModal); al cerrarse devuelve el foco a donde estaba. Con beforeinstallprompt muestra
  * "Instalar" (llama a prompt() en ese clic, foco inicial) y "Ahora no"; con `instrucciones`, el texto
  * para instalar desde el menú del navegador y un solo botón "Entendido" (foco inicial). "Ahora no",
@@ -15,14 +16,14 @@
  * Si su ventana se abre encima de otra (la del ticket), Esc cierra solo esta, y al cerrarla el foco
  * vuelve al elemento de la otra ventana que lo tenía.
  */
-import { ControladorInstalacion, MODOS, EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
-import { hojaDeEstilos } from "../estilos.js";
-import { plantilla } from "../plantilla.js";
+import { ControladorInstalacion, EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
+import { Estilos } from "../estilos.js";
+import { Plantilla } from "../plantilla.js";
 
 const TEXTO_INVITACION = "¿Quieres instalar ChivoMed en este dispositivo? Podrás abrirla como una aplicación y consultar tus datos guardados sin conexión.";
 const TEXTO_INSTRUCCIONES = "Para instalar ChivoMed, abre el menú del navegador y elige Instalar ChivoMed o Agregar a la pantalla de inicio.";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <button class="instalar" id="instalar" type="button" hidden>
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
   <span>Instalar app</span>
@@ -71,7 +72,7 @@ class InstallPrompt extends HTMLElement {
 
     connectedCallback() {
         if (!this.shadowRoot.childElementCount) {
-            this.shadowRoot.append(hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
+            this.shadowRoot.append(Estilos.hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
         }
         this.#controlador = this.#inyectado ?? new ControladorInstalacion({ ventana: window });
         this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
@@ -104,8 +105,8 @@ class InstallPrompt extends HTMLElement {
 
     #pintar(estado) {
         const boton = this.shadowRoot.getElementById("instalar");
-        boton.hidden = estado.modo !== MODOS.DISPONIBLE && estado.modo !== MODOS.INSTALANDO;
-        boton.disabled = estado.modo === MODOS.INSTALANDO;
+        boton.hidden = estado.modo !== ControladorInstalacion.MODOS.DISPONIBLE && estado.modo !== ControladorInstalacion.MODOS.INSTALANDO;
+        boton.disabled = estado.modo === ControladorInstalacion.MODOS.INSTALANDO;
         this.shadowRoot.getElementById("estado").textContent = estado.mensaje ?? "";
         this.#pintarInvitacion(estado.invitacion, estado.instrucciones);
     }
@@ -118,7 +119,7 @@ class InstallPrompt extends HTMLElement {
             $("invitacion-instalar").hidden = instrucciones;
             $("invitacion-no").hidden = instrucciones;
             $("invitacion-entendido").hidden = !instrucciones;
-            this.#focoPrevio = focoProfundo();
+            this.#focoPrevio = InstallPrompt.#focoProfundo();
             dialogo.showModal();
             $(instrucciones ? "invitacion-entendido" : "invitacion-instalar").focus();
         } else if (!abierta) {
@@ -128,13 +129,13 @@ class InstallPrompt extends HTMLElement {
             if (previo && previo.isConnected !== false) previo.focus?.();
         }
     }
-}
 
-/** El elemento con el foco, atravesando los Shadow DOM abiertos. */
-function focoProfundo() {
-    let actual = document.activeElement;
-    while (actual?.shadowRoot?.activeElement) actual = actual.shadowRoot.activeElement;
-    return actual;
+    /** El elemento con el foco, atravesando los Shadow DOM abiertos. */
+    static #focoProfundo() {
+        let actual = document.activeElement;
+        while (actual?.shadowRoot?.activeElement) actual = actual.shadowRoot.activeElement;
+        return actual;
+    }
 }
 
 customElements.define("install-prompt", InstallPrompt);

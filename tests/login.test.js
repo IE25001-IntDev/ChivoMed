@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorLogin, MENSAJES, destinoTrasLogin } from '../src/js/control/controladores/controlador_login.js';
-import { crearValidadorFormato } from '../src/js/control/formato_documento.js';
+import { ControladorLogin, MENSAJES } from '../src/js/control/controladores/controlador_login.js';
+import { FormatoDocumento } from '../src/js/control/formato_documento.js';
 
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const DUI = { idTipoDocumento: UUID(1), nombre: 'DUI', indicaciones: 'Ocho dígitos, guion y dígito verificador.', expresionRegular: '\\d{8}-\\d' };
@@ -81,10 +81,10 @@ describe('ControladorLogin: validación', () => {
     });
 
     test('crearValidadorFormato ignora expresiones vacías o inválidas en lugar de bloquear el acceso', () => {
-        assert.equal(crearValidadorFormato(null), null);
-        assert.equal(crearValidadorFormato('  '), null);
-        assert.equal(crearValidadorFormato('(sin cerrar'), null);
-        const alternativa = crearValidadorFormato('A|B');
+        assert.equal(FormatoDocumento.crearValidadorFormato(null), null);
+        assert.equal(FormatoDocumento.crearValidadorFormato('  '), null);
+        assert.equal(FormatoDocumento.crearValidadorFormato('(sin cerrar'), null);
+        const alternativa = FormatoDocumento.crearValidadorFormato('A|B');
         assert.equal(alternativa('A'), true);
         assert.equal(alternativa('AB'), false, 'la alternativa se ancla completa, no por partes');
     });
@@ -152,18 +152,18 @@ describe('ControladorLogin: envío', () => {
 
 describe('destinoTrasLogin', () => {
     const query = volver => new URLSearchParams(volver === undefined ? '' : { volver });
-    test('sin volver entra al dashboard para empleados', () => assert.equal(destinoTrasLogin(query(), sesion('DOCTOR')), '/dashboard'));
-    test('vuelve a la consulta que se pidió', () => assert.equal(destinoTrasLogin(query(`/consulta/${UUID(5)}`), sesion('DOCTOR')), `/consulta/${UUID(5)}`));
+    test('sin volver entra al dashboard para empleados', () => assert.equal(ControladorLogin.destinoTrasLogin(query(), sesion('DOCTOR')), '/dashboard'));
+    test('vuelve a la consulta que se pidió', () => assert.equal(ControladorLogin.destinoTrasLogin(query(`/consulta/${UUID(5)}`), sesion('DOCTOR')), `/consulta/${UUID(5)}`));
     for (const malo of ['//evil.example', 'https://evil.example', '/login', '/no-existe']) {
-        test(`ignora volver=${malo}`, () => assert.equal(destinoTrasLogin(query(malo), sesion('DOCTOR')), '/dashboard'));
+        test(`ignora volver=${malo}`, () => assert.equal(ControladorLogin.destinoTrasLogin(query(malo), sesion('DOCTOR')), '/dashboard'));
     }
     test('redirige personas sin rol o pacientes a la ruta pública', () => {
-        assert.equal(destinoTrasLogin(query(), sesion(undefined)), '/citas');
-        assert.equal(destinoTrasLogin(query(), sesion('PACIENTE')), '/citas');
+        assert.equal(ControladorLogin.destinoTrasLogin(query(), sesion(undefined)), '/citas');
+        assert.equal(ControladorLogin.destinoTrasLogin(query(), sesion('PACIENTE')), '/citas');
     });
     test('no permite volver a una ruta protegida sin rol de empleado', () =>
-        assert.equal(destinoTrasLogin(query('/dashboard'), sesion('PACIENTE')), '/citas'));
-    test('tolera un contexto sin query', () => assert.equal(destinoTrasLogin(undefined, sesion('DOCTOR')), '/dashboard'));
+        assert.equal(ControladorLogin.destinoTrasLogin(query('/dashboard'), sesion('PACIENTE')), '/citas'));
+    test('tolera un contexto sin query', () => assert.equal(ControladorLogin.destinoTrasLogin(undefined, sesion('DOCTOR')), '/dashboard'));
 });
 
 describe('ControladorLogin: estado reactivo', () => {

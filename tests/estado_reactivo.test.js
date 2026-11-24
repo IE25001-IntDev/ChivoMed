@@ -1,6 +1,12 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { crearEstado } from '../src/js/control/estado_reactivo.js';
+import { EstadoReactivo } from '../src/js/control/estado_reactivo.js';
+
+/** Instancia nueva con `estado` y `suscribir` sueltos (suscribir sigue llamando a la instancia). */
+function crear(inicial, opciones) {
+    const reactivo = new EstadoReactivo(inicial, opciones);
+    return { estado: reactivo.estado, suscribir: fn => reactivo.suscribir(fn) };
+}
 
 const tick = () => new Promise(resolve => queueMicrotask(resolve));
 
@@ -8,7 +14,7 @@ const tick = () => new Promise(resolve => queueMicrotask(resolve));
 function manual(inicial) {
     const cola = [];
     const errores = [];
-    const r = crearEstado(inicial, { programar: fn => cola.push(fn), alFallar: e => errores.push(e) });
+    const r = crear(inicial, { programar: fn => cola.push(fn), alFallar: e => errores.push(e) });
     return { ...r, cola, errores, vaciar: () => { while (cola.length) cola.shift()(); } };
 }
 
@@ -19,9 +25,9 @@ function registrar(suscribir) {
     return { lotes, cancelar };
 }
 
-describe('crearEstado', () => {
+describe('EstadoReactivo', () => {
     test('lee los valores iniciales y una escritura se ve de inmediato', () => {
-        const { estado } = crearEstado({ a: 1, b: 'x' });
+        const { estado } = crear({ a: 1, b: 'x' });
         assert.equal(estado.a, 1);
         estado.a = 2;
         assert.equal(estado.a, 2);
@@ -29,7 +35,7 @@ describe('crearEstado', () => {
     });
 
     test('un cambio notifica una vez y en el siguiente microtask, no antes', async () => {
-        const { estado, suscribir } = crearEstado({ a: 1 });
+        const { estado, suscribir } = crear({ a: 1 });
         const { lotes } = registrar(suscribir);
         estado.a = 2;
         assert.deepEqual(lotes, [], 'no notifica de forma síncrona');
@@ -49,7 +55,7 @@ describe('crearEstado', () => {
     });
 
     test('varios cambios del mismo tick, incluido Object.assign, llegan juntos', async () => {
-        const { estado, suscribir } = crearEstado({ a: 1, b: 1, c: 1 });
+        const { estado, suscribir } = crear({ a: 1, b: 1, c: 1 });
         const { lotes } = registrar(suscribir);
         estado.a = 2;
         Object.assign(estado, { b: 2, c: 2 });
@@ -81,7 +87,7 @@ describe('crearEstado', () => {
     });
 
     test('cambios en ticks distintos generan notificaciones distintas', async () => {
-        const { estado, suscribir } = crearEstado({ a: 1 });
+        const { estado, suscribir } = crear({ a: 1 });
         const { lotes } = registrar(suscribir);
         estado.a = 2;
         await tick();
@@ -91,7 +97,7 @@ describe('crearEstado', () => {
     });
 
     test('cancelar detiene las notificaciones y se puede llamar dos veces', async () => {
-        const { estado, suscribir } = crearEstado({ a: 1 });
+        const { estado, suscribir } = crear({ a: 1 });
         const { lotes, cancelar } = registrar(suscribir);
         cancelar();
         cancelar();
@@ -125,7 +131,7 @@ describe('crearEstado', () => {
     });
 
     test('una clave desconocida, delete y defineProperty lanzan TypeError', () => {
-        const { estado } = crearEstado({ a: 1 });
+        const { estado } = crear({ a: 1 });
         assert.throws(() => { estado.b = 1; }, TypeError);
         assert.throws(() => { delete estado.a; }, TypeError);
         assert.throws(() => Object.defineProperty(estado, 'a', { value: 2 }), TypeError);
@@ -147,7 +153,7 @@ describe('crearEstado', () => {
     });
 
     test('la reactividad es superficial: un arreglo congelado no se puede mutar, se reemplaza', async () => {
-        const { estado, suscribir } = crearEstado({ lista: Object.freeze([1]) });
+        const { estado, suscribir } = crear({ lista: Object.freeze([1]) });
         const { lotes } = registrar(suscribir);
         assert.throws(() => estado.lista.push(2), TypeError);
         estado.lista = Object.freeze([...estado.lista, 2]);
@@ -156,7 +162,20 @@ describe('crearEstado', () => {
         assert.deepEqual(estado.lista, [1, 2]);
     });
 
+    test('programar y alFallar se llaman sin receptor, como queueMicrotask del navegador exige', async () => {
+        const receptores = [];
+        // En modo estricto `this` es undefined si se llama sin receptor; queueMicrotask del navegador
+        // lanza "Illegal invocation" si recibe otro.
+        function programar(tarea) { receptores.push(this); queueMicrotask(tarea); }
+        function alFallar() { receptores.push(this); }
+        const { estado, suscribir } = crear({ a: 1 }, { programar, alFallar });
+        suscribir(() => { throw new Error('suscriptor roto'); });
+        estado.a = 2;
+        await tick();
+        assert.deepEqual(receptores, [undefined, undefined]);
+    });
+
     test('suscribir exige una función', () => {
-        assert.throws(() => crearEstado({}).suscribir(null), TypeError);
+        assert.throws(() => new EstadoReactivo({}).suscribir(null), TypeError);
     });
 });

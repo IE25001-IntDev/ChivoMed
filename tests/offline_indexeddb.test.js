@@ -1,14 +1,14 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { crearAlmacenOffline, NOMBRE_BASE, ALMACEN } from '../src/js/control/almacen_offline.js';
-import { MemoriaVistas, VIGENCIA_MS, RANURA_SESION, ranuraDe } from '../src/js/control/memoria_vistas.js';
+import { AlmacenOffline, NOMBRE_BASE, ALMACEN } from '../src/js/control/almacen_offline.js';
+import { MemoriaVistas, VIGENCIA_MS, RANURA_SESION } from '../src/js/control/memoria_vistas.js';
 import { ControladorConsultas } from '../src/js/control/controladores/controlador_consultas.js';
 import * as memoriaVistas from '../src/js/control/memoria_vistas.js';
 import { ControladorCitas, CLAVE_MEMORIA as CLAVE_CITAS, MENSAJES as MENSAJES_CITAS } from '../src/js/control/controladores/controlador_citas.js';
 import { FechasSV } from '../src/js/control/fechas_sv.js';
 import { crearIndexedDbDoble } from './dobles/indexeddb_doble.js';
 import { ControladorConexion } from '../src/js/control/controlador_conexion.js';
-import { listarTiposDocumento, CABECERA_COPIA } from '../src/js/control/auth_service.js';
+import { auth, CABECERA_COPIA } from '../src/js/control/auth_service.js';
 
 // Datos inventados (demo del guion): Carlos Gómez, Doctor en Clínica Santa Ana; Lucía Pérez, Enfermera.
 const UUID = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -28,7 +28,7 @@ const disco = fabrica => Object.fromEntries(fabrica.bases.get(NOMBRE_BASE)?.get(
 
 /** `documento` recibe "servidor-respondio" de DefaultService y auth_service (null: no escucha). */
 function nuevaMemoria(fabrica, desfase = 0, { documento = null } = {}) {
-    return new MemoriaVistas({ persistencia: crearAlmacenOffline(fabrica), reloj: reloj(desfase), documento });
+    return new MemoriaVistas({ persistencia: AlmacenOffline.crear(fabrica), reloj: reloj(desfase), documento });
 }
 
 const consultaDemo = {
@@ -57,13 +57,13 @@ function controladorDashboard(memoria, { enLinea, dashboard = async () => [consu
 
 describe('almacen_offline', () => {
     test('sin IndexedDB no hay almacén', () => {
-        assert.equal(crearAlmacenOffline(undefined), null);
-        assert.equal(crearAlmacenOffline({}), null);
+        assert.equal(AlmacenOffline.crear(undefined), null);
+        assert.equal(AlmacenOffline.crear({}), null);
     });
 
     test('guarda, lee, borra un registro y vacía todo; una sola apertura de la base', async () => {
         const fabrica = crearIndexedDbDoble();
-        const almacen = crearAlmacenOffline(fabrica);
+        const almacen = AlmacenOffline.crear(fabrica);
         assert.equal(await almacen.guardar('a', { fecha: AHORA }), true);
         await almacen.guardar('b', 2);
         const leido = await almacen.leer(['a', 'b', 'c']);
@@ -77,22 +77,22 @@ describe('almacen_offline', () => {
     });
 
     test('si IndexedDB falla, lee vacío y las escrituras resuelven false sin lanzar', async () => {
-        const cerrada = crearAlmacenOffline(crearIndexedDbDoble({ fallarAlAbrir: true }));
+        const cerrada = AlmacenOffline.crear(crearIndexedDbDoble({ fallarAlAbrir: true }));
         assert.deepEqual(await cerrada.leer(['a']), {});
         assert.equal(await cerrada.guardar('a', 1), false);
         assert.equal(await cerrada.borrar(), false);
-        const llena = crearAlmacenOffline(crearIndexedDbDoble({ fallarAlEscribir: true }));
+        const llena = AlmacenOffline.crear(crearIndexedDbDoble({ fallarAlEscribir: true }));
         assert.equal(await llena.guardar('a', 1), false);
     });
 });
 
 describe('MemoriaVistas con copia en disco', () => {
     test('ranuraDe: solo el último dashboard, las asignaciones y la consulta van a disco', () => {
-        assert.equal(ranuraDe(`dashboard.ultimo:${UUID(10)}`), 'dashboard');
-        assert.equal(ranuraDe('dashboard.asignaciones'), 'asignaciones');
-        assert.equal(ranuraDe(`consulta:${UUID(20)}`), 'consulta');
+        assert.equal(MemoriaVistas.ranuraDe(`dashboard.ultimo:${UUID(10)}`), 'dashboard');
+        assert.equal(MemoriaVistas.ranuraDe('dashboard.asignaciones'), 'asignaciones');
+        assert.equal(MemoriaVistas.ranuraDe(`consulta:${UUID(20)}`), 'consulta');
         for (const nombre of [`dashboard.consultas:${UUID(10)}:2026-11-13:2026-11-13`, `dashboard.valor:${UUID(22)}`,
-            `consulta.borrador:${UUID(22)}`, 'citas.busqueda']) assert.equal(ranuraDe(nombre), null, nombre);
+            `consulta.borrador:${UUID(22)}`, 'citas.busqueda']) assert.equal(MemoriaVistas.ranuraDe(nombre), null, nombre);
     });
 
     test('la sesión va a disco sin csrfToken y con la hora de verificación', async () => {
@@ -163,7 +163,7 @@ describe('MemoriaVistas con copia en disco', () => {
 
     test('una copia sin fecha válida o sin usuario se descarta', async () => {
         const fabrica = crearIndexedDbDoble();
-        const almacen = crearAlmacenOffline(fabrica);
+        const almacen = AlmacenOffline.crear(fabrica);
         await almacen.guardar(RANURA_SESION, { sesion: sesionDe(CARLOS), verificadaEn: 'ayer' });
         assert.equal(await nuevaMemoria(fabrica).hidratar(), false);
         await almacen.guardar(RANURA_SESION, { sesion: { usuario: {} }, verificadaEn: AHORA });
@@ -172,7 +172,7 @@ describe('MemoriaVistas con copia en disco', () => {
 
     test('datos en disco de otro usuario no se cargan con la sesión guardada', async () => {
         const fabrica = crearIndexedDbDoble();
-        const almacen = crearAlmacenOffline(fabrica);
+        const almacen = AlmacenOffline.crear(fabrica);
         await almacen.guardar(RANURA_SESION, { sesion: sesionDe(CARLOS), verificadaEn: AHORA });
         await almacen.guardar('consulta', { clave: `${LUCIA}:consulta:${UUID(20)}`, valor: { consulta: consultaDemo } });
         const m = nuevaMemoria(fabrica);
@@ -353,7 +353,7 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         const fabrica = crearIndexedDbDoble();
         await buscarConExito(nuevaMemoria(fabrica));
         await asentar();
-        const almacen = crearAlmacenOffline(fabrica);
+        const almacen = AlmacenOffline.crear(fabrica);
         await almacen.guardar('dashboard', { clave: `${CARLOS}:dashboard.ultimo:x`, valor: {} });
         const recargada = nuevaMemoria(fabrica);
         await recargada.hidratar();
@@ -412,7 +412,7 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         test('una respuesta servida desde la copia no marca en línea ni borra la búsqueda guardada', async () => {
             const { fabrica, recargada } = await cargarConRed();
             globalThis.fetch = async () => Response.json(TIPOS, { headers: { [CABECERA_COPIA]: '1' } });
-            assert.equal((await listarTiposDocumento()).length, 1);
+            assert.equal((await auth.listarTiposDocumento()).length, 1);
             await asentar();
             assert.equal(conexion.enLinea, false);
             assert.equal(conexion.motivo, 'servidor');
@@ -433,9 +433,9 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         test('una respuesta real del backend sí marca en línea y borra la búsqueda guardada', async () => {
             const { fabrica, recargada } = await cargarConRed();
             globalThis.fetch = async () => Response.json(TIPOS, { headers: { [CABECERA_COPIA]: '1' } });
-            await listarTiposDocumento();
+            await auth.listarTiposDocumento();
             globalThis.fetch = async () => Response.json(TIPOS);
-            await listarTiposDocumento();
+            await auth.listarTiposDocumento();
             await asentar();
             assert.equal(conexion.enLinea, true);
             assert.equal(recargada.leer(CLAVE_CITAS), null);
@@ -538,7 +538,7 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
 // Punto 6: las consultas de hoy que me tocan van a disco con las mismas reglas.
 describe('consultas pendientes de hoy en IndexedDB', () => {
     test('van a disco, se hidratan al recargar y cerrar sesión las borra', async () => {
-        assert.equal(ranuraDe('consultas.pendientes:x'), 'pendientes');
+        assert.equal(MemoriaVistas.ranuraDe('consultas.pendientes:x'), 'pendientes');
         const fabrica = crearIndexedDbDoble();
         const memoria = nuevaMemoria(fabrica);
         const sesion = sesionDe(CARLOS);

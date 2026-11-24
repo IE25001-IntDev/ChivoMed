@@ -10,14 +10,14 @@
  * 'titulo-consultas' { titulo } (bubbles) cuando cambia el rango mostrado, para el encabezado de
  * la sección de <vista-dashboard>. "Buscar paciente" filtra lo cargado sin pedir nada al backend.
  */
-import { ControladorConsultas, motivoNoAtender, resumenResultado } from "../../../control/controladores/controlador_consultas.js";
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
+import { ControladorConsultas } from "../../../control/controladores/controlador_consultas.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
-import { mensajeGuardado } from "../../../control/controlador_conexion.js";
+import { ControladorConexion } from "../../../control/controlador_conexion.js";
 import "./tarjeta_consulta_dashboard.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <form class="filtro-fechas" id="filtro" novalidate aria-label="Filtrar consultas por fecha">
   <div class="campo">
     <label for="desde">Desde</label>
@@ -92,7 +92,7 @@ class ListaConsultas extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.$("filtro").addEventListener("submit", this.#alBuscar);
         this.$("desde").addEventListener("change", this.#alCambiarFecha);
@@ -137,7 +137,7 @@ class ListaConsultas extends HTMLElement {
         }
 
         const aviso = estado.cargando && !estado.consultas.length ? "Cargando consultas…"
-            : estado.desdeMemoria ? mensajeGuardado(FechasSV.hora(estado.actualizadoEn)) : null;
+            : estado.desdeMemoria ? ControladorConexion.mensajeGuardado(FechasSV.hora(estado.actualizadoEn)) : null;
         this.$("estado").hidden = !aviso;
         this.$("estado").textContent = aviso ?? "";
         this.$("error").hidden = !estado.error;
@@ -146,7 +146,7 @@ class ListaConsultas extends HTMLElement {
         this.$("filtro").setAttribute("aria-busy", String(estado.cargando));
         if (cambio("busqueda") && this.$("busqueda").value !== estado.busqueda) this.$("busqueda").value = estado.busqueda;
         if (cambio("consultas") || cambio("consultado") || cambio("cargando") || cambio("busqueda")) {
-            this.$("resumen").textContent = estado.cargando ? "" : resumenResultado(estado.consultas, estado.consultado, estado.busqueda);
+            this.$("resumen").textContent = estado.cargando ? "" : ControladorConsultas.resumenResultado(estado.consultas, estado.consultado, estado.busqueda);
         }
         if (cambio("consultado")) {
             this.dispatchEvent(new CustomEvent("titulo-consultas", { bubbles: true, detail: { titulo: this.#controlador.titulo } }));
@@ -161,7 +161,7 @@ class ListaConsultas extends HTMLElement {
     }
 
     #motivo(consulta) {
-        return motivoNoAtender(consulta, this.#controlador.contextoAtender());
+        return ControladorConsultas.motivoNoAtender(consulta, this.#controlador.contextoAtender());
     }
 
     #pintarTarjetas(estado) {

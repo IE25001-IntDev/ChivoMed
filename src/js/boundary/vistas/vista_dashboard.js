@@ -12,12 +12,12 @@
  * F8: con una consulta en curso (estado.enCurso) muestra "Tienes una consulta en curso", el enlace
  * "Ir a la consulta en curso" y "Salir de la consulta", y le pasa `enCurso` a <lista-consultas>.
  */
-import { ControladorDashboard, mensajeMemoria, MENSAJES } from "../../control/controladores/controlador_dashboard.js";
-import { nombreDeRol } from "../../control/auth_service.js";
-import { hojaDeEstilos } from "../estilos.js";
+import { ControladorDashboard, MENSAJES } from "../../control/controladores/controlador_dashboard.js";
+import { AuthService } from "../../control/auth_service.js";
+import { Estilos } from "../estilos.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import "../components/dashboard/lista_consultas.js";
-import { plantilla } from "../plantilla.js";
+import { Plantilla } from "../plantilla.js";
 
 /** F8: textos fijos del aviso de consulta en curso. */
 const TEXTOS = Object.freeze({
@@ -27,7 +27,7 @@ const TEXTOS = Object.freeze({
     saliendo: "Saliendo…",
 });
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Dashboard</h1>
   <p class="subtitulo" id="activo" aria-live="polite"></p>
@@ -93,7 +93,7 @@ class VistaDashboard extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            raiz.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
+            raiz.append(Estilos.hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
         }
         this.$ = id => raiz.getElementById(id);
         this.$("selector").addEventListener("submit", this.#alEnviar);
@@ -138,12 +138,12 @@ class VistaDashboard extends HTMLElement {
 
         const rol = estado.activa
             ? { nombre: estado.activa.nombreRol, clinica: estado.activa.nombreClinica }
-            : { nombre: estado.sesion?.rolActivo ? nombreDeRol(estado.sesion.rolActivo) : null, clinica: estado.sesion?.rolActivo?.nombreClinica };
+            : { nombre: estado.sesion?.rolActivo ? AuthService.nombreDeRol(estado.sesion.rolActivo) : null, clinica: estado.sesion?.rolActivo?.nombreClinica };
         this.$("activo").textContent = rol.nombre && rol.clinica ? `Estás atendiendo como ${rol.nombre} en ${rol.clinica}.` : "";
 
         const avisoEstado = estado.cargando && !estado.grupos.length ? "Cargando tus roles…"
             : estado.soloLectura ? MENSAJES.soloLectura
-            : estado.desdeMemoria ? mensajeMemoria(estado.actualizadoEn)
+            : estado.desdeMemoria ? ControladorDashboard.mensajeMemoria(estado.actualizadoEn)
             : estado.vacio ? MENSAJES.sinAsignaciones : null;
         this.$("estado").hidden = !avisoEstado;
         this.$("estado").textContent = avisoEstado ?? "";

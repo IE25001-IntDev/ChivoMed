@@ -21,11 +21,11 @@ import AtencionService from "../atencion_service.js";
 import ConsultaService from "../consulta_service.js";
 import ConsultaProcedimientoPasoService from "../consulta_procedimiento_paso_service.js";
 import ProcedimientoPasoService from "../procedimiento_paso_service.js";
-import { crearEstado } from "../estado_reactivo.js";
+import { EstadoReactivo } from "../estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "../memoria_vistas.js";
 import { conexion as conexionCompartida } from "../conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../controlador_conexion.js";
-import { normalizarConsultas, motivoNoAtender, esPasoDeMiRol, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
+import { ControladorConexion, MENSAJE_SIN_DATOS } from "../controlador_conexion.js";
+import { ControladorConsultas, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
 import { Validaciones } from "../validaciones.js";
 
 export const MAX_TEXTO = 255;
@@ -41,12 +41,12 @@ export const MENSAJES = Object.freeze({
     sinSeleccion: "No pudimos seleccionar esta consulta para atenderla. Vuelve a intentarlo.",
     cerrada: "Esta consulta ya está cerrada.",
     cerradaAhora: "Consulta cerrada.",
-    sinRed: motivoSinConexion("registrar la atención"),
+    sinRed: ControladorConexion.motivoSinConexion("registrar la atención"),
     sinRedCarga: MENSAJE_SIN_DATOS,
-    desdeMemoria: mensajeGuardado,
+    desdeMemoria: ControladorConexion.mensajeGuardado,
     /** F8: texto propio para consulta.cerrarAntesRetomar; se ignora el message del backend. */
     enCurso: "Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.",
-    sinRedSalir: motivoSinConexion("salir de la consulta"),
+    sinRedSalir: ControladorConexion.motivoSinConexion("salir de la consulta"),
     noEncontrada: "No encontramos esta consulta en tu clínica.",
     sinPermiso: "No tienes permiso para atender esta consulta.",
     sesionFinalizada: "Tu sesión ha finalizado. Vuelve a iniciar sesión.",
@@ -113,176 +113,50 @@ export const CODIGOS_POR_ROL = Object.freeze(["consulta.noResponsablePaso", "con
 /** Rechazos de una orden que dejan viejo lo mostrado: se recarga la consulta. */
 const RECARGAR_TRAS_ORDEN = new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]);
 
-/** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
-export function mensajeDeErrorConsulta(error) {
-    const code = error?.code;
-    if (code && Object.hasOwn(USAR_MENSAJE_BACKEND, code)) return Validaciones.esTexto(error.message) ? error.message.trim() : USAR_MENSAJE_BACKEND[code];
-    if (code && Object.hasOwn(POR_CODIGO, code)) return POR_CODIGO[code];
-    switch (error?.status) {
-        case 0: return MENSAJES.conexion;
-        case 401: return MENSAJES.sesionFinalizada;
-        case 403: return MENSAJES.sinPermiso;
-        case 404: return MENSAJES.noEncontrada;
-        case 400: case 409: return Validaciones.esTexto(error.message) ? error.message.trim() : MENSAJES.generico;
-        default: return MENSAJES.generico;
-    }
-}
-
-/** Pasos PENDIENTE de la consulta, en orden, con el nombre de su procedimiento. */
-export function pasosPendientes(consulta) {
-    if (!consulta) return NINGUNA;
-    return congelar(consulta.procedimientos.flatMap(p => p.pasos
-        .filter(s => s.estado === "PENDIENTE")
-        .map(paso => congelar({ paso, procedimiento: p.nombre }))));
-}
-
-/**
- * Paso actual: el elegido si sigue PENDIENTE; si no, el primero del rol activo (por `idRol`, cuando
- * el backend envía `rolPaso` y el rol activo trae `idRol`); si ninguno, el primero. null si no
- * quedan pendientes. Nunca compara roles por nombre.
- */
-export function elegirPasoActual(consulta, rolActivo, idElegido = null) {
-    const pendientes = pasosPendientes(consulta).map(p => p.paso);
-    if (!pendientes.length) return null;
-    return pendientes.find(p => p.idConsultaProcedimientoPaso === idElegido)
-        ?? pendientes.find(p => esPasoDeMiRol(p, rolActivo))
-        ?? pendientes[0];
-}
-
-/**
- * Motivo por el que toda la vista queda en solo lectura, en orden de prioridad; null si se puede
- * atender. `atendiendo` es true si la consulta se seleccionó en la sesión (PUT …/sesion).
- */
-export function motivoBloqueo({ consulta, atendiendo = false, enLinea = true, soloLectura = false }) {
-    if (!consulta) return null;
-    if (consulta.fechaFin) return MENSAJES.cerrada;
-    if (!consulta.pendienteParaMi) return motivoNoAtender(consulta);
-    if (!enLinea || soloLectura) return MENSAJES.sinRed;
-    if (!atendiendo) return MENSAJES.sinSeleccion;
-    return null;
-}
-
-/** Retroceder solo se ofrece si el paso no es el primero de su procedimiento. */
-export function puedeOfrecerRetroceso(paso) {
-    return Boolean(paso) && paso.nivel > 0;
-}
-
-/** null si se puede retroceder; si no, el motivo que el frontend ya conoce (el backend decide el resto). */
-export function motivoNoRetroceder({ ordenes = NINGUNA, valorGuardado = null } = {}) {
-    if (ordenes.length) return MENSAJES.retrocesoConOrdenes;
-    if (Validaciones.esTexto(valorGuardado)) return MENSAJES.retrocesoConRegistro;
-    return null;
-}
-
-/** El cierre se ofrece cuando la consulta está abierta, tiene procedimientos y no quedan pasos PENDIENTE. */
-export function puedeCerrar(consulta) {
-    return Boolean(consulta) && !consulta.fechaFin && consulta.procedimientos.length > 0 && pasosPendientes(consulta).length === 0;
-}
-
-/** Nombre que se muestra para una orden emitida. */
-export function nombreDeOrden(orden, asignables) {
-    if (!orden?.idExamen) return MENSAJES.sinExamen;
-    return asignables.find(e => e.idExamen === orden.idExamen)?.nombre ?? MENSAJES.examenNoDisponible;
-}
-
-/** Tipos de examen activos de un examen asignable (B8): válidos, sin repetir y congelados. */
-function normalizarTipos(datos) {
-    if (!Array.isArray(datos)) return NINGUNA;
-    const vistos = new Set();
-    const tipos = [];
-    for (const t of datos) {
-        if (!t || !Validaciones.esTexto(t.idTipoExamen) || !Validaciones.esTexto(t.nombre) || vistos.has(t.idTipoExamen)) continue;
-        vistos.add(t.idTipoExamen);
-        tipos.push(congelar({ idTipoExamen: t.idTipoExamen, nombre: t.nombre.trim() }));
-    }
-    return congelar(tipos);
-}
-
-/**
- * DTO de GET …/examenes-asignables: [{ idExamen, nombre, tiposExamen: [{ idTipoExamen, nombre }] }].
- * Sin `tiposExamen` queda [] (el filtro por categoría se oculta).
- */
-export function normalizarAsignables(datos) {
-    if (!Array.isArray(datos)) return NINGUNA;
-    return congelar(datos.filter(e => e && Validaciones.esTexto(e.idExamen) && Validaciones.esTexto(e.nombre))
-        .map(e => congelar({ idExamen: e.idExamen, nombre: e.nombre.trim(), tiposExamen: normalizarTipos(e.tiposExamen) })));
-}
-
-/** F9: categorías del filtro: la unión de los tipos de los asignables, por nombre. */
-export function categoriasDe(asignables) {
-    const porId = new Map();
-    for (const e of asignables ?? NINGUNA) for (const t of e.tiposExamen ?? NINGUNA) if (!porId.has(t.idTipoExamen)) porId.set(t.idTipoExamen, t);
-    return congelar([...porId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
-}
-
-/** F9: asignables de una categoría; "" (Todas) los devuelve todos. */
-export function examenesVisibles(asignables, idTipoExamen = "") {
-    if (!idTipoExamen) return asignables;
-    return congelar(asignables.filter(e => e.tiposExamen.some(t => t.idTipoExamen === idTipoExamen)));
-}
-
-/** F9: idExamen ya ordenados en el paso. El backend no impide repetir una orden; el frontend sí. */
-export function idsOrdenados(ordenes) {
-    return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(Validaciones.esTexto))]);
-}
-
-/** F9: texto de cuántos exámenes hay seleccionados. */
-export function textoSeleccion(n) {
-    if (!n) return "Ningún examen seleccionado";
-    return n === 1 ? "1 seleccionado" : `${n} seleccionados`;
-}
-
 /**
  * F9: errores propios de un examen; la serie sigue con el siguiente. Cualquier otro (paso
  * completado, consulta cerrada, rechazo por rol, sesión, red, desconocido) corta la serie.
  */
 const ERRORES_POR_EXAMEN = Object.freeze(["consulta.examenNoAsignable", "consulta.examenObligatorio"]);
 
-/** F9: valida la asignación de varios exámenes antes de enviarla. Devuelve el mensaje o null. */
-export function validarAsignacion({ idsExamen, indicaciones } = {}, asignables = NINGUNA, ordenes = NINGUNA) {
-    if (!Array.isArray(idsExamen) || idsExamen.length === 0) return MENSAJES.seleccionVacia;
-    if (!idsExamen.every(id => asignables.some(e => e.idExamen === id))) return MENSAJES.examenAjeno;
-    const ordenados = idsOrdenados(ordenes);
-    const repetido = idsExamen.find(id => ordenados.includes(id));
-    if (repetido) return MENSAJES.yaOrdenado(asignables.find(e => e.idExamen === repetido).nombre);
-    if (typeof indicaciones === "string" && indicaciones.trim().length > MAX_TEXTO) return `Las indicaciones admiten hasta ${MAX_TEXTO} caracteres.`;
-    return null;
-}
+/** Servicio por defecto (fachada): adapta los servicios REST a las operaciones que usa el controlador. */
+export class ServicioConsulta {
+    #atencion;
+    #consultas;
+    #pasos;
+    #definiciones;
 
-function normalizarOrdenes(datos) {
-    if (!Array.isArray(datos)) return NINGUNA;
-    return congelar(datos.filter(o => o && Validaciones.esTexto(o.idOrdenExamen)).map(o => congelar({
-        idOrdenExamen: o.idOrdenExamen,
-        idExamen: Validaciones.esTexto(o.idExamen) ? o.idExamen : null,
-        indicaciones: Validaciones.esTexto(o.indicaciones) ? o.indicaciones.trim() : null,
-        fechaCreacion: Validaciones.esTexto(o.fechaCreacion) ? o.fechaCreacion : null,
-    })));
-}
+    constructor({
+        atencion = new AtencionService(), consultas = new ConsultaService(),
+        pasos = new ConsultaProcedimientoPasoService(), definiciones = new ProcedimientoPasoService(),
+    } = {}) {
+        this.#atencion = atencion;
+        this.#consultas = consultas;
+        this.#pasos = pasos;
+        this.#definiciones = definiciones;
+    }
 
-/** Servicio por defecto: adapta los servicios REST a las operaciones que usa el controlador. */
-export function servicioConsulta({
-    atencion = new AtencionService(), consultas = new ConsultaService(),
-    pasos = new ConsultaProcedimientoPasoService(), definiciones = new ProcedimientoPasoService(),
-} = {}) {
-    return {
-        retomar: id => consultas.retomar(id),
-        contexto: () => atencion.contexto(),
-        consulta: id => atencion.consulta(id),
-        paso: id => pasos.buscarPorId(id),
-        definicion: id => definiciones.buscarPorId(id),
-        ordenes: id => pasos.ordenesExamen(id).listar(),
-        asignables: id => pasos.examenesAsignables(id),
-        completar: (id, valor) => pasos.completar(id, valor),
-        retroceder: id => pasos.retroceder(id),
-        ordenar: (id, datos) => pasos.ordenar(id, datos),
-        cerrar: (id, notas) => consultas.cerrar(id, notas),
-        salirDeConsulta: () => atencion.salirDeConsulta(),
-    };
+    retomar(id) { return this.#consultas.retomar(id); }
+    contexto() { return this.#atencion.contexto(); }
+    consulta(id) { return this.#atencion.consulta(id); }
+    paso(id) { return this.#pasos.buscarPorId(id); }
+    definicion(id) { return this.#definiciones.buscarPorId(id); }
+    ordenes(id) { return this.#pasos.ordenesExamen(id).listar(); }
+    asignables(id) { return this.#pasos.examenesAsignables(id); }
+    completar(id, valor) { return this.#pasos.completar(id, valor); }
+    retroceder(id) { return this.#pasos.retroceder(id); }
+    ordenar(id, datos) { return this.#pasos.ordenar(id, datos); }
+    cerrar(id, notas) { return this.#consultas.cerrar(id, notas); }
+    salirDeConsulta() { return this.#atencion.salirDeConsulta(); }
 }
 
 const SIN_DETALLE = congelar({ idPaso: null, cargando: false, error: null, valorGuardado: null, indicaFin: null, ordenes: NINGUNA, asignables: NINGUNA });
 
 export class ControladorConsulta {
+    /** Estado reactivo del controlador (composición): `estado` lo publica y `suscribir` delega en él. */
+    #reactivo;
+    /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
+    suscribir = fn => this.#reactivo.suscribir(fn);
     #servicio;
     #conexion;
     #memoria;
@@ -293,17 +167,17 @@ export class ControladorConsulta {
 
     /**
      * @param opciones opcional, con:
-     *   - `servicio`: las operaciones de servicioConsulta(), que resuelven { data }.
+     *   - `servicio`: las operaciones de ServicioConsulta, que resuelven { data }.
      *   - `conexion`: objeto con `enLinea` y `suscribir`.
      *   - `memoria`: una MemoriaVistas (memoria_vistas.js).
      *   - `reloj`: función que devuelve la fecha actual.
      */
     constructor({ servicio, conexion = conexionCompartida, memoria = memoriaCompartida, reloj = () => new Date() } = {}) {
-        this.#servicio = servicio ?? servicioConsulta();
+        this.#servicio = servicio ?? new ServicioConsulta();
         this.#conexion = conexion;
         this.#memoria = memoria;
         this.#reloj = reloj;
-        const { estado, suscribir } = crearEstado({
+        this.#reactivo = new EstadoReactivo({
             sesion: null,
             soloLectura: false,
             enLinea: conexion.enLinea,
@@ -344,13 +218,12 @@ export class ControladorConsulta {
             /** F9: resultado de la última asignación: [{ idExamen, nombre, ok, mensaje }] congelado, o null. */
             resultadoExamenes: null,
         });
-        this.estado = estado;
-        this.suscribir = suscribir;
+        this.estado = this.#reactivo.estado;
     }
 
     // ---------------------------------------------------------------- derivados para la vista
 
-    get pasoActual() { return elegirPasoActual(this.estado.consulta, this.estado.sesion?.rolActivo, this.estado.idElegido); }
+    get pasoActual() { return ControladorConsulta.elegirPasoActual(this.estado.consulta, this.estado.sesion?.rolActivo, this.estado.idElegido); }
 
     /** true si el rol activo atiende esta consulta ahora: seleccionada en la sesión, abierta y le toca. */
     get atiende() {
@@ -367,12 +240,12 @@ export class ControladorConsulta {
         return atendiendo && Boolean(consulta) && !consulta.fechaFin;
     }
 
-    get pendientes() { return pasosPendientes(this.estado.consulta); }
+    get pendientes() { return ControladorConsulta.pasosPendientes(this.estado.consulta); }
 
     /** Motivo de solo lectura de toda la vista, o null. */
     get bloqueo() {
         const { consulta, atendiendo, enLinea, soloLectura, desdeMemoria } = this.estado;
-        return motivoBloqueo({ consulta, atendiendo, enLinea, soloLectura: soloLectura || desdeMemoria });
+        return ControladorConsulta.motivoBloqueo({ consulta, atendiendo, enLinea, soloLectura: soloLectura || desdeMemoria });
     }
 
     // ---------------------------------------------------------------- memoria
@@ -485,7 +358,7 @@ export class ControladorConsulta {
             .then(() => ({ consulta, atendiendo: true, aviso: null }), error => {
                 if (error?.code !== "consulta.yaCerrada" && !CODIGOS_POR_ROL.includes(error?.code)) throw error;
                 if (id !== this.#secuencia) return null;
-                const aviso = mensajeDeErrorConsulta(error);
+                const aviso = ControladorConsulta.mensajeDeErrorConsulta(error);
                 return this.#leerConsulta(idConsulta).then(releida => ({ consulta: releida, atendiendo: false, aviso }));
             })
             .then(resultado => {
@@ -508,14 +381,14 @@ export class ControladorConsulta {
             this.#mostrarMemoria(id);
             return undefined;
         }
-        Object.assign(this.estado, { cargando: false, consulta: null, detalle: SIN_DETALLE, error: mensajeDeErrorConsulta(error), desdeMemoria: false });
+        Object.assign(this.estado, { cargando: false, consulta: null, detalle: SIN_DETALLE, error: ControladorConsulta.mensajeDeErrorConsulta(error), desdeMemoria: false });
         if (error?.code === "consulta.cerrarAntesRetomar") return this.#buscarEnCurso(id);
         return undefined;
     }
 
     #leerConsulta(idConsulta) {
         return new Promise(resolve => resolve(this.#servicio.consulta(idConsulta))).then(({ data }) => {
-            const [consulta] = normalizarConsultas([data]);
+            const [consulta] = ControladorConsultas.normalizarConsultas([data]);
             if (!consulta || consulta.idConsulta !== idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
             return consulta;
         });
@@ -561,7 +434,7 @@ export class ControladorConsulta {
                 this.estado.detalle = congelar({
                     idPaso, cargando: false, error: null, valorGuardado,
                     indicaFin: definicion ? definicion.data?.indicaFin === true : null,
-                    ordenes: normalizarOrdenes(ordenes?.data), asignables: normalizarAsignables(asignables?.data),
+                    ordenes: ControladorConsulta.#normalizarOrdenes(ordenes?.data), asignables: ControladorConsulta.normalizarAsignables(asignables?.data),
                 });
                 this.#depurarExamenes();
                 this.#restaurarBorrador();
@@ -580,7 +453,7 @@ export class ControladorConsulta {
                 })
                 .catch(error => {
                     if (idDetalle !== this.#secuenciaDetalle || idCarga !== this.#secuencia) return;
-                    const error_ = [0, 401, 403, 404].includes(error?.status) ? mensajeDeErrorConsulta(error) : MENSAJES.detalle;
+                    const error_ = [0, 401, 403, 404].includes(error?.status) ? ControladorConsulta.mensajeDeErrorConsulta(error) : MENSAJES.detalle;
                     this.estado.detalle = congelar({ ...previo, idPaso, cargando: false, error: error_ });
                 }));
         });
@@ -601,7 +474,7 @@ export class ControladorConsulta {
         const seleccion = this.estado.seleccionExamenes.filter(id => asignables.some(e => e.idExamen === id) && !ordenados.includes(id));
         if (seleccion.length !== this.estado.seleccionExamenes.length) this.estado.seleccionExamenes = congelar(seleccion);
         const filtro = this.estado.filtroExamenes;
-        if (filtro && !categoriasDe(asignables).some(t => t.idTipoExamen === filtro)) this.estado.filtroExamenes = "";
+        if (filtro && !ControladorConsulta.categoriasDe(asignables).some(t => t.idTipoExamen === filtro)) this.estado.filtroExamenes = "";
     }
 
     /** Borrador del paso actual: lo escrito en esta sesión o, si no hay, el valor guardado (paso reabierto). */
@@ -690,7 +563,7 @@ export class ControladorConsulta {
             }, error => {
                 if (id !== this.#secuencia) return false;
                 // El enlace a la consulta en curso se conserva: sigue en la sesión.
-                Object.assign(this.estado, { saliendo: false, error: mensajeDeErrorConsulta(error) });
+                Object.assign(this.estado, { saliendo: false, error: ControladorConsulta.mensajeDeErrorConsulta(error) });
                 return false;
             }));
         });
@@ -698,7 +571,7 @@ export class ControladorConsulta {
 
     /** null si se puede pedir el retroceso; si no, su motivo. Solo se ofrece si el paso no es el primero. */
     get motivoNoRetroceder() {
-        return this.motivoNoActuar ?? motivoNoRetroceder(this.estado.detalle);
+        return this.motivoNoActuar ?? ControladorConsulta.motivoNoRetroceder(this.estado.detalle);
     }
 
     /**
@@ -721,7 +594,7 @@ export class ControladorConsulta {
                 })
                 .catch(error => {
                     if (idCarga !== this.#secuencia) return false;
-                    this.estado.errorAccion = mensajeDeErrorConsulta(error);
+                    this.estado.errorAccion = ControladorConsulta.mensajeDeErrorConsulta(error);
                     const recarga = recargarTras.has(error?.code) ? this.#recargar() : Promise.resolve();
                     return recarga.then(() => alFallar?.(error)).then(() => ok);
                 })
@@ -739,14 +612,14 @@ export class ControladorConsulta {
         return new Promise(resolve => resolve(this.#servicio.consulta(this.estado.idConsulta)))
             .then(({ data }) => {
                 if (id !== this.#secuencia) return undefined;
-                const [consulta] = normalizarConsultas([data]);
+                const [consulta] = ControladorConsultas.normalizarConsultas([data]);
                 if (!consulta || consulta.idConsulta !== this.estado.idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
                 this.estado.consulta = consulta;
                 return this.#cargarDetalle(id);
             })
             .catch(error => {
                 if (id !== this.#secuencia) return;
-                this.estado.errorAccion ??= mensajeDeErrorConsulta(error);
+                this.estado.errorAccion ??= ControladorConsulta.mensajeDeErrorConsulta(error);
             });
     }
 
@@ -773,7 +646,7 @@ export class ControladorConsulta {
 
     /** Pide retroceder: si hay algo escrito, primero pide confirmar que se descartará. */
     pedirRetroceso() {
-        if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
+        if (!ControladorConsulta.puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
         if (this.estado.borrador.trim()) {
             Object.assign(this.estado, { confirmando: "retroceso", errorAccion: null });
             return Promise.resolve(false);
@@ -782,7 +655,7 @@ export class ControladorConsulta {
     }
 
     #retroceder() {
-        if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
+        if (!ControladorConsulta.puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
         const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
         let anterior = null;
         const operacion = () => new Promise(resolve => resolve(this.#servicio.retroceder(idPaso)))
@@ -801,7 +674,7 @@ export class ControladorConsulta {
 
     /** Pide cerrar la consulta; queda esperando la confirmación. */
     pedirCierre(observaciones = "") {
-        if (this.bloqueo || this.estado.accion || !puedeCerrar(this.estado.consulta)) return false;
+        if (this.bloqueo || this.estado.accion || !ControladorConsulta.puedeCerrar(this.estado.consulta)) return false;
         const notas = typeof observaciones === "string" ? observaciones.trim() : "";
         if (notas.length > MAX_TEXTO) {
             this.estado.errorAccion = `Las observaciones admiten hasta ${MAX_TEXTO} caracteres.`;
@@ -815,7 +688,7 @@ export class ControladorConsulta {
     #observaciones = "";
 
     #cerrar() {
-        if (this.bloqueo || !puedeCerrar(this.estado.consulta)) return Promise.resolve(false);
+        if (this.bloqueo || !ControladorConsulta.puedeCerrar(this.estado.consulta)) return Promise.resolve(false);
         const notas = this.#observaciones ? { observaciones: this.#observaciones } : {};
         return this.#ejecutar("cierre", () => this.#servicio.cerrar(this.estado.idConsulta, notas), {
             recargarTras: new Set(["consulta.completeAntesCerrar", "consulta.procedimientoSinFinal", "consulta.yaCerrada", ...CODIGOS_POR_ROL]),
@@ -846,7 +719,7 @@ export class ControladorConsulta {
             .then(respuestas => {
                 if (this.estado.detalle.idPaso !== idPaso) return;
                 const cambios = {};
-                campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? normalizarOrdenes(respuestas[i]?.data) : normalizarAsignables(respuestas[i]?.data); });
+                campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? ControladorConsulta.#normalizarOrdenes(respuestas[i]?.data) : ControladorConsulta.normalizarAsignables(respuestas[i]?.data); });
                 this.estado.detalle = congelar({ ...this.estado.detalle, ...cambios });
                 this.#depurarExamenes();
                 this.#guardarEnMemoria();
@@ -856,12 +729,12 @@ export class ControladorConsulta {
     // ---------------------------------------------------------------- F9: varios exámenes
 
     /** idExamen ya ordenados en el paso actual: salen marcados y deshabilitados ("Ya ordenado"). */
-    get examenesOrdenados() { return idsOrdenados(this.estado.detalle.ordenes); }
+    get examenesOrdenados() { return ControladorConsulta.idsOrdenados(this.estado.detalle.ordenes); }
 
     /** Elige la categoría del filtro: "" (Todas) o una de las categorías de los asignables. */
     elegirCategoria(idTipoExamen) {
         const id = typeof idTipoExamen === "string" ? idTipoExamen : "";
-        if (id && !categoriasDe(this.estado.detalle.asignables).some(t => t.idTipoExamen === id)) return;
+        if (id && !ControladorConsulta.categoriasDe(this.estado.detalle.asignables).some(t => t.idTipoExamen === id)) return;
         this.estado.filtroExamenes = id;
     }
 
@@ -888,7 +761,7 @@ export class ControladorConsulta {
             if (this.motivoNoActuar) { resolve(false); return; }
             const { asignables, ordenes } = this.estado.detalle;
             const idsExamen = this.estado.seleccionExamenes;
-            const invalida = validarAsignacion({ idsExamen, indicaciones }, asignables, ordenes);
+            const invalida = ControladorConsulta.validarAsignacion({ idsExamen, indicaciones }, asignables, ordenes);
             if (invalida) {
                 this.estado.errorAccion = invalida;
                 resolve(false);
@@ -911,7 +784,7 @@ export class ControladorConsulta {
             resolve(this.#ejecutar("orden", () => this.#ordenarDesde(0, serie).then(publicar), {
                 recargarTras: RECARGAR_TRAS_ORDEN,
                 alTerminar: () => this.#actualizarListas(idPaso, serie.recargarAsignables ? ["ordenes", "asignables"] : ["ordenes"])
-                    .catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
+                    .catch(error => { this.estado.errorAccion = ControladorConsulta.mensajeDeErrorConsulta(error); }),
             }).then(ok => ok && resultados.some(r => r.ok)));
         });
     }
@@ -930,7 +803,7 @@ export class ControladorConsulta {
                 serie.resultados.push(congelar({ idExamen, nombre: serie.nombre(idExamen), ok: true, mensaje: MENSAJES.ordenEmitida }));
             })
             .catch(error => {
-                serie.resultados.push(congelar({ idExamen, nombre: serie.nombre(idExamen), ok: false, mensaje: mensajeDeErrorConsulta(error) }));
+                serie.resultados.push(congelar({ idExamen, nombre: serie.nombre(idExamen), ok: false, mensaje: ControladorConsulta.mensajeDeErrorConsulta(error) }));
                 if (ERRORES_POR_EXAMEN.includes(error?.code)) {
                     serie.recargarAsignables ||= error.code === "consulta.examenNoAsignable";
                     return;
@@ -948,5 +821,145 @@ export class ControladorConsulta {
         const borrador = typeof valor === "string" ? valor : "";
         this.estado.borrador = borrador;
         this.#memoria.guardar(this.#claveBorrador(this.estado.detalle.idPaso ?? this.pasoActual?.idConsultaProcedimientoPaso), borrador);
+    }
+
+    /** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
+    static mensajeDeErrorConsulta(error) {
+        const code = error?.code;
+        if (code && Object.hasOwn(USAR_MENSAJE_BACKEND, code)) return Validaciones.esTexto(error.message) ? error.message.trim() : USAR_MENSAJE_BACKEND[code];
+        if (code && Object.hasOwn(POR_CODIGO, code)) return POR_CODIGO[code];
+        switch (error?.status) {
+            case 0: return MENSAJES.conexion;
+            case 401: return MENSAJES.sesionFinalizada;
+            case 403: return MENSAJES.sinPermiso;
+            case 404: return MENSAJES.noEncontrada;
+            case 400: case 409: return Validaciones.esTexto(error.message) ? error.message.trim() : MENSAJES.generico;
+            default: return MENSAJES.generico;
+        }
+    }
+
+    /** Pasos PENDIENTE de la consulta, en orden, con el nombre de su procedimiento. */
+    static pasosPendientes(consulta) {
+        if (!consulta) return NINGUNA;
+        return congelar(consulta.procedimientos.flatMap(p => p.pasos
+            .filter(s => s.estado === "PENDIENTE")
+            .map(paso => congelar({ paso, procedimiento: p.nombre }))));
+    }
+
+    /**
+     * Paso actual: el elegido si sigue PENDIENTE; si no, el primero del rol activo (por `idRol`, cuando
+     * el backend envía `rolPaso` y el rol activo trae `idRol`); si ninguno, el primero. null si no
+     * quedan pendientes. Nunca compara roles por nombre.
+     */
+    static elegirPasoActual(consulta, rolActivo, idElegido = null) {
+        const pendientes = ControladorConsulta.pasosPendientes(consulta).map(p => p.paso);
+        if (!pendientes.length) return null;
+        return pendientes.find(p => p.idConsultaProcedimientoPaso === idElegido)
+            ?? pendientes.find(p => ControladorConsultas.esPasoDeMiRol(p, rolActivo))
+            ?? pendientes[0];
+    }
+
+    /**
+     * Motivo por el que toda la vista queda en solo lectura, en orden de prioridad; null si se puede
+     * atender. `atendiendo` es true si la consulta se seleccionó en la sesión (PUT …/sesion).
+     */
+    static motivoBloqueo({ consulta, atendiendo = false, enLinea = true, soloLectura = false }) {
+        if (!consulta) return null;
+        if (consulta.fechaFin) return MENSAJES.cerrada;
+        if (!consulta.pendienteParaMi) return ControladorConsultas.motivoNoAtender(consulta);
+        if (!enLinea || soloLectura) return MENSAJES.sinRed;
+        if (!atendiendo) return MENSAJES.sinSeleccion;
+        return null;
+    }
+
+    /** Retroceder solo se ofrece si el paso no es el primero de su procedimiento. */
+    static puedeOfrecerRetroceso(paso) {
+        return Boolean(paso) && paso.nivel > 0;
+    }
+
+    /** null si se puede retroceder; si no, el motivo que el frontend ya conoce (el backend decide el resto). */
+    static motivoNoRetroceder({ ordenes = NINGUNA, valorGuardado = null } = {}) {
+        if (ordenes.length) return MENSAJES.retrocesoConOrdenes;
+        if (Validaciones.esTexto(valorGuardado)) return MENSAJES.retrocesoConRegistro;
+        return null;
+    }
+
+    /** El cierre se ofrece cuando la consulta está abierta, tiene procedimientos y no quedan pasos PENDIENTE. */
+    static puedeCerrar(consulta) {
+        return Boolean(consulta) && !consulta.fechaFin && consulta.procedimientos.length > 0 && ControladorConsulta.pasosPendientes(consulta).length === 0;
+    }
+
+    /** Nombre que se muestra para una orden emitida. */
+    static nombreDeOrden(orden, asignables) {
+        if (!orden?.idExamen) return MENSAJES.sinExamen;
+        return asignables.find(e => e.idExamen === orden.idExamen)?.nombre ?? MENSAJES.examenNoDisponible;
+    }
+
+    /** Tipos de examen activos de un examen asignable (B8): válidos, sin repetir y congelados. */
+    static #normalizarTipos(datos) {
+        if (!Array.isArray(datos)) return NINGUNA;
+        const vistos = new Set();
+        const tipos = [];
+        for (const t of datos) {
+            if (!t || !Validaciones.esTexto(t.idTipoExamen) || !Validaciones.esTexto(t.nombre) || vistos.has(t.idTipoExamen)) continue;
+            vistos.add(t.idTipoExamen);
+            tipos.push(congelar({ idTipoExamen: t.idTipoExamen, nombre: t.nombre.trim() }));
+        }
+        return congelar(tipos);
+    }
+
+    /**
+     * DTO de GET …/examenes-asignables: [{ idExamen, nombre, tiposExamen: [{ idTipoExamen, nombre }] }].
+     * Sin `tiposExamen` queda [] (el filtro por categoría se oculta).
+     */
+    static normalizarAsignables(datos) {
+        if (!Array.isArray(datos)) return NINGUNA;
+        return congelar(datos.filter(e => e && Validaciones.esTexto(e.idExamen) && Validaciones.esTexto(e.nombre))
+            .map(e => congelar({ idExamen: e.idExamen, nombre: e.nombre.trim(), tiposExamen: ControladorConsulta.#normalizarTipos(e.tiposExamen) })));
+    }
+
+    /** F9: categorías del filtro: la unión de los tipos de los asignables, por nombre. */
+    static categoriasDe(asignables) {
+        const porId = new Map();
+        for (const e of asignables ?? NINGUNA) for (const t of e.tiposExamen ?? NINGUNA) if (!porId.has(t.idTipoExamen)) porId.set(t.idTipoExamen, t);
+        return congelar([...porId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
+    }
+
+    /** F9: asignables de una categoría; "" (Todas) los devuelve todos. */
+    static examenesVisibles(asignables, idTipoExamen = "") {
+        if (!idTipoExamen) return asignables;
+        return congelar(asignables.filter(e => e.tiposExamen.some(t => t.idTipoExamen === idTipoExamen)));
+    }
+
+    /** F9: idExamen ya ordenados en el paso. El backend no impide repetir una orden; el frontend sí. */
+    static idsOrdenados(ordenes) {
+        return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(Validaciones.esTexto))]);
+    }
+
+    /** F9: texto de cuántos exámenes hay seleccionados. */
+    static textoSeleccion(n) {
+        if (!n) return "Ningún examen seleccionado";
+        return n === 1 ? "1 seleccionado" : `${n} seleccionados`;
+    }
+
+    /** F9: valida la asignación de varios exámenes antes de enviarla. Devuelve el mensaje o null. */
+    static validarAsignacion({ idsExamen, indicaciones } = {}, asignables = NINGUNA, ordenes = NINGUNA) {
+        if (!Array.isArray(idsExamen) || idsExamen.length === 0) return MENSAJES.seleccionVacia;
+        if (!idsExamen.every(id => asignables.some(e => e.idExamen === id))) return MENSAJES.examenAjeno;
+        const ordenados = ControladorConsulta.idsOrdenados(ordenes);
+        const repetido = idsExamen.find(id => ordenados.includes(id));
+        if (repetido) return MENSAJES.yaOrdenado(asignables.find(e => e.idExamen === repetido).nombre);
+        if (typeof indicaciones === "string" && indicaciones.trim().length > MAX_TEXTO) return `Las indicaciones admiten hasta ${MAX_TEXTO} caracteres.`;
+        return null;
+    }
+
+    static #normalizarOrdenes(datos) {
+        if (!Array.isArray(datos)) return NINGUNA;
+        return congelar(datos.filter(o => o && Validaciones.esTexto(o.idOrdenExamen)).map(o => congelar({
+            idOrdenExamen: o.idOrdenExamen,
+            idExamen: Validaciones.esTexto(o.idExamen) ? o.idExamen : null,
+            indicaciones: Validaciones.esTexto(o.indicaciones) ? o.indicaciones.trim() : null,
+            fechaCreacion: Validaciones.esTexto(o.fechaCreacion) ? o.fechaCreacion : null,
+        })));
     }
 }

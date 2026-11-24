@@ -67,10 +67,10 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend. Destino final de la
 8. **Para recordar el orden:** el código síncrono antes del primer `await` se ejecuta durante la llamada, y lo que viene después siempre en una microtarea posterior. Con `.then` pasa lo mismo, siempre que se respete la regla 2.
 
 **Estado reactivo y plantillas** (norma desde 2026-11-13)
-- Cada vista tiene un controlador sin DOM cuyo estado es un estado reactivo de `src/js/control/estado_reactivo.js` (hoy la fábrica `crearEstado(...)`; pasa a clase según la norma de estilo de código). El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
+- Cada vista tiene un controlador sin DOM cuyo estado es un `EstadoReactivo` de `src/js/control/estado_reactivo.js`, usado por composición (`#reactivo`; el controlador publica `estado` y delega `suscribir`). El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
 - La vista se suscribe con `suscribir()` en `connectedCallback` y cancela en `disconnectedCallback`. Repinta a partir del `Set` de claves que cambiaron.
 - Los objetos y arreglos que se guardan en el estado van congelados; para cambiarlos se reemplazan, no se mutan.
-- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de `src/js/boundary/plantilla.js` (hoy la función `plantilla()`; pasa a clase según la norma de estilo de código), que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
+- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de la clase `Plantilla` de `src/js/boundary/plantilla.js` (`new Plantilla(html)`), que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
 - Un componente que muestra contenido de otro lo recibe por `<slot>` (p. ej. `<slot name="consultas">` en `<vista-dashboard>`).
 - Las vistas se prueban en Node con el DOM mínimo de `tests/dobles/dom_minimo.js`, que solo modela lo que usan las vistas; si una vista necesita algo nuevo del DOM, se agrega ahí.
 
@@ -90,9 +90,9 @@ Los de `../galenasv/docs/datos-demo-rubrica.md` (se restauran con `bash scripts/
 
 ## Login (HU2)
 - El login es con tipo de documento y número de documento, sin contraseña. Contrato: POST /api/auth/login con { idTipoDocumento, numeroDocumento }.
-- Entra cualquier empleado: un rol activo excepto PACIENTE, incluso un rol sin código (regla B8 del backend). `/auth/me` puede devolver `codigo: null` y trae `nombreRol`: se muestra `nombreRol` y el código solo se usa para reconocer PACIENTE (`esEmpleado` en `auth_service.js`). Nunca fijar listas de roles en el frontend.
+- Entra cualquier empleado: un rol activo excepto PACIENTE, incluso un rol sin código (regla B8 del backend). `/auth/me` puede devolver `codigo: null` y trae `nombreRol`: se muestra `nombreRol` y el código solo se usa para reconocer PACIENTE (`AuthService.esEmpleado` en `auth_service.js`). Nunca fijar listas de roles en el frontend.
 - Cada paso de una consulta lo atiende quien tiene su rol responsable, y la cierra quien completó el paso final; el frontend se guía por `pendienteParaMi` y no compara roles por nombre.
-- Para saber de qué rol es un paso se compara `paso.rolPaso.idRol` con `sesion.rolActivo.idRol` (`esPasoDeMiRol` en `controlador_consultas.js`), nunca por nombre ni por código. La vista de consulta hace `PUT …/sesion` solo si `pendienteParaMi` y la consulta no está cerrada; si no, queda en solo lectura.
+- Para saber de qué rol es un paso se compara `paso.rolPaso.idRol` con `sesion.rolActivo.idRol` (`ControladorConsultas.esPasoDeMiRol` en `controlador_consultas.js`), nunca por nombre ni por código. La vista de consulta hace `PUT …/sesion` solo si `pendienteParaMi` y la consulta no está cerrada; si no, queda en solo lectura.
 
 ## Estado actual (2026-11-14)
 Plan: `docs/reportes/correcciones-plan.md`. Commits en `spa`:

@@ -1,7 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { formatearFechaHora } from '../src/js/control/fechas_sv.js';
+import { FechasSV } from '../src/js/control/fechas_sv.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const CITA = Object.freeze({ idConsulta: '50000000-0000-4000-8000-000000000001', fechaInicio: '2026-11-12T08:00:00-06:00',
@@ -25,7 +25,7 @@ function tarjeta(modelo) {
 describe('<tarjeta-cita>', () => {
     test('pinta fecha y hora, clínica y procedimientos con textContent', () => {
         const { el, $ } = tarjeta({ cita: CITA, motivoTicket: null });
-        assert.equal($('fecha').textContent, formatearFechaHora(CITA.fechaInicio));
+        assert.equal($('fecha').textContent, FechasSV.formatearFechaHora(CITA.fechaInicio));
         assert.equal($('clinica').textContent, 'Clínica Prueba <b>Norte</b>', 'el HTML del servidor queda como texto');
         assert.deepEqual(el.shadowRoot.querySelectorAll('li').map(li => li.textContent), ['Consulta general', 'Control']);
         assert.equal($('sin-procedimientos').hidden, true);

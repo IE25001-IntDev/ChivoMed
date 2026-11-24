@@ -54,7 +54,7 @@
 - Contrato acordado, pendiente en el backend: `POST /api/auth/login` con `{ idTipoDocumento, numeroDocumento }` y `GET /api/publico/tipos-documento` sin sesión. Hoy el backend solo acepta `identificador` + `password` y exige sesión en toda `/api`. Las llamadas quedan aisladas en `src/js/control/auth_service.js`.
 - El frontend rechaza y cierra una sesión con rol PACIENTE, pero eso no es una barrera de seguridad: el backend niega el login a quien no es empleado. El rol se muestra con `nombreRol` y el código solo se usa para reconocer PACIENTE.
 - Alcance reducido a las 4 HU. Rutas: `#/citas` (HU1, pública, ruta por defecto), `#/login` (HU2), `#/dashboard` (HU3) y `#/consulta/:id` (HU4), más una vista de no encontrada.
-- Las rutas de empleado (`empleado: true` en `rutas.js`) aceptan cualquier rol de empleado (`esEmpleado` de `auth_service.js`). Cada paso de una consulta lo atiende su rol responsable y la consulta la cierra quien completó el paso final (B8); lo decide el backend.
+- Las rutas de empleado (`empleado: true` en `rutas.js`) aceptan cualquier rol de empleado (`AuthService.esEmpleado` de `auth_service.js`). Cada paso de una consulta lo atiende su rol responsable y la consulta la cierra quien completó el paso final (B8); lo decide el backend.
 - Fuera de alcance: portada, administración, vista de cuenta y portal del paciente con login. La HU1 no reutiliza el portal (ver `docs/reportes/hu1-plan.md`, D3); su código se borró en la Fase 4.
 - `npm start` usa `scripts/dev_server.js`, que tiene el proxy a `/galenosv/api`. BrowserSync, Playwright y los e2e (`tests/browser/`) ya no están; `tests/integracion/api_proxy.test.js` prueba `dev_server.js`.
 - HU4 "retroceder": reabre el paso anterior en el backend con `PUT /api/consultas-procedimientos-pasos/{id}/retroceso`. Responde 409 si es el primer paso o si el paso actual tiene valor u órdenes; la vista debe mostrar el motivo del 409. Endpoint acordado, pendiente en el backend.
@@ -62,10 +62,10 @@
 - `src/js/boundary/components/medico/*` no se reutilizó (eran plantillas enteras con `innerHTML` y `escapeHtml`); la HU4 extrajo antes sus reglas de negocio y se borró en la Fase 4. La parte 2 de HU3 y la HU4 se escribieron con componentes nuevos bajo la norma de abajo.
 
 **Estado reactivo y plantillas** (norma desde 2026-11-13)
-- Cada vista tiene un controlador sin DOM cuyo estado es un `crearEstado(...)` de `src/js/control/estado_reactivo.js`. El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
+- Cada vista tiene un controlador sin DOM cuyo estado es un `EstadoReactivo` de `src/js/control/estado_reactivo.js` (por composición). El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
 - La vista se suscribe con `suscribir()` en `connectedCallback` y cancela en `disconnectedCallback`. Repinta a partir del `Set` de claves que cambiaron.
 - Los objetos y arreglos que se guardan en el estado van congelados; para cambiarlos se reemplazan, no se mutan.
-- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de `plantilla()` de `src/js/boundary/plantilla.js`, que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
+- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de `new Plantilla(html)` de `src/js/boundary/plantilla.js`, que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
 - Un componente que muestra contenido de otro lo recibe por `<slot>` (p. ej. `<slot name="consultas">` en `<vista-dashboard>`).
 - Las vistas se prueban en Node con el DOM mínimo de `tests/dobles/dom_minimo.js`, que solo modela lo que usan las vistas; si una vista necesita algo nuevo del DOM, se agrega ahí.
 

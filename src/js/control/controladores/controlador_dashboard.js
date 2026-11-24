@@ -8,11 +8,11 @@
  * Un cambio de rol confirmado se publica en `estado.sesionCambiada`.
  */
 import AtencionService from "../atencion_service.js";
-import { obtenerSesion as obtenerSesionHttp, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../auth_service.js";
+import { auth, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../auth_service.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "../memoria_vistas.js";
 import { conexion as conexionCompartida } from "../conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../controlador_conexion.js";
-import { crearEstado } from "../estado_reactivo.js";
+import { ControladorConexion, MENSAJE_SIN_DATOS } from "../controlador_conexion.js";
+import { EstadoReactivo } from "../estado_reactivo.js";
 import { FechasSV } from "../fechas_sv.js";
 import { Validaciones } from "../validaciones.js";
 
@@ -31,75 +31,15 @@ export const MENSAJES = Object.freeze({
     cerrarAntes: "Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.",
     salioDeConsulta: "Saliste de la consulta. Ya puedes cambiar de rol.",
     sesionNoActualizada: "Cambiaste de rol, pero no pudimos actualizar tu sesión. Recarga la página.",
-    soloLectura: motivoSinConexion("cambiar de rol"),
+    soloLectura: ControladorConexion.motivoSinConexion("cambiar de rol"),
     sinAsignaciones: "No tienes roles de empleado activos en ninguna clínica.",
 });
 
-export function mensajeMemoria(fecha) {
-    return mensajeGuardado(FechasSV.hora(fecha));
-}
-
-/**
- * Valida y limpia el DTO de GET /atencion/asignaciones. Descarta entradas incompletas, repetidas o
- * de PACIENTE (defensa: el backend ya las excluye). Un rol sin código es de empleado (B8).
- */
-export function normalizarAsignaciones(datos) {
-    if (!Array.isArray(datos)) return [];
-    const vistos = new Set();
-    const resultado = [];
-    for (const a of datos) {
-        if (!a || typeof a.idPersonaRol !== "string" || !Validaciones.UUID.test(a.idPersonaRol)
-            || typeof a.idClinica !== "string" || !Validaciones.UUID.test(a.idClinica)
-            || a.codigoRol === CODIGO_PACIENTE || !(a.codigoRol == null || Validaciones.esTexto(a.codigoRol)) || !Validaciones.esTexto(a.nombreClinica)
-            || vistos.has(a.idPersonaRol)) continue;
-        vistos.add(a.idPersonaRol);
-        resultado.push(Object.freeze({
-            idPersonaRol: a.idPersonaRol,
-            codigoRol: Validaciones.esTexto(a.codigoRol) ? a.codigoRol : null,
-            nombreRol: Validaciones.esTexto(a.nombreRol) ? a.nombreRol.trim() : ROL_SIN_NOMBRE,
-            idClinica: a.idClinica,
-            nombreClinica: a.nombreClinica.trim(),
-            activa: a.activa === true,
-        }));
-    }
-    return resultado;
-}
-
-/**
- * Agrupa por clínica y marca la asignación activa. La fuente de verdad es el rol activo de la
- * sesión (/auth/me); el campo `activa` del DTO solo se usa si no hay sesión.
- * La clínica activa va primero; el resto, por nombre. Los roles, por nombre.
- */
-export function agruparPorClinica(asignaciones, idPersonaRolActivo = null) {
-    const comparar = (a, b) => a.localeCompare(b, "es");
-    const grupos = new Map();
-    for (const a of asignaciones) {
-        const activa = idPersonaRolActivo ? a.idPersonaRol === idPersonaRolActivo : a.activa;
-        if (!grupos.has(a.idClinica)) grupos.set(a.idClinica, { idClinica: a.idClinica, nombreClinica: a.nombreClinica, activa: false, roles: [] });
-        const grupo = grupos.get(a.idClinica);
-        grupo.roles.push(Object.freeze({ ...a, activa }));
-        grupo.activa ||= activa;
-    }
-    return Object.freeze([...grupos.values()]
-        .map(g => Object.freeze({ ...g, roles: Object.freeze(g.roles.sort((a, b) => comparar(a.nombreRol, b.nombreRol))) }))
-        .sort((a, b) => (b.activa - a.activa) || comparar(a.nombreClinica, b.nombreClinica)));
-}
-
-/** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
-export function mensajeDeError(error, { cambio = false } = {}) {
-    if (error?.code === CODIGO_CERRAR_ANTES) return MENSAJES.cerrarAntes;
-    switch (error?.status) {
-        case 0: return MENSAJES.conexion;
-        case 401: return MENSAJES.sesionFinalizada;
-        case 403: return MENSAJES.sinPermiso;
-        case 404: return MENSAJES.noDisponible;
-        // 409 de verificarSesionActual ("La sesión cambió…") u otro conflicto: el mensaje ya es para el usuario.
-        case 409: return Validaciones.esTexto(error.message) ? error.message : (cambio ? MENSAJES.cambioFallido : MENSAJES.generico);
-        default: return cambio ? MENSAJES.cambioFallido : MENSAJES.generico;
-    }
-}
-
 export class ControladorDashboard {
+    /** Estado reactivo del controlador (composición): `estado` lo publica y `suscribir` delega en él. */
+    #reactivo;
+    /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
+    suscribir = fn => this.#reactivo.suscribir(fn);
     #servicio;
     #obtenerSesion;
     #conexion;
@@ -118,14 +58,14 @@ export class ControladorDashboard {
      *   - `memoria`: una MemoriaVistas (memoria_vistas.js).
      *   - `reloj`: función que devuelve la fecha actual.
      */
-    constructor({ servicio, obtenerSesion = obtenerSesionHttp, conexion = conexionCompartida,
+    constructor({ servicio, obtenerSesion = () => auth.obtenerSesion(), conexion = conexionCompartida,
         memoria = memoriaCompartida, reloj = () => new Date() } = {}) {
         this.#servicio = servicio ?? new AtencionService();
         this.#obtenerSesion = obtenerSesion;
         this.#conexion = conexion;
         this.#memoria = memoria;
         this.#reloj = reloj;
-        const { estado, suscribir } = crearEstado({
+        this.#reactivo = new EstadoReactivo({
             sesion: null,
             /** Sesión nueva tras un cambio de rol confirmado; nunca se escribe al iniciar. */
             sesionCambiada: null,
@@ -148,9 +88,7 @@ export class ControladorDashboard {
             confirmacion: null,
         });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
-        this.estado = estado;
-        /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
-        this.suscribir = suscribir;
+        this.estado = this.#reactivo.estado;
     }
 
     #actualizar(cambios) {
@@ -163,7 +101,7 @@ export class ControladorDashboard {
 
     /** Recalcula grupos y activa a partir de las asignaciones y la sesión vigentes. */
     #derivados() {
-        const grupos = agruparPorClinica(this.#asignaciones, this.estado.sesion?.rolActivo?.idPersonaRol ?? null);
+        const grupos = ControladorDashboard.agruparPorClinica(this.#asignaciones, this.estado.sesion?.rolActivo?.idPersonaRol ?? null);
         const activa = grupos.flatMap(g => g.roles).find(r => r.activa) ?? null;
         return { grupos, activa };
     }
@@ -217,7 +155,7 @@ export class ControladorDashboard {
             resolve(new Promise(pedir => pedir(this.#servicio.asignaciones()))
                 .then(({ data }) => contexto.then(() => {
                     if (id !== this.#secuencia) return;
-                    this.#asignaciones = normalizarAsignaciones(data);
+                    this.#asignaciones = ControladorDashboard.normalizarAsignaciones(data);
                     this.#hayDatos = true;
                     const en = this.#reloj();
                     this.#memoria.guardar(this.#clave(), Object.freeze({ asignaciones: this.#asignaciones, en }));
@@ -231,7 +169,7 @@ export class ControladorDashboard {
                         this.#actualizar({ cargando: false, desdeMemoria: true, error: null });
                         return;
                     }
-                    this.#actualizar({ cargando: false, error: mensajeDeError(error) });
+                    this.#actualizar({ cargando: false, error: ControladorDashboard.mensajeDeError(error) });
                 })));
         });
     }
@@ -262,11 +200,11 @@ export class ControladorDashboard {
      */
     #rechazoDeCambio(error) {
         if (error?.code !== CODIGO_CERRAR_ANTES) {
-            this.#actualizar({ cambiando: null, error: mensajeDeError(error, { cambio: true }) });
+            this.#actualizar({ cambiando: null, error: ControladorDashboard.mensajeDeError(error, { cambio: true }) });
             return false;
         }
         const publicar = enCurso => {
-            this.#actualizar({ cambiando: null, aviso: mensajeDeError(error), confirmacion: null, enCurso });
+            this.#actualizar({ cambiando: null, aviso: ControladorDashboard.mensajeDeError(error), confirmacion: null, enCurso });
             return false;
         };
         // `??` no esperaba si ya había valor: se ramifica para no agregar una microtarea.
@@ -317,9 +255,73 @@ export class ControladorDashboard {
                 return true;
             }, error => {
                 // 401: mismo texto que el resto de acciones; DefaultService ya emitió 'sesion-expirada'.
-                this.#actualizar({ saliendo: false, error: mensajeDeError(error) });
+                this.#actualizar({ saliendo: false, error: ControladorDashboard.mensajeDeError(error) });
                 return false;
             }));
         });
+    }
+
+    static mensajeMemoria(fecha) {
+        return ControladorConexion.mensajeGuardado(FechasSV.hora(fecha));
+    }
+
+    /**
+     * Valida y limpia el DTO de GET /atencion/asignaciones. Descarta entradas incompletas, repetidas o
+     * de PACIENTE (defensa: el backend ya las excluye). Un rol sin código es de empleado (B8).
+     */
+    static normalizarAsignaciones(datos) {
+        if (!Array.isArray(datos)) return [];
+        const vistos = new Set();
+        const resultado = [];
+        for (const a of datos) {
+            if (!a || typeof a.idPersonaRol !== "string" || !Validaciones.UUID.test(a.idPersonaRol)
+                || typeof a.idClinica !== "string" || !Validaciones.UUID.test(a.idClinica)
+                || a.codigoRol === CODIGO_PACIENTE || !(a.codigoRol == null || Validaciones.esTexto(a.codigoRol)) || !Validaciones.esTexto(a.nombreClinica)
+                || vistos.has(a.idPersonaRol)) continue;
+            vistos.add(a.idPersonaRol);
+            resultado.push(Object.freeze({
+                idPersonaRol: a.idPersonaRol,
+                codigoRol: Validaciones.esTexto(a.codigoRol) ? a.codigoRol : null,
+                nombreRol: Validaciones.esTexto(a.nombreRol) ? a.nombreRol.trim() : ROL_SIN_NOMBRE,
+                idClinica: a.idClinica,
+                nombreClinica: a.nombreClinica.trim(),
+                activa: a.activa === true,
+            }));
+        }
+        return resultado;
+    }
+
+    /**
+     * Agrupa por clínica y marca la asignación activa. La fuente de verdad es el rol activo de la
+     * sesión (/auth/me); el campo `activa` del DTO solo se usa si no hay sesión.
+     * La clínica activa va primero; el resto, por nombre. Los roles, por nombre.
+     */
+    static agruparPorClinica(asignaciones, idPersonaRolActivo = null) {
+        const comparar = (a, b) => a.localeCompare(b, "es");
+        const grupos = new Map();
+        for (const a of asignaciones) {
+            const activa = idPersonaRolActivo ? a.idPersonaRol === idPersonaRolActivo : a.activa;
+            if (!grupos.has(a.idClinica)) grupos.set(a.idClinica, { idClinica: a.idClinica, nombreClinica: a.nombreClinica, activa: false, roles: [] });
+            const grupo = grupos.get(a.idClinica);
+            grupo.roles.push(Object.freeze({ ...a, activa }));
+            grupo.activa ||= activa;
+        }
+        return Object.freeze([...grupos.values()]
+            .map(g => Object.freeze({ ...g, roles: Object.freeze(g.roles.sort((a, b) => comparar(a.nombreRol, b.nombreRol))) }))
+            .sort((a, b) => (b.activa - a.activa) || comparar(a.nombreClinica, b.nombreClinica)));
+    }
+
+    /** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
+    static mensajeDeError(error, { cambio = false } = {}) {
+        if (error?.code === CODIGO_CERRAR_ANTES) return MENSAJES.cerrarAntes;
+        switch (error?.status) {
+            case 0: return MENSAJES.conexion;
+            case 401: return MENSAJES.sesionFinalizada;
+            case 403: return MENSAJES.sinPermiso;
+            case 404: return MENSAJES.noDisponible;
+            // 409 de verificarSesionActual ("La sesión cambió…") u otro conflicto: el mensaje ya es para el usuario.
+            case 409: return Validaciones.esTexto(error.message) ? error.message : (cambio ? MENSAJES.cambioFallido : MENSAJES.generico);
+            default: return cambio ? MENSAJES.cambioFallido : MENSAJES.generico;
+        }
     }
 }

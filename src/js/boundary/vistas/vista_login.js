@@ -6,15 +6,15 @@
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  * Emite 'navegar' { ruta } (bubbles, composed) cuando el personal puede entrar.
  */
-import { ControladorLogin, MENSAJES, destinoTrasLogin } from "../../control/controladores/controlador_login.js";
-import { hojaDeEstilos } from "../estilos.js";
+import { ControladorLogin, MENSAJES } from "../../control/controladores/controlador_login.js";
+import { Estilos } from "../estilos.js";
 import { conexion } from "../../control/conexion.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
-import { plantilla } from "../plantilla.js";
+import { Plantilla } from "../plantilla.js";
 import { EVENTO_OFRECER } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Acceso del personal</h1>
   <p class="subtitulo">Ingresa con tu documento de identidad. Solo para el personal de la clínica.</p>
@@ -75,7 +75,7 @@ class VistaLogin extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            raiz.append(hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
+            raiz.append(Estilos.hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
         }
         this.$ = id => raiz.getElementById(id);
         this.$("formulario").addEventListener("submit", this.#alEnviar);
@@ -184,7 +184,7 @@ class VistaLogin extends HTMLElement {
                 if (!this.isConnected) return;
                 if (sesion) {
                     this.dispatchEvent(new CustomEvent("navegar", {
-                        bubbles: true, composed: true, detail: { ruta: destinoTrasLogin(this.contexto?.query, sesion) },
+                        bubbles: true, composed: true, detail: { ruta: ControladorLogin.destinoTrasLogin(this.contexto?.query, sesion) },
                     }));
                     return;
                 }

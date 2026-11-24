@@ -15,14 +15,11 @@
  * Recibe del router `contexto` = { params: { id }, sesion, soloLectura }. Acepta `controlador`
  * asignado antes de conectarse (pruebas).
  */
-import {
-    ControladorConsulta, MENSAJES, motivoNoRetroceder, puedeOfrecerRetroceso, puedeCerrar,
-    categoriasDe, examenesVisibles, textoSeleccion,
-} from "../../control/controladores/controlador_consulta.js";
-import { arbolDePasos, etiquetaEstado } from "../../control/controladores/controlador_consultas.js";
-import { hojaDeEstilos } from "../estilos.js";
-import { plantilla } from "../plantilla.js";
-import { formatearFecha, formatearFechaHora, FechasSV } from "../../control/fechas_sv.js";
+import { ControladorConsulta, MENSAJES } from "../../control/controladores/controlador_consulta.js";
+import { ControladorConsultas } from "../../control/controladores/controlador_consultas.js";
+import { Estilos } from "../estilos.js";
+import { Plantilla } from "../plantilla.js";
+import { FechasSV } from "../../control/fechas_sv.js";
 import { Validaciones } from "../../control/validaciones.js";
 import "../components/consulta/panel_paso_actual.js";
 import "../components/consulta/panel_examenes_paso.js";
@@ -35,7 +32,7 @@ const TEXTOS = Object.freeze({
     saliendo: "Saliendo…",
 });
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="tarjeta cabecera-consulta" aria-labelledby="titulo">
   <div class="fila">
     <h1 id="titulo" tabindex="-1">Consulta</h1>
@@ -112,7 +109,7 @@ class VistaConsulta extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         if (!this.#paneles) this.#crearPaneles();
         const c = () => this.#controlador;
@@ -225,11 +222,11 @@ class VistaConsulta extends HTMLElement {
             const { paciente } = consulta;
             this.$("paciente").textContent = paciente.nombre;
             const edad = paciente.edad === null ? "No registrada" : `${paciente.edad} ${paciente.edad === 1 ? "año" : "años"}`;
-            this.$("edad").textContent = paciente.fechaNacimiento ? `${edad} (nació el ${formatearFecha(paciente.fechaNacimiento)})` : edad;
+            this.$("edad").textContent = paciente.fechaNacimiento ? `${edad} (nació el ${FechasSV.formatearFecha(paciente.fechaNacimiento)})` : edad;
             this.$("documentos").textContent = paciente.documentos.length
                 ? paciente.documentos.map(d => `${d.tipoDocumento} ${d.numero}`).join(" · ") : "Sin documentos registrados";
-            this.$("inicio").textContent = formatearFechaHora(consulta.fechaInicio);
-            this.$("estado-consulta").textContent = consulta.fechaFin ? `Cerrada el ${formatearFechaHora(consulta.fechaFin)}` : "Abierta";
+            this.$("inicio").textContent = FechasSV.formatearFechaHora(consulta.fechaInicio);
+            this.$("estado-consulta").textContent = consulta.fechaFin ? `Cerrada el ${FechasSV.formatearFechaHora(consulta.fechaFin)}` : "Abierta";
             this.$("estado-consulta").className = consulta.fechaFin ? "insignia cerrada" : "insignia abierta";
         }
         const bloqueo = consulta ? ctrl.bloqueo : null;
@@ -252,7 +249,7 @@ class VistaConsulta extends HTMLElement {
             const seccion = document.createElement("section");
             seccion.className = "procedimiento";
             seccion.append(this.#texto("h3", p.nombre));
-            const arbol = arbolDePasos(p.pasos);
+            const arbol = ControladorConsultas.arbolDePasos(p.pasos);
             seccion.append(arbol.length ? this.#lista(arbol, actual, "arbol-pasos") : this.#texto("p", "Sin pasos registrados.", "vacio"));
             return seccion;
         });
@@ -278,10 +275,10 @@ class VistaConsulta extends HTMLElement {
             const titulo = document.createElement("p");
             titulo.className = "paso-titulo";
             const clase = paso.estado === "PENDIENTE" ? "pendiente" : paso.estado === "COMPLETADO" ? "completado" : "otro";
-            titulo.append(this.#texto("span", paso.nombre), this.#texto("span", etiquetaEstado(paso.estado), `insignia ${clase}`));
+            titulo.append(this.#texto("span", paso.nombre), this.#texto("span", ControladorConsultas.etiquetaEstado(paso.estado), `insignia ${clase}`));
             const responsable = paso.responsable
                 ? [paso.responsable.nombre, paso.responsable.rol].filter(Boolean).join(" · ") : "Sin responsable asignado";
-            const fechas = `${formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? formatearFechaHora(paso.fechaFin) : "En curso"}`;
+            const fechas = `${FechasSV.formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? FechasSV.formatearFechaHora(paso.fechaFin) : "En curso"}`;
             caja.append(titulo, this.#texto("p", responsable, "meta"), this.#texto("p", fechas, "meta"));
             li.append(caja);
             if (hijos.length) li.append(this.#lista(hijos, actual));
@@ -304,7 +301,7 @@ class VistaConsulta extends HTMLElement {
             panelPaso.modelo = Object.freeze({
                 paso, procedimiento, pendientes: ctrl.pendientes, indicaFin: detalle.indicaFin === true,
                 borrador: estado.borrador, editable: atiende, aviso: estado.aviso === MENSAJES.reabierto ? estado.aviso : null,
-                motivo, ofrecerRetroceso: puedeOfrecerRetroceso(paso), motivoRetroceso: motivoNoRetroceder(detalle),
+                motivo, ofrecerRetroceso: ControladorConsulta.puedeOfrecerRetroceso(paso), motivoRetroceso: ControladorConsulta.motivoNoRetroceder(detalle),
                 confirmando: confirmando === "retroceso", accion,
             });
         }
@@ -316,14 +313,14 @@ class VistaConsulta extends HTMLElement {
             panelExamenes.modelo = Object.freeze({
                 asignables: detalle.asignables, ordenes: detalle.ordenes,
                 categorias: this.#categorias(detalle.asignables), filtro: estado.filtroExamenes,
-                visibles: examenesVisibles(detalle.asignables, estado.filtroExamenes), seleccion,
-                ordenados: ctrl.examenesOrdenados, textoSeleccion: textoSeleccion(seleccion.length),
+                visibles: ControladorConsulta.examenesVisibles(detalle.asignables, estado.filtroExamenes), seleccion,
+                ordenados: ctrl.examenesOrdenados, textoSeleccion: ControladorConsulta.textoSeleccion(seleccion.length),
                 resultado: estado.resultadoExamenes, motivo, accion,
                 error: this.#ultimaPedida === "orden" ? estado.errorAccion : null,
             });
         }
 
-        const conCierre = atiende && puedeCerrar(consulta);
+        const conCierre = atiende && ControladorConsulta.puedeCerrar(consulta);
         panelCierre.hidden = !conCierre;
         if (conCierre) {
             const motivoCierre = ctrl.bloqueo ?? (accion ? MENSAJES.accionEnCurso : null);
@@ -332,7 +329,7 @@ class VistaConsulta extends HTMLElement {
     }
 
     #categorias(asignables) {
-        if (this.#memoCategorias.asignables !== asignables) this.#memoCategorias = { asignables, categorias: categoriasDe(asignables) };
+        if (this.#memoCategorias.asignables !== asignables) this.#memoCategorias = { asignables, categorias: ControladorConsulta.categoriasDe(asignables) };
         return this.#memoCategorias.categorias;
     }
 

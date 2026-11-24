@@ -9,17 +9,8 @@
  */
 import { EVENTO_SERVIDOR_CAIDO, EVENTO_SERVIDOR_RESPONDIO } from "./auth_service.js";
 
-/**
- * Motivo de una acción deshabilitada sin red o sin servidor: un solo texto para los dos casos.
- * @param accion texto de la acción, p. ej. "registrar la atención".
- */
-export const motivoSinConexion = accion => `Sin conexión: necesitas conexión con el servidor para ${accion}.`;
 export const MENSAJE_SIN_RED = "Sin conexión con el servidor. Esta acción estará disponible cuando vuelva la conexión.";
 export const INTERVALO_VERIFICACION_MS = 20000;
-/** Aviso de las vistas que muestran lo guardado sin conexión. `hora` es "HH:MM" (o vacía). */
-export const mensajeGuardado = hora => (hora
-    ? `Sin conexión con el servidor. Mostrando lo guardado a las ${hora}.`
-    : "Sin conexión con el servidor. Mostrando lo guardado.");
 export const MENSAJE_SIN_DATOS = "No se puede conectar con el servidor y no hay datos guardados.";
 
 export class ControladorConexion {
@@ -119,5 +110,20 @@ export class ControladorConexion {
         this.enLinea = enLinea;
         this.motivo = motivo;
         for (const fn of [...this.#suscriptores]) fn(enLinea);
+    }
+
+    /**
+     * Motivo de una acción deshabilitada sin red o sin servidor: un solo texto para los dos casos.
+     * @param accion texto de la acción, p. ej. "registrar la atención".
+     */
+    static motivoSinConexion(accion) {
+        return `Sin conexión: necesitas conexión con el servidor para ${accion}.`;
+    }
+
+    /** Aviso de las vistas que muestran lo guardado sin conexión. `hora` es "HH:MM" (o vacía). */
+    static mensajeGuardado(hora) {
+        return hora
+            ? `Sin conexión con el servidor. Mostrando lo guardado a las ${hora}.`
+            : "Sin conexión con el servidor. Mostrando lo guardado.";
     }
 }

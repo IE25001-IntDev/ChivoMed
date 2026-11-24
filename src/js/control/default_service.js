@@ -1,7 +1,7 @@
 import DefaultResponse from "../entities/default_response.js";
 import DefaultError from "../entities/default_error.js";
 import { API_CONFIG } from "./api_config.js";
-import { verificarSesionActual, STATUS_SIN_SERVIDOR, avisarServidor } from "./auth_service.js";
+import { AuthService, auth, STATUS_SIN_SERVIDOR } from "./auth_service.js";
 
 /** CRUD compartido. Todas las operaciones resuelven DefaultResponse o rechazan DefaultError. */
 class DefaultService {
@@ -14,7 +14,7 @@ class DefaultService {
         this.fetchImpl = opciones.fetchImpl ?? globalThis.fetch.bind(globalThis);
         // `autenticar: null` es explícito (rutas públicas, sin CSRF ni auth/me): no se reemplaza por el valor por defecto.
         this.autenticar = Object.hasOwn(opciones, "autenticar") ? opciones.autenticar
-            : (typeof window === "undefined" ? null : verificarSesionActual);
+            : (typeof window === "undefined" ? null : () => auth.verificarSesionActual());
         this.metodos = new Set(opciones.metodos ?? ["POST", "PUT", "PATCH", "DELETE"]);
     }
 
@@ -77,7 +77,7 @@ class DefaultService {
             // Dos argumentos: los throw de #responder se propagan sin pasar por el manejo del fallo de red.
             .then(({ respuesta, blob, texto }) => this.#responder(respuesta, blob, texto, url, Entidad), cause => {
                 const cancelada = cause.name === "AbortError" || opciones.signal?.aborted;
-                if (!cancelada) avisarServidor(null);
+                if (!cancelada) AuthService.avisarServidor(null);
                 throw new DefaultError({ status: 0,
                     code: cancelada ? "solicitud.cancelada" : "conexion.error",
                     message: cancelada ? "La solicitud fue cancelada." : "No se pudo conectar con GalenoSV.",
@@ -86,7 +86,7 @@ class DefaultService {
     }
 
     #responder(respuesta, blob, texto, url, Entidad) {
-        avisarServidor(respuesta);
+        AuthService.avisarServidor(respuesta);
         // Sin conexión con el servidor (proxy sin backend o backend caído): igual que un fallo de red.
         if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
             throw new DefaultError({ status: 0, code: "conexion.error",

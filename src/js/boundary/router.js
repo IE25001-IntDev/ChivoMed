@@ -3,56 +3,6 @@
  * Recibe la ventana, la autenticación y el montaje por inyección para poder probarse con node --test.
  */
 
-/** Separa ruta y query del hash. '', '#' y '#/' se vuelven '/'; se quitan las barras finales. */
-export function normalizarHash(hash = "") {
-    const texto = String(hash).replace(/^#/, "");
-    const indice = texto.indexOf("?");
-    const crudo = indice === -1 ? texto : texto.slice(0, indice);
-    const query = new URLSearchParams(indice === -1 ? "" : texto.slice(indice + 1));
-    const ruta = `/${crudo.replace(/^\/+/, "")}`.replace(/\/+$/, "") || "/";
-    return { ruta, query };
-}
-
-function coincidir(patron, ruta, restricciones = {}) {
-    const esperados = patron.split("/");
-    const recibidos = ruta.split("/");
-    if (esperados.length !== recibidos.length) return null;
-    const params = {};
-    for (let i = 0; i < esperados.length; i++) {
-        const esperado = esperados[i];
-        if (!esperado.startsWith(":")) {
-            if (esperado !== recibidos[i]) return null;
-            continue;
-        }
-        let valor;
-        try { valor = decodeURIComponent(recibidos[i]); } catch { return null; }
-        const nombre = esperado.slice(1);
-        if (!valor || (restricciones[nombre] && !restricciones[nombre].test(valor))) return null;
-        params[nombre] = valor;
-    }
-    return params;
-}
-
-/** Devuelve { ruta: definición | null, params, query, path }. */
-export function resolverRuta(hash, rutas) {
-    const { ruta: path, query } = normalizarHash(hash);
-    for (const ruta of rutas) {
-        const params = coincidir(ruta.patron, path, ruta.restricciones);
-        if (params) return { ruta, params, query, path };
-    }
-    return { ruta: null, params: {}, query, path };
-}
-
-/**
- * Valida el parámetro `volver` del login: solo rutas internas conocidas y que no sean solo para invitados.
- * Devuelve la ruta (con su query) o null.
- */
-export function rutaDeRetorno(valor, rutas) {
-    if (typeof valor !== "string" || !valor.startsWith("/") || valor.startsWith("//") || /[\\\s]/.test(valor)) return null;
-    const { ruta } = resolverRuta(valor, rutas);
-    return ruta && !ruta.soloInvitados ? valor : null;
-}
-
 export class Router {
     #opciones;
     #secuencia = 0;
@@ -113,7 +63,7 @@ export class Router {
             const id = ++this.#secuencia;
             const vigente = () => id === this.#secuencia;
             const o = this.#opciones;
-            const resultado = resolverRuta(o.ventana.location.hash, o.rutas);
+            const resultado = Router.resolverRuta(o.ventana.location.hash, o.rutas);
             const { path, query, params } = resultado;
 
             if (path === "/") {
@@ -179,5 +129,55 @@ export class Router {
         }, error => {
             if (vigente()) this.#opciones.mostrarError(error, contexto);
         });
+    }
+
+    /** Separa ruta y query del hash. '', '#' y '#/' se vuelven '/'; se quitan las barras finales. */
+    static normalizarHash(hash = "") {
+        const texto = String(hash).replace(/^#/, "");
+        const indice = texto.indexOf("?");
+        const crudo = indice === -1 ? texto : texto.slice(0, indice);
+        const query = new URLSearchParams(indice === -1 ? "" : texto.slice(indice + 1));
+        const ruta = `/${crudo.replace(/^\/+/, "")}`.replace(/\/+$/, "") || "/";
+        return { ruta, query };
+    }
+
+    static #coincidir(patron, ruta, restricciones = {}) {
+        const esperados = patron.split("/");
+        const recibidos = ruta.split("/");
+        if (esperados.length !== recibidos.length) return null;
+        const params = {};
+        for (let i = 0; i < esperados.length; i++) {
+            const esperado = esperados[i];
+            if (!esperado.startsWith(":")) {
+                if (esperado !== recibidos[i]) return null;
+                continue;
+            }
+            let valor;
+            try { valor = decodeURIComponent(recibidos[i]); } catch { return null; }
+            const nombre = esperado.slice(1);
+            if (!valor || (restricciones[nombre] && !restricciones[nombre].test(valor))) return null;
+            params[nombre] = valor;
+        }
+        return params;
+    }
+
+    /** Devuelve { ruta: definición | null, params, query, path }. */
+    static resolverRuta(hash, rutas) {
+        const { ruta: path, query } = Router.normalizarHash(hash);
+        for (const ruta of rutas) {
+            const params = Router.#coincidir(ruta.patron, path, ruta.restricciones);
+            if (params) return { ruta, params, query, path };
+        }
+        return { ruta: null, params: {}, query, path };
+    }
+
+    /**
+     * Valida el parámetro `volver` del login: solo rutas internas conocidas y que no sean solo para invitados.
+     * Devuelve la ruta (con su query) o null.
+     */
+    static rutaDeRetorno(valor, rutas) {
+        if (typeof valor !== "string" || !valor.startsWith("/") || valor.startsWith("//") || /[\\\s]/.test(valor)) return null;
+        const { ruta } = Router.resolverRuta(valor, rutas);
+        return ruta && !ruta.soloInvitados ? valor : null;
     }
 }

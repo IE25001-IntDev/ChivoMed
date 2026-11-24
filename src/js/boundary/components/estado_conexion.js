@@ -8,10 +8,10 @@
  * Las vistas deshabilitan sus acciones de red suscribiéndose a `conexion` (control/conexion.js).
  */
 import { conexion } from "../../control/conexion.js";
-import { hojaDeEstilos } from "../estilos.js";
-import { plantilla } from "../plantilla.js";
+import { Estilos } from "../estilos.js";
+import { Plantilla } from "../plantilla.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <div class="estado-red" id="estado" role="status" aria-live="polite" aria-atomic="true" data-aviso="oculto">
   <span class="punto" aria-hidden="true"></span><span id="texto"></span>
 </div>`);
@@ -29,7 +29,7 @@ class EstadoConexion extends HTMLElement {
 
     connectedCallback() {
         if (!this.shadowRoot.childElementCount) {
-            this.shadowRoot.append(hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
+            this.shadowRoot.append(Estilos.hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
         }
         this.#cancelar = conexion.suscribir(enLinea => this.#pintar(enLinea, true));
         this.#pintar(conexion.enLinea, false);

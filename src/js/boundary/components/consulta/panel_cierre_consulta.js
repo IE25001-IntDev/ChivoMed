@@ -5,11 +5,11 @@
  * Propiedad `modelo` (congelado, lo arma <vista-consulta>): { motivo, confirmando, accion }.
  * Emite (bubbles, composed): 'cerrar' { observaciones }, 'confirmar', 'cancelar'.
  */
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
 import { MAX_TEXTO } from "../../../control/controladores/controlador_consulta.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="panel panel-cierre" aria-labelledby="titulo">
   <h2 id="titulo">Cerrar consulta</h2>
   <p class="indicaciones">Ya no quedan pasos pendientes. Al cerrarla, la consulta queda en solo lectura.</p>
@@ -29,15 +29,13 @@ const PLANTILLA = plantilla(`
   </div>
 </section>`);
 
-const contador = valor => `${valor.length}/${MAX_TEXTO} caracteres`;
-
 class PanelCierreConsulta extends HTMLElement {
     #modelo = null;
     #emitir = (tipo, detail) => this.dispatchEvent(new CustomEvent(tipo, { bubbles: true, composed: true, detail }));
     #alCerrar = () => this.#emitir("cerrar", { observaciones: this.$("observaciones").value });
     #alConfirmar = () => this.#emitir("confirmar");
     #alCancelar = () => this.#emitir("cancelar");
-    #alEscribir = () => { this.$("contador-observaciones").textContent = contador(this.$("observaciones").value); };
+    #alEscribir = () => { this.$("contador-observaciones").textContent = PanelCierreConsulta.#contador(this.$("observaciones").value); };
 
     constructor() {
         super();
@@ -53,7 +51,7 @@ class PanelCierreConsulta extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.$("cerrar").addEventListener("click", this.#alCerrar);
         this.$("confirmar").addEventListener("click", this.#alConfirmar);
@@ -87,6 +85,10 @@ class PanelCierreConsulta extends HTMLElement {
         if (m.motivo) this.$("observaciones").setAttribute("readonly", "");
         else this.$("observaciones").removeAttribute("readonly");
         this.setAttribute("aria-busy", String(cerrando));
+    }
+
+    static #contador(valor) {
+        return `${valor.length}/${MAX_TEXTO} caracteres`;
     }
 }
 

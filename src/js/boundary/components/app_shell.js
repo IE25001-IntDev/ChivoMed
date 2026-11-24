@@ -16,12 +16,12 @@
  * Además registra el service worker y, al cerrar o perder la sesión, borra los cachés con datos
  * y la memoria de las vistas.
  */
-import { Router, normalizarHash } from "../router.js";
-import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
-import { obtenerSesion, fijarSesionVista, esEmpleado, CODIGO_SIN_RED } from "../../control/auth_service.js";
-import { hojaDeEstilos } from "../estilos.js";
-import { registrarServiceWorker } from "../pwa/registro_sw.js";
-import { limpiarCachesDeDatos } from "../../control/caches_cliente.js";
+import { Router } from "../router.js";
+import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION, RUTA_POR_DEFECTO, RUTA_LOGIN, TablaRutas } from "../rutas.js";
+import { AuthService, auth, CODIGO_SIN_RED } from "../../control/auth_service.js";
+import { Estilos } from "../estilos.js";
+import { RegistroServiceWorker } from "../pwa/registro_sw.js";
+import { CachesCliente } from "../../control/caches_cliente.js";
 import { memoria } from "../../control/memoria_vistas.js";
 import { conexion } from "../../control/conexion.js";
 import "./session_bar.js";
@@ -29,9 +29,9 @@ import "./theme_toggle.js";
 import "./install_prompt.js";
 import "./estado_conexion.js";
 import "../vistas/vista_aviso.js";
-import { plantilla } from "../plantilla.js";
+import { Plantilla } from "../plantilla.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <a class="saltar" href="#contenido">Saltar al contenido</a>
 <header class="cabecera">
   <a class="marca" href="#${RUTA_POR_DEFECTO}" aria-label="ChivoMed, búsqueda de citas">
@@ -61,15 +61,15 @@ class AppShell extends HTMLElement {
         event.stopPropagation();
         const { sesion } = event.detail ?? {};
         if (!sesion || !this.#rutaActual?.empleado) return;
-        fijarSesionVista(sesion);
+        auth.fijarSesionVista(sesion);
         memoria.recordarSesion(sesion);
         this.shadowRoot.querySelector("session-bar").sesion = sesion;
     };
     // Se difiere: si el 401 vino de la verificación del propio router, este ya redirigió al login.
     #alExpirar = () => setTimeout(() => {
         if (!this.#rutaActual?.empleado) return;
-        if (normalizarHash(location.hash).ruta !== RUTA_LOGIN) this.#irAlLogin(true);
-        else limpiarCachesDeDatos();
+        if (Router.normalizarHash(location.hash).ruta !== RUTA_LOGIN) this.#irAlLogin(true);
+        else CachesCliente.limpiarCachesDeDatos();
     }, 0);
 
     constructor() {
@@ -80,7 +80,7 @@ class AppShell extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            raiz.append(hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
+            raiz.append(Estilos.hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
             // El enlace de salto no debe cambiar el hash: el router lo interpretaría como ruta.
             raiz.querySelector(".saltar").addEventListener("click", event => {
                 event.preventDefault();
@@ -92,10 +92,10 @@ class AppShell extends HTMLElement {
             noEncontrada: RUTA_NO_ENCONTRADA,
             porDefecto: RUTA_POR_DEFECTO,
             login: RUTA_LOGIN,
-            inicioPorRol,
-            esEmpleado,
+            inicioPorRol: sesion => TablaRutas.inicioPorRol(sesion),
+            esEmpleado: sesion => AuthService.esEmpleado(sesion),
             ventana: window,
-            autenticar: () => obtenerSesion().catch(error => {
+            autenticar: () => auth.obtenerSesion().catch(error => {
                 // Sin sesión en el servidor, la copia de otra sesión no sirve de respaldo.
                 if (error?.status === 401) memoria.limpiar();
                 throw error;
@@ -114,7 +114,7 @@ class AppShell extends HTMLElement {
         const hidratando = memoria.hidratar();
         if (hidratando) hidratando.finally(() => { if (this.isConnected) this.#router.iniciar(); });
         else this.#router.iniciar();
-        registrarServiceWorker();
+        RegistroServiceWorker.registrar();
     }
 
     disconnectedCallback() {
@@ -128,9 +128,9 @@ class AppShell extends HTMLElement {
 
     #irAlLogin(expirada) {
         this.#rutaActual = null;
-        fijarSesionVista(null);
+        auth.fijarSesionVista(null);
         memoria.limpiar();
-        limpiarCachesDeDatos();
+        CachesCliente.limpiarCachesDeDatos();
         this.#router.navegar(expirada ? `${RUTA_LOGIN}?sesion=finalizada` : RUTA_LOGIN);
     }
 
@@ -151,7 +151,7 @@ class AppShell extends HTMLElement {
     /** La barra de sesión solo se muestra en rutas de empleado con sesión verificada. */
     #mostrarSesion(contexto) {
         const protegida = Boolean(contexto.ruta.empleado && contexto.sesion);
-        fijarSesionVista(protegida ? contexto.sesion : null);
+        auth.fijarSesionVista(protegida ? contexto.sesion : null);
         const barra = this.shadowRoot.querySelector("session-bar");
         barra.sesion = protegida ? contexto.sesion : null;
         barra.hidden = !protegida;

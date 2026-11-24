@@ -2,10 +2,7 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import AtencionService from '../src/js/control/atencion_service.js';
 import DefaultError from '../src/js/entities/default_error.js';
-import {
-    ControladorDashboard, MENSAJES, CODIGO_CERRAR_ANTES, normalizarAsignaciones, agruparPorClinica,
-    mensajeDeError, mensajeMemoria,
-} from '../src/js/control/controladores/controlador_dashboard.js';
+import { ControladorDashboard, MENSAJES, CODIGO_CERRAR_ANTES } from '../src/js/control/controladores/controlador_dashboard.js';
 import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import { MENSAJE_SIN_RED } from '../src/js/control/controlador_conexion.js';
 import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';
@@ -150,7 +147,7 @@ function preparar({ asignaciones = async () => ASIGNACIONES, cambiarRol = async 
 
 describe('normalizarAsignaciones', () => {
     test('conserva las asignaciones válidas y recorta los textos', () => {
-        const [a] = normalizarAsignaciones([{ ...DOC_NORTE, nombreRol: '  Doctor ', nombreClinica: ' Clínica Prueba Norte ' }]);
+        const [a] = ControladorDashboard.normalizarAsignaciones([{ ...DOC_NORTE, nombreRol: '  Doctor ', nombreClinica: ' Clínica Prueba Norte ' }]);
         assert.deepEqual(a, DOC_NORTE);
         assert.ok(Object.isFrozen(a));
     });
@@ -165,7 +162,7 @@ describe('normalizarAsignaciones', () => {
             { ...ADM_NORTE, idPersonaRol: UUID(32), nombreClinica: '  ' },
             null,
         ];
-        assert.deepEqual(normalizarAsignaciones(datos).map(a => a.idPersonaRol), [DOC_NORTE.idPersonaRol]);
+        assert.deepEqual(ControladorDashboard.normalizarAsignaciones(datos).map(a => a.idPersonaRol), [DOC_NORTE.idPersonaRol]);
     });
 
     test('B8: acepta Enfermera y un rol sin código; descarta un código que no es texto', () => {
@@ -174,33 +171,33 @@ describe('normalizarAsignaciones', () => {
             { ...DOC_SUR, idPersonaRol: UUID(41), codigoRol: null, nombreRol: 'Recepción' },
             { ...DOC_SUR, idPersonaRol: UUID(42), codigoRol: 7, nombreRol: 'Raro' },
         ];
-        const roles = normalizarAsignaciones(datos);
+        const roles = ControladorDashboard.normalizarAsignaciones(datos);
         assert.deepEqual(roles.map(a => [a.codigoRol, a.nombreRol]), [['ENFERMERA', 'Enfermera'], [null, 'Recepción']]);
     });
 
     test('sin nombreRol muestra un texto neutro, nunca el código; una respuesta que no es lista da []', () => {
-        assert.equal(normalizarAsignaciones([{ ...ADM_NORTE, nombreRol: null }])[0].nombreRol, 'Rol sin nombre');
-        assert.deepEqual(normalizarAsignaciones({ data: [] }), []);
+        assert.equal(ControladorDashboard.normalizarAsignaciones([{ ...ADM_NORTE, nombreRol: null }])[0].nombreRol, 'Rol sin nombre');
+        assert.deepEqual(ControladorDashboard.normalizarAsignaciones({ data: [] }), []);
     });
 });
 
 describe('agruparPorClinica', () => {
     test('agrupa por clínica, pone primero la activa y ordena los roles por nombre', () => {
-        const grupos = agruparPorClinica(normalizarAsignaciones(ASIGNACIONES), DOC_SUR.idPersonaRol);
+        const grupos = ControladorDashboard.agruparPorClinica(ControladorDashboard.normalizarAsignaciones(ASIGNACIONES), DOC_SUR.idPersonaRol);
         assert.deepEqual(grupos.map(g => g.nombreClinica), ['Clínica Prueba Sur', 'Clínica Prueba Norte']);
         assert.deepEqual(grupos[1].roles.map(r => r.nombreRol), ['Administración', 'Doctor']);
     });
 
     test('marca solo la asignación de la sesión aunque el DTO diga otra cosa', () => {
-        const roles = agruparPorClinica(normalizarAsignaciones(ASIGNACIONES), ADM_NORTE.idPersonaRol).flatMap(g => g.roles);
+        const roles = ControladorDashboard.agruparPorClinica(ControladorDashboard.normalizarAsignaciones(ASIGNACIONES), ADM_NORTE.idPersonaRol).flatMap(g => g.roles);
         assert.deepEqual(roles.filter(r => r.activa).map(r => r.idPersonaRol), [ADM_NORTE.idPersonaRol]);
     });
 
     test('sin sesión usa el campo activa del DTO; sin activa las clínicas van por nombre', () => {
-        const conDto = agruparPorClinica(normalizarAsignaciones(ASIGNACIONES));
+        const conDto = ControladorDashboard.agruparPorClinica(ControladorDashboard.normalizarAsignaciones(ASIGNACIONES));
         assert.equal(conDto[0].nombreClinica, 'Clínica Prueba Norte');
         assert.equal(conDto[0].activa, true);
-        const sinActiva = agruparPorClinica(normalizarAsignaciones([DOC_SUR, { ...DOC_NORTE, activa: false }]));
+        const sinActiva = ControladorDashboard.agruparPorClinica(ControladorDashboard.normalizarAsignaciones([DOC_SUR, { ...DOC_NORTE, activa: false }]));
         assert.deepEqual(sinActiva.map(g => g.nombreClinica), ['Clínica Prueba Norte', 'Clínica Prueba Sur']);
     });
 });
@@ -209,22 +206,22 @@ describe('mensajeDeError', () => {
     test('consulta en curso (F8): siempre el texto propio, nunca el message del backend', () => {
         assert.equal(MENSAJES.cerrarAntes, 'Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.');
         for (const status of [409, 400]) {
-            assert.equal(mensajeDeError(errorHttp(status, CODIGO_CERRAR_ANTES, 'Cierre la consulta antes de cambiar de médico o rol.')),
+            assert.equal(ControladorDashboard.mensajeDeError(errorHttp(status, CODIGO_CERRAR_ANTES, 'Cierre la consulta antes de cambiar de médico o rol.')),
                 MENSAJES.cerrarAntes);
         }
-        assert.equal(mensajeDeError(errorHttp(409, CODIGO_CERRAR_ANTES)), MENSAJES.cerrarAntes);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(409, CODIGO_CERRAR_ANTES)), MENSAJES.cerrarAntes);
     });
 
     test('traduce red, sesión, permiso, no disponible y genéricos sin exponer detalles', () => {
-        assert.equal(mensajeDeError(errorHttp(0, 'conexion.error')), MENSAJES.conexion);
-        assert.equal(mensajeDeError(errorHttp(401)), MENSAJES.sesionFinalizada);
-        assert.equal(mensajeDeError(errorHttp(403, 'auth.asignacion', 'detalle')), MENSAJES.sinPermiso);
-        assert.equal(mensajeDeError(errorHttp(404)), MENSAJES.noDisponible);
-        assert.equal(mensajeDeError(errorHttp(409, null, 'La sesión cambió. Recarga la página antes de guardar.')),
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(0, 'conexion.error')), MENSAJES.conexion);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(401)), MENSAJES.sesionFinalizada);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(403, 'auth.asignacion', 'detalle')), MENSAJES.sinPermiso);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(404)), MENSAJES.noDisponible);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(409, null, 'La sesión cambió. Recarga la página antes de guardar.')),
             'La sesión cambió. Recarga la página antes de guardar.');
-        assert.equal(mensajeDeError(errorHttp(500, 'error.interno', 'SQL interno')), MENSAJES.generico);
-        assert.equal(mensajeDeError(errorHttp(500), { cambio: true }), MENSAJES.cambioFallido);
-        assert.equal(mensajeDeError(new Error('módulo')), MENSAJES.generico);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(500, 'error.interno', 'SQL interno')), MENSAJES.generico);
+        assert.equal(ControladorDashboard.mensajeDeError(errorHttp(500), { cambio: true }), MENSAJES.cambioFallido);
+        assert.equal(ControladorDashboard.mensajeDeError(new Error('módulo')), MENSAJES.generico);
     });
 });
 
@@ -387,7 +384,7 @@ describe('ControladorDashboard: sin conexión', () => {
         assert.equal(controlador.estado.desdeMemoria, true);
         assert.deepEqual(controlador.estado.actualizadoEn, new Date(2026, 10, 13, 9, 30));
         assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
-        assert.match(mensajeMemoria(controlador.estado.actualizadoEn), /^Sin conexión con el servidor\. Mostrando lo guardado a las \d{2}:\d{2}\.$/);
+        assert.match(ControladorDashboard.mensajeMemoria(controlador.estado.actualizadoEn), /^Sin conexión con el servidor\. Mostrando lo guardado a las \d{2}:\d{2}\.$/);
     });
 
     test('si la petición falla por red y hay memoria, se queda con lo guardado', async () => {
@@ -411,7 +408,7 @@ describe('ControladorDashboard: sin conexión', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE, 2));
         assert.equal(controlador.estado.error, MENSAJES.sinRed);
         assert.equal(MENSAJES.sinRed, 'No se puede conectar con el servidor y no hay datos guardados.');
-        assert.equal(mensajeMemoria(null), 'Sin conexión con el servidor. Mostrando lo guardado.');
+        assert.equal(ControladorDashboard.mensajeMemoria(null), 'Sin conexión con el servidor. Mostrando lo guardado.');
         assert.deepEqual(controlador.estado.grupos, []);
     });
 
@@ -564,7 +561,7 @@ describe('ControladorDashboard: consulta en curso (F8)', () => {
         await controlador.iniciar(sesionCon(DOC_NORTE));
         assert.equal(await controlador.salirDeConsulta(), false);
         assert.equal(controlador.estado.error, MENSAJES.sesionFinalizada);
-        assert.equal(controlador.estado.error, mensajeDeError(errorHttp(401)), 'mismo texto que el 401 del cambio de rol');
+        assert.equal(controlador.estado.error, ControladorDashboard.mensajeDeError(errorHttp(401)), 'mismo texto que el 401 del cambio de rol');
         assert.equal(controlador.estado.enCurso, EN_CURSO);
         assert.equal(controlador.estado.confirmacion, null);
         assert.equal(controlador.estado.saliendo, false);
@@ -642,7 +639,7 @@ describe('ControladorDashboard: ninguna escritura sin servidor', () => {
             cambiarRol: async () => { red.caer(); throw sinServidor(); } });
         await controlador.iniciar(sesionCon(DOC_NORTE));
         assert.equal(await controlador.cambiar(DOC_SUR.idPersonaRol), false);
-        assert.equal(controlador.estado.error, mensajeDeError(sinServidor(), { cambio: true }));
+        assert.equal(controlador.estado.error, ControladorDashboard.mensajeDeError(sinServidor(), { cambio: true }));
         assert.equal(controlador.estado.cambiando, null);
         assert.equal(controlador.estado.activa.idPersonaRol, DOC_NORTE.idPersonaRol);
         red.responder();
@@ -666,7 +663,7 @@ describe('ControladorDashboard: ninguna escritura sin servidor', () => {
             salirDeConsulta: async () => { red.caer(); throw sinServidor(); } });
         await controlador.iniciar(sesionCon(DOC_NORTE));
         assert.equal(await controlador.salirDeConsulta(), false);
-        assert.equal(controlador.estado.error, mensajeDeError(sinServidor()));
+        assert.equal(controlador.estado.error, ControladorDashboard.mensajeDeError(sinServidor()));
         red.responder();
         await pausa();
         assert.equal(llamadas.salirDeConsulta, 1);

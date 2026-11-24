@@ -1,6 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorInstalacion, MODOS, EVENTO_INSTALAR } from '../src/js/control/controlador_instalacion.js';
+import { ControladorInstalacion, EVENTO_INSTALAR } from '../src/js/control/controlador_instalacion.js';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 
 /** Deja correr los microtasks: la notificación del estado reactivo llega después del cambio. */
@@ -38,7 +38,7 @@ function preparar(opciones) {
 describe('ControladorInstalacion', () => {
     test('sin aviso del navegador la instalación no está disponible', () => {
         const { controlador } = preparar();
-        assert.equal(controlador.estado.modo, MODOS.NO_DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.NO_DISPONIBLE);
     });
 
     test('beforeinstallprompt evita el aviso automático y habilita el botón propio', () => {
@@ -46,7 +46,7 @@ describe('ControladorInstalacion', () => {
         const aviso = crearAviso();
         ventana.dispatchEvent(aviso);
         assert.equal(aviso.defaultPrevented, true);
-        assert.equal(controlador.estado.modo, MODOS.DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.DISPONIBLE);
     });
 
     test('al aceptar muestra el diálogo una vez, queda instalando y appinstalled lo confirma', async () => {
@@ -56,13 +56,13 @@ describe('ControladorInstalacion', () => {
         await asentar(); // En el navegador el aviso y el clic llegan en tareas distintas.
         assert.equal(await controlador.instalar(), 'accepted');
         assert.equal(aviso.llamadasPrompt, 1);
-        assert.equal(controlador.estado.modo, MODOS.INSTALANDO);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.INSTALANDO);
         await asentar();
         ventana.dispatchEvent(new Event('appinstalled'));
-        assert.equal(controlador.estado.modo, MODOS.INSTALADA);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.INSTALADA);
         assert.match(controlador.estado.mensaje, /instalada/);
         await asentar();
-        assert.deepEqual(estados, [MODOS.DISPONIBLE, MODOS.INSTALANDO, MODOS.INSTALANDO, MODOS.INSTALADA]);
+        assert.deepEqual(estados, [ControladorInstalacion.MODOS.DISPONIBLE, ControladorInstalacion.MODOS.INSTALANDO, ControladorInstalacion.MODOS.INSTALANDO, ControladorInstalacion.MODOS.INSTALADA]);
     });
 
     test('al rechazar se oculta el botón y el aviso ya usado no se vuelve a mostrar', async () => {
@@ -70,7 +70,7 @@ describe('ControladorInstalacion', () => {
         const aviso = crearAviso('dismissed');
         ventana.dispatchEvent(aviso);
         assert.equal(await controlador.instalar(), 'dismissed');
-        assert.equal(controlador.estado.modo, MODOS.NO_DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.NO_DISPONIBLE);
         assert.equal(await controlador.instalar(), null);
         assert.equal(aviso.llamadasPrompt, 1);
     });
@@ -80,7 +80,7 @@ describe('ControladorInstalacion', () => {
         ventana.dispatchEvent(crearAviso('dismissed'));
         await controlador.instalar();
         ventana.dispatchEvent(crearAviso('accepted'));
-        assert.equal(controlador.estado.modo, MODOS.DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.DISPONIBLE);
     });
 
     test('dos clics seguidos solo abren un diálogo', async () => {
@@ -95,31 +95,31 @@ describe('ControladorInstalacion', () => {
     test('instalar sin aviso del navegador no hace nada', async () => {
         const { controlador } = preparar();
         assert.equal(await controlador.instalar(), null);
-        assert.equal(controlador.estado.modo, MODOS.NO_DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.NO_DISPONIBLE);
     });
 
     test('si el diálogo falla se informa y se sugiere el menú del navegador', async () => {
         const { ventana, controlador } = preparar();
         ventana.dispatchEvent(crearAviso('accepted', { fallaPrompt: true }));
         assert.equal(await controlador.instalar(), null);
-        assert.equal(controlador.estado.modo, MODOS.NO_DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.NO_DISPONIBLE);
         assert.match(controlador.estado.mensaje, /menú del navegador/);
     });
 
     test('appinstalled sin pasar por el botón (desde el menú del navegador) marca la app como instalada', () => {
         const { ventana, controlador } = preparar();
         ventana.dispatchEvent(new Event('appinstalled'));
-        assert.equal(controlador.estado.modo, MODOS.INSTALADA);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.INSTALADA);
     });
 
     for (const [caso, opciones] of [['display-mode standalone', { standalone: true }], ['navigator.standalone de iOS', { iosStandalone: true }]]) {
         test(`ya instalada (${caso}): se marca al iniciar e ignora beforeinstallprompt`, () => {
             const { ventana, controlador } = preparar(opciones);
             assert.equal(controlador.yaInstalada(), true);
-            assert.equal(controlador.estado.modo, MODOS.INSTALADA);
+            assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.INSTALADA);
             const aviso = crearAviso();
             ventana.dispatchEvent(aviso);
-            assert.equal(controlador.estado.modo, MODOS.INSTALADA);
+            assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.INSTALADA);
             assert.equal(aviso.defaultPrevented, true, 'tampoco se muestra el aviso del navegador');
         });
     }
@@ -129,7 +129,7 @@ describe('ControladorInstalacion', () => {
         const cambio = new Event('change');
         cambio.matches = true;
         ventana.consulta.dispatchEvent(cambio);
-        assert.equal(controlador.estado.modo, MODOS.INSTALADA);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.INSTALADA);
     });
 
     test('detener() deja de escuchar los eventos', () => {
@@ -137,7 +137,7 @@ describe('ControladorInstalacion', () => {
         controlador.detener();
         ventana.dispatchEvent(crearAviso());
         ventana.dispatchEvent(new Event('appinstalled'));
-        assert.equal(controlador.estado.modo, MODOS.NO_DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.NO_DISPONIBLE);
     });
 
     test('sin ventana (fuera del navegador) no falla', () => {
@@ -164,7 +164,7 @@ describe('ControladorInstalacion: estado reactivo', () => {
         ventana.dispatchEvent(crearAviso());
         await asentar();
         assert.deepEqual(avisos, []);
-        assert.equal(controlador.estado.modo, MODOS.DISPONIBLE);
+        assert.equal(controlador.estado.modo, ControladorInstalacion.MODOS.DISPONIBLE);
     });
 });
 
@@ -314,7 +314,7 @@ describe('ControladorInstalacion: invitar hasta que la app se instale', () => {
         const otra = new ControladorInstalacion({ ventana });
         otra.iniciar();
         assert.equal(otra.invitar(), false, 'pestaña normal, sin beforeinstallprompt');
-        assert.equal(otra.estado.modo, MODOS.NO_DISPONIBLE, 'el botón de la cabecera no cambia');
+        assert.equal(otra.estado.modo, ControladorInstalacion.MODOS.NO_DISPONIBLE, 'el botón de la cabecera no cambia');
     });
 
     test('beforeinstallprompt borra la marca: no está instalada', () => {

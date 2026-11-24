@@ -12,16 +12,16 @@
  * en el mismo toque, emite EVENTO_INSTALAR. Al cerrar la ventana, el foco vuelve a "Ver ticket".
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  */
-import { ControladorCitas, MENSAJES, motivoNoBuscar } from "../../control/controladores/controlador_citas.js";
-import { formatearFecha, FechasSV } from "../../control/fechas_sv.js";
-import { hojaDeEstilos } from "../estilos.js";
-import { plantilla } from "../plantilla.js";
+import { ControladorCitas, MENSAJES } from "../../control/controladores/controlador_citas.js";
+import { FechasSV } from "../../control/fechas_sv.js";
+import { Estilos } from "../estilos.js";
+import { Plantilla } from "../plantilla.js";
 import { EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
 import "../components/citas/tarjeta_cita.js";
 import "../components/citas/ventana_ticket.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
   <h1 id="titulo" tabindex="-1">Búsqueda de citas</h1>
   <p class="subtitulo">Consulta tus citas con tu documento, la clínica donde te atienden y un rango de fechas.</p>
@@ -110,7 +110,7 @@ class VistaCitas extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("citas.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("citas.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.#controlador ??= new ControladorCitas();
         const c = this.#controlador;
@@ -306,7 +306,7 @@ class VistaCitas extends HTMLElement {
         this.$("sin-citas").hidden = !vacias;
         this.$("sin-citas-texto").textContent = vacias ? MENSAJES.sinCitas : "";
         const clinica = estado.clinicas?.find(c => c.idClinica === estado.idClinica)?.nombre ?? "";
-        const rango = `del ${formatearFecha(estado.desde)} al ${formatearFecha(estado.hasta)}`;
+        const rango = `del ${FechasSV.formatearFecha(estado.desde)} al ${FechasSV.formatearFecha(estado.hasta)}`;
         this.$("resumen").textContent = citas.length
             ? `${citas.length} ${citas.length === 1 ? "cita" : "citas"} en ${clinica}, ${rango}.`
             : estado.citas ? `${clinica}, ${rango}.` : "";
@@ -314,7 +314,7 @@ class VistaCitas extends HTMLElement {
 
     /** Por qué no se puede pedir un ticket ahora (sin red o límite); null si se puede. */
     #motivoTicket(estado) {
-        return !estado.enLinea ? MENSAJES.sinRedTicket : motivoNoBuscar(estado, Date.now());
+        return !estado.enLinea ? MENSAJES.sinRedTicket : ControladorCitas.motivoNoBuscar(estado, Date.now());
     }
 
     #pintarTarjetas(estado) {
@@ -389,7 +389,7 @@ class VistaCitas extends HTMLElement {
 
     #pintarAcciones(estado) {
         const ocupado = Boolean(estado.cargando);
-        const motivo = motivoNoBuscar(estado, Date.now());
+        const motivo = ControladorCitas.motivoNoBuscar(estado, Date.now());
         this.$("reintentar-tipos").disabled = !estado.enLinea || estado.cargandoTipos;
         this.$("buscar").disabled = !estado.habilitado.buscar;
         this.$("buscar").textContent = estado.cargando === "clinicas" ? "Cargando clínicas…"

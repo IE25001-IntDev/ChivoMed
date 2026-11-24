@@ -1,9 +1,6 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-    ControladorCitas, MENSAJES, CLAVE_MEMORIA, PASOS, validarNumero, validarRango, pasoAlcanzable,
-    motivoNoBuscar, mensajeDeErrorCitas, rangoPorDefecto,
-} from '../src/js/control/controladores/controlador_citas.js';
+import { ControladorCitas, MENSAJES, CLAVE_MEMORIA, PASOS } from '../src/js/control/controladores/controlador_citas.js';
 import { FechasSV } from '../src/js/control/fechas_sv.js';
 import * as citas from '../src/js/control/controladores/controlador_citas.js';
 import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
@@ -73,45 +70,45 @@ describe('ControladorCitas: funciones puras', () => {
     });
 
     test('validarNumero: vacío, largo, saltos de línea y formato del tipo', () => {
-        assert.equal(validarNumero(DUI, '   '), MENSAJES.numeroRequerido);
-        assert.equal(validarNumero(PASAPORTE, 'A'.repeat(51)), MENSAJES.numeroLargo);
-        assert.equal(validarNumero(PASAPORTE, 'A'.repeat(50)), null);
-        assert.equal(validarNumero(PASAPORTE, 'A\nB'), MENSAJES.numeroSaltos);
-        assert.match(validarNumero(DUI, '1234'), /formato de DUI\. Ocho dígitos/);
-        assert.equal(validarNumero(DUI, ` ${NUMERO} `), null);
-        assert.equal(validarNumero(null, NUMERO), MENSAJES.tipoRequerido);
+        assert.equal(ControladorCitas.validarNumero(DUI, '   '), MENSAJES.numeroRequerido);
+        assert.equal(ControladorCitas.validarNumero(PASAPORTE, 'A'.repeat(51)), MENSAJES.numeroLargo);
+        assert.equal(ControladorCitas.validarNumero(PASAPORTE, 'A'.repeat(50)), null);
+        assert.equal(ControladorCitas.validarNumero(PASAPORTE, 'A\nB'), MENSAJES.numeroSaltos);
+        assert.match(ControladorCitas.validarNumero(DUI, '1234'), /formato de DUI\. Ocho dígitos/);
+        assert.equal(ControladorCitas.validarNumero(DUI, ` ${NUMERO} `), null);
+        assert.equal(ControladorCitas.validarNumero(null, NUMERO), MENSAJES.tipoRequerido);
     });
 
     test('validarRango: sigue al backend, DAYS.between(desde, hasta) <= 366', () => {
-        assert.equal(validarRango('2026-01-01', '2027-01-02'), null, '366 días de diferencia: se acepta');
-        assert.equal(validarRango('2026-01-01', '2027-01-03'), MENSAJES.rangoLargo, '367: no');
-        assert.equal(validarRango('2026-11-13', '2026-11-13'), null, 'un día');
-        assert.equal(validarRango('2026-11-14', '2026-11-13'), MENSAJES.rangoInvertido);
-        assert.equal(validarRango('2026-02-30', '2026-03-01'), MENSAJES.fechasInvalidas);
-        assert.equal(validarRango('', '2026-03-01'), MENSAJES.fechasInvalidas);
+        assert.equal(ControladorCitas.validarRango('2026-01-01', '2027-01-02'), null, '366 días de diferencia: se acepta');
+        assert.equal(ControladorCitas.validarRango('2026-01-01', '2027-01-03'), MENSAJES.rangoLargo, '367: no');
+        assert.equal(ControladorCitas.validarRango('2026-11-13', '2026-11-13'), null, 'un día');
+        assert.equal(ControladorCitas.validarRango('2026-11-14', '2026-11-13'), MENSAJES.rangoInvertido);
+        assert.equal(ControladorCitas.validarRango('2026-02-30', '2026-03-01'), MENSAJES.fechasInvalidas);
+        assert.equal(ControladorCitas.validarRango('', '2026-03-01'), MENSAJES.fechasInvalidas);
     });
 
     test('rangoPorDefecto: de hoy − 30 a hoy + 30 en El Salvador', () => {
-        assert.deepEqual(rangoPorDefecto(() => new Date(AHORA)), { desde: '2026-10-14', hasta: '2026-12-13' });
+        assert.deepEqual(ControladorCitas.rangoPorDefecto(() => new Date(AHORA)), { desde: '2026-10-14', hasta: '2026-12-13' });
         // 13 nov a las 23:30 en El Salvador ya es 14 nov en UTC: manda el día de El Salvador.
-        assert.deepEqual(rangoPorDefecto(() => new Date(Date.UTC(2026, 10, 14, 5, 30))), { desde: '2026-10-14', hasta: '2026-12-13' });
+        assert.deepEqual(ControladorCitas.rangoPorDefecto(() => new Date(Date.UTC(2026, 10, 14, 5, 30))), { desde: '2026-10-14', hasta: '2026-12-13' });
     });
 
     test('pasoAlcanzable: solo del 1 al alcanzado', () => {
-        assert.equal(pasoAlcanzable(3, 3), true);
-        assert.equal(pasoAlcanzable(4, 3), false);
-        assert.equal(pasoAlcanzable(0, 3), false);
-        assert.equal(pasoAlcanzable(1.5, 3), false);
+        assert.equal(ControladorCitas.pasoAlcanzable(3, 3), true);
+        assert.equal(ControladorCitas.pasoAlcanzable(4, 3), false);
+        assert.equal(ControladorCitas.pasoAlcanzable(0, 3), false);
+        assert.equal(ControladorCitas.pasoAlcanzable(1.5, 3), false);
     });
 
     test('motivoNoBuscar: sin red, bloqueo por límite o ninguno', () => {
-        assert.equal(motivoNoBuscar({ enLinea: false, bloqueadoHasta: null }, AHORA), MENSAJES.sinRedBuscar);
+        assert.equal(ControladorCitas.motivoNoBuscar({ enLinea: false, bloqueadoHasta: null }, AHORA), MENSAJES.sinRedBuscar);
         assert.equal(MENSAJES.sinRedBuscar, 'Sin conexión: necesitas conexión con el servidor para buscar.');
         assert.equal(MENSAJES.sinRedTicket, 'Sin conexión: necesitas conexión con el servidor para ver el ticket.');
         assert.equal(MENSAJES.tiposSinRed, 'Sin conexión: necesitas conexión con el servidor para cargar los tipos de documento.');
-        assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA + 60000 }, AHORA), MENSAJES.limite(FechasSV.hora(AHORA + 60000)));
-        assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA - 1 }, AHORA), null);
-        assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: null }, AHORA), null);
+        assert.equal(ControladorCitas.motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA + 60000 }, AHORA), MENSAJES.limite(FechasSV.hora(AHORA + 60000)));
+        assert.equal(ControladorCitas.motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA - 1 }, AHORA), null);
+        assert.equal(ControladorCitas.motivoNoBuscar({ enLinea: true, bloqueadoHasta: null }, AHORA), null);
     });
 
     test('FechasSV.hora: HH:MM en El Salvador', () => {
@@ -120,13 +117,13 @@ describe('ControladorCitas: funciones puras', () => {
 
     test('mensajeDeErrorCitas: por código y status, sin detalles internos', () => {
         const e = (status, code, message = 'interno') => new DefaultError({ status, code, message });
-        assert.equal(mensajeDeErrorCitas(e(400, 'validacion.invalida')), MENSAJES.datos);
-        assert.equal(mensajeDeErrorCitas(e(400, 'json.invalido')), MENSAJES.datos);
-        assert.equal(mensajeDeErrorCitas(e(400, 'citas.rango', 'El rango de fechas no es válido.')), 'El rango de fechas no es válido.');
-        assert.match(mensajeDeErrorCitas(e(403, 'auth.origen')), /localhost:3000/);
-        assert.equal(mensajeDeErrorCitas(e(0, 'conexion.error')), MENSAJES.conexion);
-        assert.equal(mensajeDeErrorCitas(e(404, 'cita.noExiste')), MENSAJES.ticketNoExiste);
-        assert.equal(mensajeDeErrorCitas(e(500, 'error.interno', 'NullPointerException')), MENSAJES.generico);
+        assert.equal(ControladorCitas.mensajeDeErrorCitas(e(400, 'validacion.invalida')), MENSAJES.datos);
+        assert.equal(ControladorCitas.mensajeDeErrorCitas(e(400, 'json.invalido')), MENSAJES.datos);
+        assert.equal(ControladorCitas.mensajeDeErrorCitas(e(400, 'citas.rango', 'El rango de fechas no es válido.')), 'El rango de fechas no es válido.');
+        assert.match(ControladorCitas.mensajeDeErrorCitas(e(403, 'auth.origen')), /localhost:3000/);
+        assert.equal(ControladorCitas.mensajeDeErrorCitas(e(0, 'conexion.error')), MENSAJES.conexion);
+        assert.equal(ControladorCitas.mensajeDeErrorCitas(e(404, 'cita.noExiste')), MENSAJES.ticketNoExiste);
+        assert.equal(ControladorCitas.mensajeDeErrorCitas(e(500, 'error.interno', 'NullPointerException')), MENSAJES.generico);
     });
 });
 
@@ -241,7 +238,7 @@ describe('ControladorCitas: pasos y datos', () => {
         assert.equal(estado.clinicas, null);
         assert.equal(estado.idClinica, null);
         assert.equal(estado.citas, null);
-        assert.equal(estado.desde, rangoPorDefecto(() => new Date(AHORA)).desde);
+        assert.equal(estado.desde, ControladorCitas.rangoPorDefecto(() => new Date(AHORA)).desde);
         await controlador.siguiente();
         assert.equal(llamadas.clinicas.length, 2);
     });
@@ -700,56 +697,56 @@ const PASAPORTE_DEMO = Object.freeze({ idTipoDocumento: UUID(3), nombre: 'Pasapo
 
 describe('Máscara del número a partir de la expresión regular', () => {
     test('mascaraDeExpresion convierte las tres expresiones de la demo', () => {
-        assert.equal(typeof citas.mascaraDeExpresion, 'function');
-        const dui = citas.mascaraDeExpresion(EXPR_DUI);
+        assert.equal(typeof citas.ControladorCitas.mascaraDeExpresion, 'function');
+        const dui = citas.ControladorCitas.mascaraDeExpresion(EXPR_DUI);
         assert.equal(dui.length, 10);
         assert.deepEqual(dui[8], { literal: '-' });
         assert.deepEqual(dui[0], { clase: '[0-9]' });
-        const pasaporte = citas.mascaraDeExpresion(EXPR_PASAPORTE);
+        const pasaporte = citas.ControladorCitas.mascaraDeExpresion(EXPR_PASAPORTE);
         assert.equal(pasaporte.length, 9);
         assert.deepEqual(pasaporte[0], { clase: '[A-Z]' });
-        const nit = citas.mascaraDeExpresion(EXPR_NIT);
+        const nit = citas.ControladorCitas.mascaraDeExpresion(EXPR_NIT);
         assert.equal(nit.length, 17);
         assert.deepEqual([4, 11, 15].map(i => nit[i]), [{ literal: '-' }, { literal: '-' }, { literal: '-' }]);
         assert.ok(Object.isFrozen(dui));
     });
 
     test('una expresión con |, *, +, ?, grupos, {n,m} o . no da máscara', () => {
-        assert.equal(typeof citas.mascaraDeExpresion, 'function');
+        assert.equal(typeof citas.ControladorCitas.mascaraDeExpresion, 'function');
         for (const expr of ['^[0-9]+$', '^[0-9]*$', '^A?[0-9]{3}$', '^(A|B)[0-9]{3}$', '^[0-9]{3}|[A-Z]{3}$',
             '^[0-9]{2,4}$', '^.{5}$', null, '', '.', '^[0-9$']) {
-            assert.equal(citas.mascaraDeExpresion(expr), null, String(expr));
+            assert.equal(citas.ControladorCitas.mascaraDeExpresion(expr), null, String(expr));
         }
     });
 
     test('DUI: las letras no entran y el guion se pone solo', () => {
-        assert.equal(typeof citas.aplicarMascara, 'function');
-        const m = citas.mascaraDeExpresion(EXPR_DUI);
-        assert.equal(citas.aplicarMascara(m, 'a1b2'), '12');
-        assert.equal(citas.aplicarMascara(m, '12345678'), '12345678');
-        assert.equal(citas.aplicarMascara(m, '123456789'), '12345678-9');
-        assert.equal(citas.aplicarMascara(m, '12345678-'), '12345678-');
+        assert.equal(typeof citas.ControladorCitas.aplicarMascara, 'function');
+        const m = citas.ControladorCitas.mascaraDeExpresion(EXPR_DUI);
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, 'a1b2'), '12');
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, '12345678'), '12345678');
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, '123456789'), '12345678-9');
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, '12345678-'), '12345678-');
     });
 
     test('pegar se limpia con la misma regla', () => {
-        assert.equal(typeof citas.aplicarMascara, 'function');
-        const m = citas.mascaraDeExpresion(EXPR_DUI);
-        assert.equal(citas.aplicarMascara(m, ' 0100 0004 4 '), '01000004-4');
-        assert.equal(citas.aplicarMascara(m, '0100-0004-4'), '01000004-4');
-        assert.equal(citas.aplicarMascara(citas.mascaraDeExpresion(EXPR_NIT), '06142803901010'), '0614-280390-101-0');
+        assert.equal(typeof citas.ControladorCitas.aplicarMascara, 'function');
+        const m = citas.ControladorCitas.mascaraDeExpresion(EXPR_DUI);
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, ' 0100 0004 4 '), '01000004-4');
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, '0100-0004-4'), '01000004-4');
+        assert.equal(citas.ControladorCitas.aplicarMascara(citas.ControladorCitas.mascaraDeExpresion(EXPR_NIT), '06142803901010'), '0614-280390-101-0');
     });
 
     test('Pasaporte: la minúscula se convierte y un dígito no entra en la letra', () => {
-        assert.equal(typeof citas.aplicarMascara, 'function');
-        const m = citas.mascaraDeExpresion(EXPR_PASAPORTE);
-        assert.equal(citas.aplicarMascara(m, 'b10000004'), 'B10000004');
-        assert.equal(citas.aplicarMascara(m, '1b1x'), 'B1');
+        assert.equal(typeof citas.ControladorCitas.aplicarMascara, 'function');
+        const m = citas.ControladorCitas.mascaraDeExpresion(EXPR_PASAPORTE);
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, 'b10000004'), 'B10000004');
+        assert.equal(citas.ControladorCitas.aplicarMascara(m, '1b1x'), 'B1');
     });
 
     test('no se escribe más allá del largo de la máscara', () => {
-        assert.equal(typeof citas.aplicarMascara, 'function');
-        assert.equal(citas.aplicarMascara(citas.mascaraDeExpresion(EXPR_DUI), '0100000449999'), '01000004-4');
-        assert.equal(citas.aplicarMascara(citas.mascaraDeExpresion(EXPR_PASAPORTE), 'B100000041234'), 'B10000004');
+        assert.equal(typeof citas.ControladorCitas.aplicarMascara, 'function');
+        assert.equal(citas.ControladorCitas.aplicarMascara(citas.ControladorCitas.mascaraDeExpresion(EXPR_DUI), '0100000449999'), '01000004-4');
+        assert.equal(citas.ControladorCitas.aplicarMascara(citas.ControladorCitas.mascaraDeExpresion(EXPR_PASAPORTE), 'B100000041234'), 'B10000004');
     });
 
     test('el controlador aplica la máscara al escribir y borrar funciona normal', async () => {
@@ -776,7 +773,7 @@ describe('Máscara del número a partir de la expresión regular', () => {
         controlador.elegirTipo(LIBRE.idTipoDocumento);
         controlador.escribirNumero('12ab');
         assert.equal(estado.numeroDocumento, '12ab');
-        assert.match(validarNumero(LIBRE, '12ab'), /formato de Carné/);
+        assert.match(ControladorCitas.validarNumero(LIBRE, '12ab'), /formato de Carné/);
     });
 });
 
@@ -828,7 +825,7 @@ describe('Campos que se desbloquean en orden', () => {
     test('cambiar el tipo vacía y bloquea todo lo que sigue; las fechas vuelven al rango por defecto', async () => {
         const { controlador, estado } = preparar();
         await controlador.iniciar();
-        const defecto = rangoPorDefecto(() => new Date(AHORA));
+        const defecto = ControladorCitas.rangoPorDefecto(() => new Date(AHORA));
         controlador.elegirTipo(DUI.idTipoDocumento);
         controlador.escribirNumero(NUMERO);
         await asentar();
@@ -845,7 +842,7 @@ describe('Campos que se desbloquean en orden', () => {
     test('cambiar el número vacía la clínica y las fechas', async () => {
         const { controlador, estado } = preparar();
         await controlador.iniciar();
-        const defecto = rangoPorDefecto(() => new Date(AHORA));
+        const defecto = ControladorCitas.rangoPorDefecto(() => new Date(AHORA));
         controlador.elegirTipo(DUI.idTipoDocumento);
         controlador.escribirNumero(NUMERO);
         await asentar();
@@ -861,7 +858,7 @@ describe('Campos que se desbloquean en orden', () => {
     test('cambiar la clínica vacía las fechas y los resultados', async () => {
         const { controlador, estado } = preparar();
         await controlador.iniciar();
-        const defecto = rangoPorDefecto(() => new Date(AHORA));
+        const defecto = ControladorCitas.rangoPorDefecto(() => new Date(AHORA));
         controlador.elegirTipo(DUI.idTipoDocumento);
         controlador.escribirNumero(NUMERO);
         await asentar();
@@ -956,7 +953,7 @@ describe('ControladorCitas: ninguna escritura sin servidor', () => {
         const ctx = preparar({ conexion: red.conexion });
         await hastaFechas(ctx);
         red.caer();
-        assert.equal(motivoNoBuscar(ctx.estado, AHORA), MENSAJES.sinRedBuscar);
+        assert.equal(ControladorCitas.motivoNoBuscar(ctx.estado, AHORA), MENSAJES.sinRedBuscar);
         await ctx.controlador.buscar();
         assert.deepEqual(ctx.llamadas.citas, []);
         assert.equal(ctx.estado.mensaje, MENSAJES.sinRedBuscar);

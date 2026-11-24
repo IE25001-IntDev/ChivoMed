@@ -1,12 +1,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-    ControladorConsultas, MENSAJES, MAX_DIAS, validarRango, normalizarConsultas, arbolDePasos, motivoNoAtender,
-    etiquetaEstado, resumenResultado, mensajeDeError, accionAtender, esPasoDeMiRol, filtrarConsultas, tituloConsultas,
-} from '../src/js/control/controladores/controlador_consultas.js';
+import { ControladorConsultas, MENSAJES, MAX_DIAS } from '../src/js/control/controladores/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
-import { hoySV, sumarDias } from '../src/js/control/fechas_sv.js';
+import { FechasSV } from '../src/js/control/fechas_sv.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -58,21 +55,21 @@ function preparar({ dashboard = async () => [consulta(1), consulta(2)], valorPas
 
 describe('validarRango', () => {
     test('el mismo día y 31 días contando ambos extremos son válidos', () => {
-        assert.equal(validarRango('2026-11-13', '2026-11-13'), null);
-        assert.equal(validarRango('2026-11-01', '2026-12-01'), null);
+        assert.equal(ControladorConsultas.validarRango('2026-11-13', '2026-11-13'), null);
+        assert.equal(ControladorConsultas.validarRango('2026-11-01', '2026-12-01'), null);
         assert.equal(MAX_DIAS, 31);
     });
     test('32 días, rango invertido o fechas inválidas tienen su mensaje', () => {
-        assert.equal(validarRango('2026-11-01', '2026-12-02'), MENSAJES.rangoExcedido);
-        assert.equal(validarRango('2026-11-14', '2026-11-13'), MENSAJES.rangoInvertido);
-        assert.equal(validarRango('2026-02-30', '2026-03-01'), MENSAJES.fechaInvalida);
-        assert.equal(validarRango('', '2026-11-13'), MENSAJES.fechaInvalida);
+        assert.equal(ControladorConsultas.validarRango('2026-11-01', '2026-12-02'), MENSAJES.rangoExcedido);
+        assert.equal(ControladorConsultas.validarRango('2026-11-14', '2026-11-13'), MENSAJES.rangoInvertido);
+        assert.equal(ControladorConsultas.validarRango('2026-02-30', '2026-03-01'), MENSAJES.fechaInvalida);
+        assert.equal(ControladorConsultas.validarRango('', '2026-11-13'), MENSAJES.fechaInvalida);
     });
 });
 
 describe('normalizarConsultas', () => {
     test('conserva el orden, arma el nombre y congela todo', () => {
-        const [a, b] = normalizarConsultas([consulta(2), consulta(1)]);
+        const [a, b] = ControladorConsultas.normalizarConsultas([consulta(2), consulta(1)]);
         assert.equal(a.idConsulta, UUID(2));
         assert.equal(b.paciente.nombre, 'Paciente Prueba 1');
         assert.ok(Object.isFrozen(a) && Object.isFrozen(a.procedimientos[0].pasos[0]));
@@ -86,8 +83,8 @@ describe('normalizarConsultas', () => {
                     { idConsultaProcedimiento: 'x' },
                     { idConsultaProcedimiento: UUID(61), nombre: 'P', pasos: [paso(9, { responsable: null, nombre: null, nivel: -2 }), { idConsultaProcedimientoPaso: 'x' }] }] },
         ];
-        const [c] = normalizarConsultas(datos);
-        assert.equal(normalizarConsultas(datos).length, 1);
+        const [c] = ControladorConsultas.normalizarConsultas(datos);
+        assert.equal(ControladorConsultas.normalizarConsultas(datos).length, 1);
         assert.equal(c.paciente.nombre, 'Paciente sin nombre registrado');
         assert.equal(c.paciente.edad, null);
         assert.equal(c.paciente.fechaNacimiento, null);
@@ -101,73 +98,73 @@ describe('normalizarConsultas', () => {
         assert.equal(s.nombre, 'Paso sin nombre');
         assert.equal(s.nivel, 0);
     });
-    test('una respuesta que no es lista da []', () => assert.deepEqual(normalizarConsultas({}), []));
+    test('una respuesta que no es lista da []', () => assert.deepEqual(ControladorConsultas.normalizarConsultas({}), []));
 });
 
 describe('arbolDePasos', () => {
     const p = (id, nivel) => ({ id, nivel });
     const forma = nodos => nodos.map(n => (n.hijos.length ? [n.paso.id, forma(n.hijos)] : n.paso.id));
-    test('lista plana en nivel 0', () => assert.deepEqual(forma(arbolDePasos([p('a', 0), p('b', 0)])), ['a', 'b']));
-    test('cadena 0-1-2', () => assert.deepEqual(forma(arbolDePasos([p('a', 0), p('b', 1), p('c', 2)])), [['a', [['b', ['c']]]]]));
+    test('lista plana en nivel 0', () => assert.deepEqual(forma(ControladorConsultas.arbolDePasos([p('a', 0), p('b', 0)])), ['a', 'b']));
+    test('cadena 0-1-2', () => assert.deepEqual(forma(ControladorConsultas.arbolDePasos([p('a', 0), p('b', 1), p('c', 2)])), [['a', [['b', ['c']]]]]));
     test('hermanos en el mismo nivel y vuelta a la raíz', () => {
-        assert.deepEqual(forma(arbolDePasos([p('a', 0), p('b', 1), p('c', 1), p('d', 0)])), [['a', ['b', 'c']], 'd']);
+        assert.deepEqual(forma(ControladorConsultas.arbolDePasos([p('a', 0), p('b', 1), p('c', 1), p('d', 0)])), [['a', ['b', 'c']], 'd']);
     });
     test('un salto de nivel se ajusta al anterior + 1', () => {
-        assert.deepEqual(forma(arbolDePasos([p('a', 0), p('b', 2)])), [['a', ['b']]]);
-        assert.deepEqual(forma(arbolDePasos([p('a', 3)])), ['a']);
+        assert.deepEqual(forma(ControladorConsultas.arbolDePasos([p('a', 0), p('b', 2)])), [['a', ['b']]]);
+        assert.deepEqual(forma(ControladorConsultas.arbolDePasos([p('a', 3)])), ['a']);
     });
     test('un paso sin definición al final con nivel 0 vuelve a la raíz; conserva el orden', () => {
-        assert.deepEqual(forma(arbolDePasos([p('a', 0), p('b', 1), p('sin-def', 0)])), [['a', ['b']], 'sin-def']);
+        assert.deepEqual(forma(ControladorConsultas.arbolDePasos([p('a', 0), p('b', 1), p('sin-def', 0)])), [['a', ['b']], 'sin-def']);
     });
     test('el árbol queda congelado y acepta una lista vacía', () => {
-        const arbol = arbolDePasos([p('a', 0), p('b', 1)]);
+        const arbol = ControladorConsultas.arbolDePasos([p('a', 0), p('b', 1)]);
         assert.ok(Object.isFrozen(arbol) && Object.isFrozen(arbol[0].hijos));
-        assert.deepEqual(arbolDePasos([]), []);
+        assert.deepEqual(ControladorConsultas.arbolDePasos([]), []);
     });
 });
 
 describe('motivoNoAtender', () => {
-    const [abierta] = normalizarConsultas([consulta(1)]);
-    test('abierta y pendiente para mí, con red: se puede atender', () => assert.equal(motivoNoAtender(abierta), null));
+    const [abierta] = ControladorConsultas.normalizarConsultas([consulta(1)]);
+    test('abierta y pendiente para mí, con red: se puede atender', () => assert.equal(ControladorConsultas.motivoNoAtender(abierta), null));
     test('cerrada', () => {
-        const [c] = normalizarConsultas([consulta(1, { fechaFin: '2026-11-13T10:00:00-06:00' })]);
-        assert.equal(motivoNoAtender(c), MENSAJES.cerrada);
+        const [c] = ControladorConsultas.normalizarConsultas([consulta(1, { fechaFin: '2026-11-13T10:00:00-06:00' })]);
+        assert.equal(ControladorConsultas.motivoNoAtender(c), MENSAJES.cerrada);
     });
     test('una consulta futura queda como cita hasta que llegue el día, según la zona de El Salvador', () => {
-        const hoy = hoySV();
-        const [futura] = normalizarConsultas([consulta(1, { fechaInicio: `${sumarDias(hoy, 1)}T12:00:00Z` })]);
-        const [hoyMismo] = normalizarConsultas([consulta(1, { fechaInicio: `${hoy}T08:00:00-06:00` })]);
-        assert.equal(motivoNoAtender(futura, { hoy }), MENSAJES.futura);
-        assert.equal(motivoNoAtender(hoyMismo, { hoy }), null);
+        const hoy = FechasSV.hoySV();
+        const [futura] = ControladorConsultas.normalizarConsultas([consulta(1, { fechaInicio: `${FechasSV.sumarDias(hoy, 1)}T12:00:00Z` })]);
+        const [hoyMismo] = ControladorConsultas.normalizarConsultas([consulta(1, { fechaInicio: `${hoy}T08:00:00-06:00` })]);
+        assert.equal(ControladorConsultas.motivoNoAtender(futura, { hoy }), MENSAJES.futura);
+        assert.equal(ControladorConsultas.motivoNoAtender(hoyMismo, { hoy }), null);
     });
     // Demo del guion: SA-4 (Toma de presión de Julia) está pendiente para Lucía, Enfermera.
-    const ajena = (pendiente, extra = {}) => normalizarConsultas([consulta(1, { pendienteParaMi: false, ...extra,
+    const ajena = (pendiente, extra = {}) => ControladorConsultas.normalizarConsultas([consulta(1, { pendienteParaMi: false, ...extra,
         procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'Control de hipertensión', pasos: [paso(1), paso(2, { estado: 'PENDIENTE', ...pendiente })] }] })])[0];
     const ROL_ENFERMERA = { idRol: UUID(600), nombre: 'Enfermera' };
 
     test('no es para mí: dice la persona asignada y, si llega rolPaso, el rol del paso', () => {
         const lucia = { nombre: 'Lucía Pérez', rol: 'Enfermera' };
-        assert.equal(motivoNoAtender(ajena({ responsable: lucia, rolPaso: ROL_ENFERMERA })), 'Le corresponde a Lucía Pérez (Enfermera).');
-        assert.equal(motivoNoAtender(ajena({ responsable: lucia })), 'Le corresponde a Lucía Pérez.', 'sin rolPaso no usa el rol de la persona');
-        assert.equal(motivoNoAtender(ajena({ responsable: null, rolPaso: ROL_ENFERMERA })), 'Este paso lo atiende el rol Enfermera.');
+        assert.equal(ControladorConsultas.motivoNoAtender(ajena({ responsable: lucia, rolPaso: ROL_ENFERMERA })), 'Le corresponde a Lucía Pérez (Enfermera).');
+        assert.equal(ControladorConsultas.motivoNoAtender(ajena({ responsable: lucia })), 'Le corresponde a Lucía Pérez.', 'sin rolPaso no usa el rol de la persona');
+        assert.equal(ControladorConsultas.motivoNoAtender(ajena({ responsable: null, rolPaso: ROL_ENFERMERA })), 'Este paso lo atiende el rol Enfermera.');
     });
     test('no es para mí y no se sabe quién atiende el paso: respaldo genérico', () => {
-        assert.equal(motivoNoAtender(ajena({ responsable: null })), MENSAJES.otroRol);
+        assert.equal(ControladorConsultas.motivoNoAtender(ajena({ responsable: null })), MENSAJES.otroRol);
         assert.equal(MENSAJES.otroRol, 'Este paso lo atiende otro rol.');
     });
     test('sin pasos pendientes y no me toca: solo cierra quien completó el paso final', () => {
-        const [todoListo] = normalizarConsultas([consulta(1, { pendienteParaMi: false, procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P', pasos: [paso(1)] }] })]);
-        assert.equal(motivoNoAtender(todoListo), MENSAJES.soloFinalizador);
+        const [todoListo] = ControladorConsultas.normalizarConsultas([consulta(1, { pendienteParaMi: false, procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P', pasos: [paso(1)] }] })]);
+        assert.equal(ControladorConsultas.motivoNoAtender(todoListo), MENSAJES.soloFinalizador);
     });
     test('sin red o en solo lectura no se puede atender', () => {
-        assert.equal(motivoNoAtender(abierta, { enLinea: false }), MENSAJES.sinRedAtender);
-        assert.equal(motivoNoAtender(abierta, { soloLectura: true }), MENSAJES.sinRedAtender);
+        assert.equal(ControladorConsultas.motivoNoAtender(abierta, { enLinea: false }), MENSAJES.sinRedAtender);
+        assert.equal(ControladorConsultas.motivoNoAtender(abierta, { soloLectura: true }), MENSAJES.sinRedAtender);
         assert.equal(MENSAJES.sinRedAtender, 'Sin conexión: necesitas conexión con el servidor para atender una consulta.');
         assert.equal(MENSAJES.sinRedRegistro, 'Sin conexión: necesitas conexión con el servidor para ver este registro.');
     });
     test('no depende del rol activo: no hay lista fija de roles que atienden', () => {
         assert.equal(Object.hasOwn(MENSAJES, 'soloDoctor'), false);
-        assert.equal(motivoNoAtender(abierta, { rol: 'ADMINISTRACION' }), null);
+        assert.equal(ControladorConsultas.motivoNoAtender(abierta, { rol: 'ADMINISTRACION' }), null);
     });
     test('un rolPaso mal formado se descarta', () => {
         assert.equal(ajena({ rolPaso: { idRol: 'x', nombre: 'Enfermera' } }).procedimientos[0].pasos[1].rolPaso, null);
@@ -177,44 +174,44 @@ describe('motivoNoAtender', () => {
 
 describe('accionAtender y esPasoDeMiRol', () => {
     test('"cerrar" si me toca y no quedan pasos pendientes; si no, "atender"', () => {
-        const [cerrarla] = normalizarConsultas([consulta(1, { procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P', pasos: [paso(1)] }] })]);
-        assert.equal(accionAtender(cerrarla), 'cerrar');
-        assert.equal(accionAtender(normalizarConsultas([consulta(1)])[0]), 'atender');
-        assert.equal(accionAtender({ ...cerrarla, fechaFin: '2026-11-13T10:00:00-06:00' }), 'atender');
-        assert.equal(accionAtender(null), 'atender');
+        const [cerrarla] = ControladorConsultas.normalizarConsultas([consulta(1, { procedimientos: [{ idConsultaProcedimiento: UUID(70), nombre: 'P', pasos: [paso(1)] }] })]);
+        assert.equal(ControladorConsultas.accionAtender(cerrarla), 'cerrar');
+        assert.equal(ControladorConsultas.accionAtender(ControladorConsultas.normalizarConsultas([consulta(1)])[0]), 'atender');
+        assert.equal(ControladorConsultas.accionAtender({ ...cerrarla, fechaFin: '2026-11-13T10:00:00-06:00' }), 'atender');
+        assert.equal(ControladorConsultas.accionAtender(null), 'atender');
     });
     test('compara solo por idRol, y solo si los dos lados lo traen', () => {
         const pasoEnfermera = { rolPaso: { idRol: UUID(600), nombre: 'Enfermera' } };
-        assert.equal(esPasoDeMiRol(pasoEnfermera, { idRol: UUID(600) }), true);
-        assert.equal(esPasoDeMiRol(pasoEnfermera, { idRol: UUID(601), nombreRol: 'Enfermera' }), false, 'nunca por nombre');
-        assert.equal(esPasoDeMiRol(pasoEnfermera, { nombreRol: 'Enfermera' }), false);
-        assert.equal(esPasoDeMiRol({ rolPaso: null }, { idRol: UUID(600) }), false);
+        assert.equal(ControladorConsultas.esPasoDeMiRol(pasoEnfermera, { idRol: UUID(600) }), true);
+        assert.equal(ControladorConsultas.esPasoDeMiRol(pasoEnfermera, { idRol: UUID(601), nombreRol: 'Enfermera' }), false, 'nunca por nombre');
+        assert.equal(ControladorConsultas.esPasoDeMiRol(pasoEnfermera, { nombreRol: 'Enfermera' }), false);
+        assert.equal(ControladorConsultas.esPasoDeMiRol({ rolPaso: null }, { idRol: UUID(600) }), false);
     });
 });
 
 describe('textos', () => {
     test('etiquetaEstado traduce los estados conocidos y deja los demás tal cual', () => {
-        assert.equal(etiquetaEstado('PENDIENTE'), 'Pendiente');
-        assert.equal(etiquetaEstado('COMPLETADO'), 'Completado');
-        assert.equal(etiquetaEstado('OTRO'), 'OTRO');
-        assert.equal(etiquetaEstado(null), 'Sin estado');
+        assert.equal(ControladorConsultas.etiquetaEstado('PENDIENTE'), 'Pendiente');
+        assert.equal(ControladorConsultas.etiquetaEstado('COMPLETADO'), 'Completado');
+        assert.equal(ControladorConsultas.etiquetaEstado('OTRO'), 'OTRO');
+        assert.equal(ControladorConsultas.etiquetaEstado(null), 'Sin estado');
     });
     test('resumenResultado', () => {
-        assert.equal(resumenResultado([], null), '');
-        assert.equal(resumenResultado([], { desde: '2026-11-13', hasta: '2026-11-13' }), MENSAJES.sinConsultas);
-        assert.match(resumenResultado([1], { desde: '2026-11-13', hasta: '2026-11-13' }), /^1 consulta del 13 nov/);
-        assert.match(resumenResultado([1, 2], { desde: '2026-11-01', hasta: '2026-11-15' }), /^2 consultas del 1 nov.* al 15 nov/);
+        assert.equal(ControladorConsultas.resumenResultado([], null), '');
+        assert.equal(ControladorConsultas.resumenResultado([], { desde: '2026-11-13', hasta: '2026-11-13' }), MENSAJES.sinConsultas);
+        assert.match(ControladorConsultas.resumenResultado([1], { desde: '2026-11-13', hasta: '2026-11-13' }), /^1 consulta del 13 nov/);
+        assert.match(ControladorConsultas.resumenResultado([1, 2], { desde: '2026-11-01', hasta: '2026-11-15' }), /^2 consultas del 1 nov.* al 15 nov/);
     });
     test('mensajeDeError traduce los códigos del dashboard y los status', () => {
-        assert.equal(mensajeDeError(errorHttp(400, 'dashboard.rangoExcedido')), MENSAJES.rangoExcedido);
-        assert.equal(mensajeDeError(errorHttp(400, 'dashboard.rangoInvertido')), MENSAJES.rangoInvertido);
-        assert.equal(mensajeDeError(errorHttp(400, 'dashboard.fecha')), MENSAJES.fechaInvalida);
-        assert.equal(mensajeDeError(errorHttp(403, 'auth.rolActivo')), MENSAJES.sinRol);
-        assert.equal(mensajeDeError(errorHttp(403, 'auth.asignacion')), MENSAJES.sinAsignacion);
-        assert.equal(mensajeDeError(errorHttp(404, 'consulta.pasoNoExiste'), { registro: true }), MENSAJES.pasoNoExiste);
-        assert.equal(mensajeDeError(errorHttp(0, 'conexion.error')), MENSAJES.conexion);
-        assert.equal(mensajeDeError(errorHttp(500, 'error.interno', 'SQL interno')), MENSAJES.generico);
-        assert.equal(mensajeDeError(errorHttp(500), { registro: true }), MENSAJES.registroGenerico);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(400, 'dashboard.rangoExcedido')), MENSAJES.rangoExcedido);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(400, 'dashboard.rangoInvertido')), MENSAJES.rangoInvertido);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(400, 'dashboard.fecha')), MENSAJES.fechaInvalida);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(403, 'auth.rolActivo')), MENSAJES.sinRol);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(403, 'auth.asignacion')), MENSAJES.sinAsignacion);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(404, 'consulta.pasoNoExiste'), { registro: true }), MENSAJES.pasoNoExiste);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(0, 'conexion.error')), MENSAJES.conexion);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(500, 'error.interno', 'SQL interno')), MENSAJES.generico);
+        assert.equal(ControladorConsultas.mensajeDeError(errorHttp(500), { registro: true }), MENSAJES.registroGenerico);
     });
 });
 
@@ -394,7 +391,7 @@ describe('ControladorConsultas: atender', () => {
         const { controlador, conexion } = preparar({ dashboard: async () => [consulta(1), consulta(2, { pendienteParaMi: false })] });
         await controlador.iniciar(sesionCon());
         conexion.emitir(false);
-        assert.equal(motivoNoAtender(controlador.estado.consultas[0], controlador.contextoAtender()), MENSAJES.sinRedAtender);
+        assert.equal(ControladorConsultas.motivoNoAtender(controlador.estado.consultas[0], controlador.contextoAtender()), MENSAJES.sinRedAtender);
         assert.equal(controlador.atender(UUID(2)), false);
         assert.equal(controlador.atender(UUID(1)), true, 'la pendiente guardada se abre en solo lectura');
     });
@@ -459,35 +456,35 @@ describe('ControladorConsultas: sin conexión', () => {
 
 describe('Buscar paciente y título según el rango', () => {
     // Pacientes demo del guion (inventados): Ana Martínez y Julia Flores.
-    const [ana, julia] = normalizarConsultas([
+    const [ana, julia] = ControladorConsultas.normalizarConsultas([
         consulta(1, { paciente: { nombres: 'Ana', apellidos: 'Martínez', documentos: [{ tipoDocumento: 'DUI', numero: '01000004-4' }, { tipoDocumento: 'Pasaporte', numero: 'B10000004' }] } }),
         consulta(2, { paciente: { nombres: 'Julia', apellidos: 'Flores', documentos: [{ tipoDocumento: 'DUI', numero: '01000008-8' }] } }),
     ]);
     const todas = Object.freeze([ana, julia]);
 
     test('filtra por nombre sin acentos ni mayúsculas, o por documento sin guiones', () => {
-        assert.deepEqual(filtrarConsultas(todas, '  MARTINEZ ').map(c => c.paciente.nombre), ['Ana Martínez']);
-        assert.deepEqual(filtrarConsultas(todas, 'julia f').map(c => c.paciente.nombre), ['Julia Flores']);
-        assert.deepEqual(filtrarConsultas(todas, '010000088').map(c => c.paciente.nombre), ['Julia Flores']);
-        assert.deepEqual(filtrarConsultas(todas, 'b1000').map(c => c.paciente.nombre), ['Ana Martínez']);
-        assert.deepEqual(filtrarConsultas(todas, 'Pedro'), []);
-        assert.equal(filtrarConsultas(todas, '   '), todas, 'vacía: la misma lista');
-        assert.ok(Object.isFrozen(filtrarConsultas(todas, 'ana')));
+        assert.deepEqual(ControladorConsultas.filtrarConsultas(todas, '  MARTINEZ ').map(c => c.paciente.nombre), ['Ana Martínez']);
+        assert.deepEqual(ControladorConsultas.filtrarConsultas(todas, 'julia f').map(c => c.paciente.nombre), ['Julia Flores']);
+        assert.deepEqual(ControladorConsultas.filtrarConsultas(todas, '010000088').map(c => c.paciente.nombre), ['Julia Flores']);
+        assert.deepEqual(ControladorConsultas.filtrarConsultas(todas, 'b1000').map(c => c.paciente.nombre), ['Ana Martínez']);
+        assert.deepEqual(ControladorConsultas.filtrarConsultas(todas, 'Pedro'), []);
+        assert.equal(ControladorConsultas.filtrarConsultas(todas, '   '), todas, 'vacía: la misma lista');
+        assert.ok(Object.isFrozen(ControladorConsultas.filtrarConsultas(todas, 'ana')));
     });
 
     test('el resumen dice cuántas coinciden', () => {
         const hoy = { desde: '2026-11-13', hasta: '2026-11-13' };
-        assert.equal(resumenResultado(todas, hoy, 'ana'), '1 de 2 consultas coinciden con «ana».');
-        assert.equal(resumenResultado(todas, hoy, 'Pedro'), 'Ninguna de las 2 consultas coincide con «Pedro».');
-        assert.equal(resumenResultado([ana], hoy, 'ana'), '1 de 1 consulta coincide con «ana».');
-        assert.match(resumenResultado(todas, hoy, ''), /^2 consultas del 13 nov/);
+        assert.equal(ControladorConsultas.resumenResultado(todas, hoy, 'ana'), '1 de 2 consultas coinciden con «ana».');
+        assert.equal(ControladorConsultas.resumenResultado(todas, hoy, 'Pedro'), 'Ninguna de las 2 consultas coincide con «Pedro».');
+        assert.equal(ControladorConsultas.resumenResultado([ana], hoy, 'ana'), '1 de 1 consulta coincide con «ana».');
+        assert.match(ControladorConsultas.resumenResultado(todas, hoy, ''), /^2 consultas del 13 nov/);
     });
 
     test('el título refleja el rango mostrado', () => {
-        assert.equal(tituloConsultas({ desde: '2026-11-13', hasta: '2026-11-13' }, '2026-11-13'), 'Consultas de hoy');
-        assert.match(tituloConsultas({ desde: '2026-11-12', hasta: '2026-11-12' }, '2026-11-13'), /^Consultas del 12 nov.? 2026$/);
-        assert.match(tituloConsultas({ desde: '2026-10-21', hasta: '2026-11-20' }, '2026-11-13'), /^Consultas del 21 oct.? 2026 al 20 nov.? 2026$/);
-        assert.equal(tituloConsultas(null, '2026-11-13'), 'Consultas');
+        assert.equal(ControladorConsultas.tituloConsultas({ desde: '2026-11-13', hasta: '2026-11-13' }, '2026-11-13'), 'Consultas de hoy');
+        assert.match(ControladorConsultas.tituloConsultas({ desde: '2026-11-12', hasta: '2026-11-12' }, '2026-11-13'), /^Consultas del 12 nov.? 2026$/);
+        assert.match(ControladorConsultas.tituloConsultas({ desde: '2026-10-21', hasta: '2026-11-20' }, '2026-11-13'), /^Consultas del 21 oct.? 2026 al 20 nov.? 2026$/);
+        assert.equal(ControladorConsultas.tituloConsultas(null, '2026-11-13'), 'Consultas');
     });
 
     test('el controlador filtra sin pedir nada al backend y conserva la búsqueda al cambiar de fechas', async () => {

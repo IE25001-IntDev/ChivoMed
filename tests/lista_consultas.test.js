@@ -1,7 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar } from './dobles/dom_minimo.js';
-import { normalizarConsultas } from '../src/js/control/controladores/controlador_consultas.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -18,7 +17,7 @@ const consultaCruda = (n, extra = {}) => ({
         pasos: [paso(1), paso(2, { nivel: 1, estado: 'PENDIENTE', fechaFin: null, tieneValor: false }), paso(3, { nivel: 2, tieneValor: false })] }],
     ...extra,
 });
-const normal = (n, extra) => normalizarConsultas([consultaCruda(n, extra)])[0];
+const normal = (n, extra) => ControladorConsultas.normalizarConsultas([consultaCruda(n, extra)])[0];
 
 before(async () => {
     instalarDom();
@@ -253,7 +252,7 @@ describe('<lista-consultas>', () => {
         await asentar();
         assert.equal(tarjetas()[0], primera, 'misma tarjeta');
         assert.equal(primera.valores[UUID(101)].valor, 'Registro de prueba');
-        controlador.estado.consultas = normalizarConsultas([consultaCruda(3)]);
+        controlador.estado.consultas = ControladorConsultas.normalizarConsultas([consultaCruda(3)]);
         await asentar();
         assert.notEqual(tarjetas()[0], primera);
         assert.equal(tarjetas().length, 1);

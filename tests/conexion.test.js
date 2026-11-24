@@ -1,14 +1,14 @@
 import { test, describe, afterEach, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorConexion, MENSAJE_SIN_RED, INTERVALO_VERIFICACION_MS, motivoSinConexion } from '../src/js/control/controlador_conexion.js';
+import { ControladorConexion, MENSAJE_SIN_RED, INTERVALO_VERIFICACION_MS } from '../src/js/control/controlador_conexion.js';
 import { MENSAJES as MENSAJES_CONSULTA } from '../src/js/control/controladores/controlador_consulta.js';
 import { MENSAJES as MENSAJES_CONSULTAS } from '../src/js/control/controladores/controlador_consultas.js';
 import { MENSAJES as MENSAJES_CITAS } from '../src/js/control/controladores/controlador_citas.js';
 import { MENSAJES as MENSAJES_DASHBOARD } from '../src/js/control/controladores/controlador_dashboard.js';
-import { verificarServidor, CABECERA_COPIA } from '../src/js/control/auth_service.js';
+import { auth, CABECERA_COPIA } from '../src/js/control/auth_service.js';
 import { conexion } from '../src/js/control/conexion.js';
-import { registrarServiceWorker } from '../src/js/boundary/pwa/registro_sw.js';
-import { limpiarCachesDeDatos } from '../src/js/control/caches_cliente.js';
+import { RegistroServiceWorker } from '../src/js/boundary/pwa/registro_sw.js';
+import { CachesCliente } from '../src/js/control/caches_cliente.js';
 
 function crearVentana(onLine = true) {
     const ventana = new EventTarget();
@@ -67,7 +67,7 @@ describe('ControladorConexion', () => {
 
     // La causa puede ser la red o el servidor: un solo formato de motivo para los dos casos.
     test('motivoSinConexion: "Sin conexión: necesitas conexión con el servidor para …"', () => {
-        assert.equal(motivoSinConexion('registrar la atención'), 'Sin conexión: necesitas conexión con el servidor para registrar la atención.');
+        assert.equal(ControladorConexion.motivoSinConexion('registrar la atención'), 'Sin conexión: necesitas conexión con el servidor para registrar la atención.');
     });
 
     test('ningún motivo de las vistas habla solo de la red', () => {
@@ -212,26 +212,26 @@ describe('verificarServidor (GET liviano, sin la copia del service worker)', () 
     test('pide publico/tipos-documento?verificar=1 sin caché HTTP', async () => {
         const llamadas = [];
         globalThis.fetch = async (url, opciones) => { llamadas.push([url, opciones.cache, opciones.method ?? 'GET']); return Response.json([]); };
-        assert.equal(await verificarServidor(), true);
+        assert.equal(await auth.verificarServidor(), true);
         assert.deepEqual(llamadas, [['/galeno/api/publico/tipos-documento?verificar=1', 'no-store', 'GET']]);
     });
 
     test('cualquier respuesta real del backend cuenta, aunque sea un error (401, 404, 500)', async () => {
         for (const status of [200, 401, 404, 500]) {
             globalThis.fetch = async () => new Response(null, { status });
-            assert.equal(await verificarServidor(), true, `status ${status}`);
+            assert.equal(await auth.verificarServidor(), true, `status ${status}`);
         }
     });
 
     test('un fallo de red, un 502/503/504 o la copia del service worker no cuentan', async () => {
         globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
-        assert.equal(await verificarServidor(), false);
+        assert.equal(await auth.verificarServidor(), false);
         for (const status of [502, 503, 504]) {
             globalThis.fetch = async () => new Response(null, { status });
-            assert.equal(await verificarServidor(), false, `status ${status}`);
+            assert.equal(await auth.verificarServidor(), false, `status ${status}`);
         }
         globalThis.fetch = async () => Response.json([], { headers: { [CABECERA_COPIA]: '1' } });
-        assert.equal(await verificarServidor(), false);
+        assert.equal(await auth.verificarServidor(), false);
     });
 });
 
@@ -240,21 +240,21 @@ describe('registrarServiceWorker', () => {
     afterEach(() => { console.warn = avisoOriginal; });
 
     test('sin soporte de service workers devuelve null', async () => {
-        assert.equal(await registrarServiceWorker({ navegador: {} }), null);
-        assert.equal(await registrarServiceWorker({ navegador: undefined }), null);
+        assert.equal(await RegistroServiceWorker.registrar({ navegador: {} }), null);
+        assert.equal(await RegistroServiceWorker.registrar({ navegador: undefined }), null);
     });
 
     test('registra src/sw.js con alcance en su carpeta y sin caché HTTP para las actualizaciones', async () => {
         const llamadas = [];
         const navegador = { serviceWorker: { register: async (...args) => { llamadas.push(args); return { scope: args[1].scope }; } } };
-        const registro = await registrarServiceWorker({ navegador, url: new URL('http://127.0.0.1:3000/sw.js') });
+        const registro = await RegistroServiceWorker.registrar({ navegador, url: new URL('http://127.0.0.1:3000/sw.js') });
         assert.deepEqual(llamadas, [['http://127.0.0.1:3000/sw.js', { scope: 'http://127.0.0.1:3000/', updateViaCache: 'none' }]]);
         assert.equal(registro.scope, 'http://127.0.0.1:3000/');
     });
 
     test('la URL por defecto apunta a src/sw.js', async () => {
         let registrada;
-        await registrarServiceWorker({ navegador: { serviceWorker: { register: async u => { registrada = u; } } } });
+        await RegistroServiceWorker.registrar({ navegador: { serviceWorker: { register: async u => { registrada = u; } } } });
         assert.ok(registrada.endsWith('/src/sw.js'), registrada);
     });
 
@@ -268,19 +268,19 @@ describe('registrarServiceWorker', () => {
 
     test('página sin control y SW activo: le pide que la reclame con { tipo: "reclamar" }', async () => {
         const { mensajes, navegador } = conActivo();
-        await registrarServiceWorker({ navegador });
+        await RegistroServiceWorker.registrar({ navegador });
         assert.deepEqual(mensajes, [{ tipo: 'reclamar' }]);
     });
 
     test('página ya controlada: no envía mensaje', async () => {
         const { mensajes, navegador } = conActivo({ controller: {} });
-        await registrarServiceWorker({ navegador });
+        await RegistroServiceWorker.registrar({ navegador });
         assert.deepEqual(mensajes, []);
     });
 
     test('primera instalación (sin SW activo todavía): no envía mensaje; activate hace el claim', async () => {
         const { navegador } = conActivo({ active: null });
-        const registro = await registrarServiceWorker({ navegador });
+        const registro = await RegistroServiceWorker.registrar({ navegador });
         assert.deepEqual(registro, { active: null });
     });
 
@@ -288,14 +288,14 @@ describe('registrarServiceWorker', () => {
     test('con red y SW activo le pide { tipo: "renovar" }', async () => {
         const { mensajes, navegador } = conActivo({ controller: {} });
         navegador.onLine = true;
-        await registrarServiceWorker({ navegador });
+        await RegistroServiceWorker.registrar({ navegador });
         assert.deepEqual(mensajes, [{ tipo: 'renovar' }]);
     });
 
     test('arranque sin red: no pide renovar', async () => {
         const { mensajes, navegador } = conActivo({ controller: {} });
         navegador.onLine = false;
-        await registrarServiceWorker({ navegador });
+        await RegistroServiceWorker.registrar({ navegador });
         assert.deepEqual(mensajes, []);
     });
 
@@ -303,7 +303,7 @@ describe('registrarServiceWorker', () => {
         const avisos = [];
         console.warn = (...args) => avisos.push(args);
         const navegador = { serviceWorker: { register: async () => { throw new Error('SecurityError'); } } };
-        assert.equal(await registrarServiceWorker({ navegador }), null);
+        assert.equal(await RegistroServiceWorker.registrar({ navegador }), null);
         assert.equal(avisos.length, 1);
     });
 });
@@ -317,13 +317,13 @@ describe('limpiarCachesDeDatos (al cerrar sesión)', () => {
     test('borra solo los cachés de datos y conserva el shell', async () => {
         const SW = globalThis.ChivoMedSW;
         const caches = crearCaches([SW.CACHE_SHELL, SW.CACHE_DATOS, 'chivomed-datos-vieja', 'otra-app']);
-        const borrados = await limpiarCachesDeDatos(caches);
+        const borrados = await CachesCliente.limpiarCachesDeDatos(caches);
         assert.deepEqual(borrados.sort(), [SW.CACHE_DATOS, 'chivomed-datos-vieja'].sort());
         assert.deepEqual([...caches.lista].sort(), [SW.CACHE_SHELL, 'otra-app'].sort());
     });
 
     test('sin CacheStorage (o si falla) no rompe el cierre de sesión', async () => {
-        assert.deepEqual(await limpiarCachesDeDatos(undefined), []);
-        assert.deepEqual(await limpiarCachesDeDatos({ keys: async () => { throw new Error('SecurityError'); } }), []);
+        assert.deepEqual(await CachesCliente.limpiarCachesDeDatos(undefined), []);
+        assert.deepEqual(await CachesCliente.limpiarCachesDeDatos({ keys: async () => { throw new Error('SecurityError'); } }), []);
     });
 });

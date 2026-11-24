@@ -1,10 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizarHash, resolverRuta, rutaDeRetorno, Router } from '../src/js/boundary/router.js';
+import { Router } from '../src/js/boundary/router.js';
 
 const UUID = '10000000-0000-4000-8000-000000000001';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-import { esEmpleado } from '../src/js/control/auth_service.js';
+import { AuthService } from '../src/js/control/auth_service.js';
 
 // B8: cualquier rol activo excepto PACIENTE, incluso sin código (null).
 const EMPLEADO = ['DOCTOR', 'ADMINISTRACION', 'ENFERMERA', null];
@@ -58,8 +58,8 @@ function preparar({ hash = '', autenticar = async () => { throw error(401); }, s
         noEncontrada: NO_ENCONTRADA,
         porDefecto: '/citas',
         login: '/login',
-        inicioPorRol: s => (esEmpleado(s) ? '/dashboard' : null),
-        esEmpleado,
+        inicioPorRol: s => (AuthService.esEmpleado(s) ? '/dashboard' : null),
+        esEmpleado: s => AuthService.esEmpleado(s),
         ventana,
         autenticar: (...args) => { llamadasAuth++; return autenticar(...args); },
         montar: (tag, contexto) => montajes.push({ tag, contexto }),
@@ -82,10 +82,10 @@ async function asentar(router) {
 describe('normalizarHash', () => {
     for (const [hash, ruta] of [['', '/'], ['#', '/'], ['#/', '/'], ['#/citas', '/citas'], ['#/citas/', '/citas'],
         ['#//dashboard//', '/dashboard'], ['#citas', '/citas'], ['#/consulta/abc', '/consulta/abc']]) {
-        test(`"${hash}" se normaliza a "${ruta}"`, () => assert.equal(normalizarHash(hash).ruta, ruta));
+        test(`"${hash}" se normaliza a "${ruta}"`, () => assert.equal(Router.normalizarHash(hash).ruta, ruta));
     }
     test('la query va dentro del hash y no se mezcla con la ruta', () => {
-        const { ruta, query } = normalizarHash('#/login?sesion=finalizada&volver=%2Fdashboard');
+        const { ruta, query } = Router.normalizarHash('#/login?sesion=finalizada&volver=%2Fdashboard');
         assert.equal(ruta, '/login');
         assert.equal(query.get('sesion'), 'finalizada');
         assert.equal(query.get('volver'), '/dashboard');
@@ -95,24 +95,24 @@ describe('normalizarHash', () => {
 describe('resolverRuta', () => {
     const rutas = crearRutas();
     test('extrae el parámetro :id de una consulta', () => {
-        const r = resolverRuta(`#/consulta/${UUID}`, rutas);
+        const r = Router.resolverRuta(`#/consulta/${UUID}`, rutas);
         assert.equal(r.ruta.tag, 'vista-consulta');
         assert.deepEqual(r.params, { id: UUID });
     });
-    test('un :id que no es UUID no coincide', () => assert.equal(resolverRuta('#/consulta/123', rutas).ruta, null));
-    test('segmentos de más no coinciden', () => assert.equal(resolverRuta(`#/consulta/${UUID}/extra`, rutas).ruta, null));
-    test('una consulta sin id no coincide', () => assert.equal(resolverRuta('#/consulta', rutas).ruta, null));
-    test('las rutas distinguen mayúsculas', () => assert.equal(resolverRuta('#/Dashboard', rutas).ruta, null));
-    test('una codificación inválida no lanza excepción', () => assert.equal(resolverRuta('#/consulta/%E0%A4%A', rutas).ruta, null));
+    test('un :id que no es UUID no coincide', () => assert.equal(Router.resolverRuta('#/consulta/123', rutas).ruta, null));
+    test('segmentos de más no coinciden', () => assert.equal(Router.resolverRuta(`#/consulta/${UUID}/extra`, rutas).ruta, null));
+    test('una consulta sin id no coincide', () => assert.equal(Router.resolverRuta('#/consulta', rutas).ruta, null));
+    test('las rutas distinguen mayúsculas', () => assert.equal(Router.resolverRuta('#/Dashboard', rutas).ruta, null));
+    test('una codificación inválida no lanza excepción', () => assert.equal(Router.resolverRuta('#/consulta/%E0%A4%A', rutas).ruta, null));
 });
 
 describe('rutaDeRetorno', () => {
     const rutas = crearRutas();
     for (const valido of ['/dashboard', `/consulta/${UUID}`, '/citas']) {
-        test(`acepta ${valido}`, () => assert.equal(rutaDeRetorno(valido, rutas), valido));
+        test(`acepta ${valido}`, () => assert.equal(Router.rutaDeRetorno(valido, rutas), valido));
     }
     for (const invalido of ['//evil.example', 'https://evil.example', '/\\evil', '/login', '/no-existe', 'dashboard', '', null, undefined, 42]) {
-        test(`rechaza ${JSON.stringify(invalido)}`, () => assert.equal(rutaDeRetorno(invalido, rutas), null));
+        test(`rechaza ${JSON.stringify(invalido)}`, () => assert.equal(Router.rutaDeRetorno(invalido, rutas), null));
     }
 });
 

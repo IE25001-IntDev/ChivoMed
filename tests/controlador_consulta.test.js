@@ -1,11 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-    MENSAJES, MAX_TEXTO, mensajeDeErrorConsulta, CODIGOS_POR_ROL, pasosPendientes, elegirPasoActual,
-    motivoBloqueo, puedeOfrecerRetroceso, motivoNoRetroceder, puedeCerrar, nombreDeOrden, servicioConsulta,
-    normalizarAsignables, categoriasDe, examenesVisibles, idsOrdenados, validarAsignacion,
-} from '../src/js/control/controladores/controlador_consulta.js';
-import { normalizarConsultas } from '../src/js/control/controladores/controlador_consultas.js';
+import { ControladorConsulta, MENSAJES, MAX_TEXTO, CODIGOS_POR_ROL, ServicioConsulta } from '../src/js/control/controladores/controlador_consulta.js';
+import { ControladorConsultas } from '../src/js/control/controladores/controlador_consultas.js';
 import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import AtencionService from '../src/js/control/atencion_service.js';
 import {
@@ -20,110 +16,110 @@ describe('mensajeDeErrorConsulta', () => {
             'consulta.retrocesoRamificado', 'consulta.pasoYaCompletado', 'consulta.yaCerrada', 'consulta.completeAntesCerrar',
             'consulta.ordenPasoCompletado', 'consulta.pasosPrevios', 'consulta.examenObligatorio', 'consulta.examenNoAsignable',
             'consulta.indicacionesValidas', 'consulta.pasoSinDefinicionHistorica', 'consulta.cerrarAntesRetomar']) {
-            const mensaje = mensajeDeErrorConsulta(errorHttp(409, code, 'Detalle del backend'));
+            const mensaje = ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, code, 'Detalle del backend'));
             assert.ok(mensaje && mensaje !== 'Detalle del backend' && mensaje !== MENSAJES.generico, code);
         }
-        assert.match(mensajeDeErrorConsulta(errorHttp(409, 'consulta.retrocesoPrimerPaso')), /primer paso/);
-        assert.match(mensajeDeErrorConsulta(errorHttp(409, 'consulta.retrocesoConRegistros')), /registros/);
+        assert.match(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'consulta.retrocesoPrimerPaso')), /primer paso/);
+        assert.match(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'consulta.retrocesoConRegistros')), /registros/);
     });
     test('procedimientoSinFinal usa el message del backend, que trae el nombre del procedimiento', () => {
-        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'consulta.procedimientoSinFinal', 'El procedimiento X no ha llegado a un paso final.')),
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'consulta.procedimientoSinFinal', 'El procedimiento X no ha llegado a un paso final.')),
             'El procedimiento X no ha llegado a un paso final.');
-        assert.match(mensajeDeErrorConsulta(errorHttp(409, 'consulta.procedimientoSinFinal', '')), /paso final/);
+        assert.match(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'consulta.procedimientoSinFinal', '')), /paso final/);
     });
     test('B8: cada rechazo por rol tiene su mensaje; noResponsablePaso usa el del backend, que trae el rol', () => {
-        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.noResponsablePaso', 'Este paso lo atiende el rol Enfermera.')),
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(403, 'consulta.noResponsablePaso', 'Este paso lo atiende el rol Enfermera.')),
             'Este paso lo atiende el rol Enfermera.');
-        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.noResponsablePaso', '')), MENSAJES.otroRol);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.soloFinalizador', 'x')), MENSAJES.soloFinalizador);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.soloEmpleado', 'x')), MENSAJES.soloEmpleado);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'consulta.rolClinica', 'x')), MENSAJES.rolClinica);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'consulta.sinPasoParaRol', 'x')), MENSAJES.sinPasoParaRol);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(403, 'consulta.noResponsablePaso', '')), MENSAJES.otroRol);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(403, 'consulta.soloFinalizador', 'x')), MENSAJES.soloFinalizador);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(403, 'consulta.soloEmpleado', 'x')), MENSAJES.soloEmpleado);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(403, 'consulta.rolClinica', 'x')), MENSAJES.rolClinica);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'consulta.sinPasoParaRol', 'x')), MENSAJES.sinPasoParaRol);
         assert.deepEqual([...CODIGOS_POR_ROL].sort(), ['consulta.noResponsablePaso', 'consulta.rolClinica', 'consulta.sinPasoParaRol',
             'consulta.soloEmpleado', 'consulta.soloFinalizador']);
     });
     test('un 409 o 400 desconocido muestra el message del backend; sin él, el genérico', () => {
-        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'otro.codigo', 'Motivo del backend.')), 'Motivo del backend.');
-        assert.equal(mensajeDeErrorConsulta(errorHttp(400, 'otro.codigo', '')), MENSAJES.generico);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'otro.codigo', 'Motivo del backend.')), 'Motivo del backend.');
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(400, 'otro.codigo', '')), MENSAJES.generico);
     });
     test('red, sesión, permiso, inexistente y 5xx', () => {
-        assert.equal(mensajeDeErrorConsulta(errorHttp(0, 'conexion.error')), MENSAJES.conexion);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(401)), MENSAJES.sesionFinalizada);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(403, 'auth.permiso')), MENSAJES.sinPermiso);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(404)), MENSAJES.noEncontrada);
-        assert.equal(mensajeDeErrorConsulta(errorHttp(500, 'x', 'NullPointerException')), MENSAJES.generico, 'no expone detalles internos');
-        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'constructor', '')), MENSAJES.generico);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(0, 'conexion.error')), MENSAJES.conexion);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(401)), MENSAJES.sesionFinalizada);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(403, 'auth.permiso')), MENSAJES.sinPermiso);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(404)), MENSAJES.noEncontrada);
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(500, 'x', 'NullPointerException')), MENSAJES.generico, 'no expone detalles internos');
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'constructor', '')), MENSAJES.generico);
     });
 });
 
 describe('pasos pendientes y paso actual', () => {
-    const [varios] = normalizarConsultas([consultaB6({ procedimientos: [
+    const [varios] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [
         procedimiento(1, [paso(1), pendiente(2, { responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
         procedimiento(2, [paso(3), pendiente(4, { rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
     ] })]);
     const doctor = { idRol: ID_ROL_DOCTOR, nombreRol: 'Doctor' };
     test('pasosPendientes lista los PENDIENTE de todos los procedimientos con el nombre del procedimiento', () => {
-        assert.deepEqual(pasosPendientes(varios).map(p => [p.paso.nombre, p.procedimiento]), [['Paso 2', 'Procedimiento 1'], ['Paso 4', 'Procedimiento 2']]);
-        assert.equal(Object.isFrozen(pasosPendientes(varios)), true);
-        assert.deepEqual(pasosPendientes(null), []);
+        assert.deepEqual(ControladorConsulta.pasosPendientes(varios).map(p => [p.paso.nombre, p.procedimiento]), [['Paso 2', 'Procedimiento 1'], ['Paso 4', 'Procedimiento 2']]);
+        assert.equal(Object.isFrozen(ControladorConsulta.pasosPendientes(varios)), true);
+        assert.deepEqual(ControladorConsulta.pasosPendientes(null), []);
     });
     test('elegirPasoActual: sin pendientes, null; con uno, ese', () => {
-        const [cerrada] = normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [paso(1)])] })]);
-        assert.equal(elegirPasoActual(cerrada, doctor), null);
-        const [una] = normalizarConsultas([consultaB6()]);
-        assert.equal(elegirPasoActual(una, null).nombre, 'Paso 2');
+        const [cerrada] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [paso(1)])] })]);
+        assert.equal(ControladorConsulta.elegirPasoActual(cerrada, doctor), null);
+        const [una] = ControladorConsultas.normalizarConsultas([consultaB6()]);
+        assert.equal(ControladorConsulta.elegirPasoActual(una, null).nombre, 'Paso 2');
     });
     test('elegirPasoActual: con varios prefiere el del rol activo por idRol; un elegido válido gana y uno inválido se ignora', () => {
-        assert.equal(elegirPasoActual(varios, doctor).nombre, 'Paso 4');
-        assert.equal(elegirPasoActual(varios, { nombreRol: 'Doctor' }).nombre, 'Paso 2', 'sin idRol no compara: nunca por nombre');
-        assert.equal(elegirPasoActual(varios, { idRol: UUID(701) }).nombre, 'Paso 2', 'ninguno coincide: el primero');
-        assert.equal(elegirPasoActual(varios, doctor, UUID(102)).nombre, 'Paso 2');
-        assert.equal(elegirPasoActual(varios, doctor, UUID(101)).nombre, 'Paso 4', 'un completado no se elige');
+        assert.equal(ControladorConsulta.elegirPasoActual(varios, doctor).nombre, 'Paso 4');
+        assert.equal(ControladorConsulta.elegirPasoActual(varios, { nombreRol: 'Doctor' }).nombre, 'Paso 2', 'sin idRol no compara: nunca por nombre');
+        assert.equal(ControladorConsulta.elegirPasoActual(varios, { idRol: UUID(701) }).nombre, 'Paso 2', 'ninguno coincide: el primero');
+        assert.equal(ControladorConsulta.elegirPasoActual(varios, doctor, UUID(102)).nombre, 'Paso 2');
+        assert.equal(ControladorConsulta.elegirPasoActual(varios, doctor, UUID(101)).nombre, 'Paso 4', 'un completado no se elige');
     });
 });
 
 describe('motivos y reglas de las acciones', () => {
-    const [abierta] = normalizarConsultas([consultaB6()]);
-    const [cerrada] = normalizarConsultas([consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00' })]);
+    const [abierta] = ControladorConsultas.normalizarConsultas([consultaB6()]);
+    const [cerrada] = ControladorConsultas.normalizarConsultas([consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00' })]);
 
     test('motivoBloqueo: cerrada, luego si no me toca (a quién le corresponde), luego sin red, luego sin seleccionar', () => {
-        const [ajena] = normalizarConsultas([consultaB6({ pendienteParaMi: false, procedimientos: [procedimiento(1, [paso(1),
+        const [ajena] = ControladorConsultas.normalizarConsultas([consultaB6({ pendienteParaMi: false, procedimientos: [procedimiento(1, [paso(1),
             pendiente(2, { responsable: { nombre: 'Lucía Pérez', rol: 'Enfermera' } })])] })]);
-        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true }), null);
-        assert.equal(motivoBloqueo({ consulta: null }), null);
-        assert.equal(motivoBloqueo({ consulta: cerrada, atendiendo: true, enLinea: false }), MENSAJES.cerrada);
-        assert.equal(motivoBloqueo({ consulta: ajena, enLinea: false }), 'Le corresponde a Lucía Pérez.');
-        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true, enLinea: false }), MENSAJES.sinRed);
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: abierta, atendiendo: true }), null);
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: null }), null);
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: cerrada, atendiendo: true, enLinea: false }), MENSAJES.cerrada);
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: ajena, enLinea: false }), 'Le corresponde a Lucía Pérez.');
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: abierta, atendiendo: true, enLinea: false }), MENSAJES.sinRed);
         assert.equal(MENSAJES.sinRed, 'Sin conexión: necesitas conexión con el servidor para registrar la atención.');
         assert.equal(MENSAJES.sinRedSalir, 'Sin conexión: necesitas conexión con el servidor para salir de la consulta.');
-        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: true, soloLectura: true }), MENSAJES.sinRed);
-        assert.equal(motivoBloqueo({ consulta: abierta, atendiendo: false }), MENSAJES.sinSeleccion);
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: abierta, atendiendo: true, soloLectura: true }), MENSAJES.sinRed);
+        assert.equal(ControladorConsulta.motivoBloqueo({ consulta: abierta, atendiendo: false }), MENSAJES.sinSeleccion);
         assert.equal(Object.hasOwn(MENSAJES, 'soloDoctor'), false);
     });
     test('Retroceder solo se ofrece si el paso no es el primero (nivel > 0)', () => {
-        assert.equal(puedeOfrecerRetroceso({ nivel: 0 }), false);
-        assert.equal(puedeOfrecerRetroceso({ nivel: 2 }), true);
-        assert.equal(puedeOfrecerRetroceso(null), false);
+        assert.equal(ControladorConsulta.puedeOfrecerRetroceso({ nivel: 0 }), false);
+        assert.equal(ControladorConsulta.puedeOfrecerRetroceso({ nivel: 2 }), true);
+        assert.equal(ControladorConsulta.puedeOfrecerRetroceso(null), false);
     });
     test('motivoNoRetroceder: con órdenes o con un registro guardado; vacío, null', () => {
-        assert.equal(motivoNoRetroceder({ ordenes: [{ idOrdenExamen: UUID(1) }] }), MENSAJES.retrocesoConOrdenes);
-        assert.equal(motivoNoRetroceder({ valorGuardado: 'texto' }), MENSAJES.retrocesoConRegistro);
-        assert.equal(motivoNoRetroceder({ valorGuardado: '  ' }), null);
-        assert.equal(motivoNoRetroceder(), null);
+        assert.equal(ControladorConsulta.motivoNoRetroceder({ ordenes: [{ idOrdenExamen: UUID(1) }] }), MENSAJES.retrocesoConOrdenes);
+        assert.equal(ControladorConsulta.motivoNoRetroceder({ valorGuardado: 'texto' }), MENSAJES.retrocesoConRegistro);
+        assert.equal(ControladorConsulta.motivoNoRetroceder({ valorGuardado: '  ' }), null);
+        assert.equal(ControladorConsulta.motivoNoRetroceder(), null);
     });
     test('puedeCerrar: abierta, con procedimientos y sin pendientes', () => {
-        const [lista] = normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [paso(1), paso(2, { nivel: 1 })])] })]);
-        const [vacia] = normalizarConsultas([consultaB6({ procedimientos: [] })]);
-        assert.equal(puedeCerrar(abierta), false);
-        assert.equal(puedeCerrar(lista), true);
-        assert.equal(puedeCerrar(vacia), false);
-        assert.equal(puedeCerrar(normalizarConsultas([consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00', procedimientos: [procedimiento(1, [paso(1)])] })])[0]), false);
+        const [lista] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [paso(1), paso(2, { nivel: 1 })])] })]);
+        const [vacia] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [] })]);
+        assert.equal(ControladorConsulta.puedeCerrar(abierta), false);
+        assert.equal(ControladorConsulta.puedeCerrar(lista), true);
+        assert.equal(ControladorConsulta.puedeCerrar(vacia), false);
+        assert.equal(ControladorConsulta.puedeCerrar(ControladorConsultas.normalizarConsultas([consultaB6({ fechaFin: '2026-11-13T10:00:00-06:00', procedimientos: [procedimiento(1, [paso(1)])] })])[0]), false);
     });
     test('nombreDeOrden: el nombre si está en la lista; si no, "Examen ya no disponible"; sin examen, su texto', () => {
         const asignables = [examen(1)];
-        assert.equal(nombreDeOrden({ idExamen: UUID(301) }, asignables), 'Examen 1');
-        assert.equal(nombreDeOrden({ idExamen: UUID(399) }, asignables), 'Examen ya no disponible');
-        assert.equal(nombreDeOrden({ idExamen: null }, asignables), 'Orden sin examen asociado');
+        assert.equal(ControladorConsulta.nombreDeOrden({ idExamen: UUID(301) }, asignables), 'Examen 1');
+        assert.equal(ControladorConsulta.nombreDeOrden({ idExamen: UUID(399) }, asignables), 'Examen ya no disponible');
+        assert.equal(ControladorConsulta.nombreDeOrden({ idExamen: null }, asignables), 'Orden sin examen asociado');
     });
 });
 
@@ -133,62 +129,62 @@ describe('F9: exámenes asignables con tipos, filtro y validación de la asignac
     const crudo = (n, tiposExamen) => ({ ...examen(n), ...(tiposExamen === undefined ? {} : { tiposExamen }) });
 
     test('normalizarAsignables conserva tiposExamen recortados y congelados', () => {
-        const [a] = normalizarAsignables([crudo(1, [{ idTipoExamen: UUID(501), nombre: '  Laboratorio clínico ' }])]);
+        const [a] = ControladorConsulta.normalizarAsignables([crudo(1, [{ idTipoExamen: UUID(501), nombre: '  Laboratorio clínico ' }])]);
         assert.deepEqual(a, { idExamen: UUID(301), nombre: 'Examen 1', tiposExamen: [LAB] });
         assert.ok(Object.isFrozen(a) && Object.isFrozen(a.tiposExamen) && Object.isFrozen(a.tiposExamen[0]));
     });
 
     test('sin tiposExamen (o si no es lista) queda []; descarta tipos inválidos y repetidos', () => {
-        const [sinCampo, noLista, sucios] = normalizarAsignables([
+        const [sinCampo, noLista, sucios] = ControladorConsulta.normalizarAsignables([
             crudo(1), crudo(2, 'Laboratorio'),
             crudo(3, [LAB, LAB, null, { idTipoExamen: '', nombre: 'x' }, { idTipoExamen: UUID(503), nombre: '  ' }, IMG]),
         ]);
         assert.deepEqual(sinCampo.tiposExamen, []);
         assert.deepEqual(noLista.tiposExamen, []);
         assert.deepEqual(sucios.tiposExamen, [LAB, IMG]);
-        assert.deepEqual(normalizarAsignables(null), []);
-        assert.deepEqual(normalizarAsignables([{ idExamen: UUID(9) }, null]), [], 'sin nombre se descarta');
+        assert.deepEqual(ControladorConsulta.normalizarAsignables(null), []);
+        assert.deepEqual(ControladorConsulta.normalizarAsignables([{ idExamen: UUID(9) }, null]), [], 'sin nombre se descarta');
     });
 
     test('categoriasDe: unión de tipos por id, ordenada por nombre; un examen con dos tipos cuenta en ambas', () => {
-        const asignables = normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG, LAB]), crudo(3, [])]);
-        assert.deepEqual(categoriasDe(asignables), [IMG, LAB]);
-        assert.ok(Object.isFrozen(categoriasDe(asignables)));
-        assert.deepEqual(categoriasDe(normalizarAsignables([crudo(1)])), [], 'sin tipos no hay filtro');
+        const asignables = ControladorConsulta.normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG, LAB]), crudo(3, [])]);
+        assert.deepEqual(ControladorConsulta.categoriasDe(asignables), [IMG, LAB]);
+        assert.ok(Object.isFrozen(ControladorConsulta.categoriasDe(asignables)));
+        assert.deepEqual(ControladorConsulta.categoriasDe(ControladorConsulta.normalizarAsignables([crudo(1)])), [], 'sin tipos no hay filtro');
     });
 
     test('examenesVisibles: "" (Todas) devuelve todos; un tipo, solo los que lo tienen', () => {
-        const asignables = normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG, LAB]), crudo(3, [])]);
-        assert.equal(examenesVisibles(asignables, ''), asignables);
-        assert.deepEqual(examenesVisibles(asignables, IMG.idTipoExamen).map(e => e.nombre), ['Examen 2']);
-        assert.deepEqual(examenesVisibles(asignables, LAB.idTipoExamen).map(e => e.nombre), ['Examen 1', 'Examen 2']);
-        assert.deepEqual(examenesVisibles(asignables, UUID(599)), []);
+        const asignables = ControladorConsulta.normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG, LAB]), crudo(3, [])]);
+        assert.equal(ControladorConsulta.examenesVisibles(asignables, ''), asignables);
+        assert.deepEqual(ControladorConsulta.examenesVisibles(asignables, IMG.idTipoExamen).map(e => e.nombre), ['Examen 2']);
+        assert.deepEqual(ControladorConsulta.examenesVisibles(asignables, LAB.idTipoExamen).map(e => e.nombre), ['Examen 1', 'Examen 2']);
+        assert.deepEqual(ControladorConsulta.examenesVisibles(asignables, UUID(599)), []);
     });
 
     test('idsOrdenados: los idExamen de las órdenes del paso, sin nulos ni repetidos', () => {
         const ordenes = [{ idExamen: UUID(301) }, { idExamen: null }, { idExamen: UUID(301) }, { idExamen: UUID(302) }];
-        assert.deepEqual(idsOrdenados(ordenes), [UUID(301), UUID(302)]);
-        assert.deepEqual(idsOrdenados(null), []);
+        assert.deepEqual(ControladorConsulta.idsOrdenados(ordenes), [UUID(301), UUID(302)]);
+        assert.deepEqual(ControladorConsulta.idsOrdenados(null), []);
     });
 
     test('validarAsignacion: al menos uno, todos de la lista, ninguno ya ordenado; indicaciones hasta 255', () => {
-        const asignables = normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG])]);
+        const asignables = ControladorConsulta.normalizarAsignables([crudo(1, [LAB]), crudo(2, [IMG])]);
         const ordenes = [{ idOrdenExamen: UUID(601), idExamen: UUID(302) }];
-        assert.equal(validarAsignacion({ idsExamen: [UUID(301)] }, asignables, ordenes), null);
-        assert.equal(validarAsignacion({ idsExamen: [UUID(301)], indicaciones: 'x'.repeat(MAX_TEXTO) }, asignables), null);
-        assert.equal(validarAsignacion({ idsExamen: [] }, asignables), MENSAJES.seleccionVacia);
-        assert.equal(validarAsignacion({}, asignables), MENSAJES.seleccionVacia);
-        assert.equal(validarAsignacion({ idsExamen: [UUID(301), UUID(399)] }, asignables), MENSAJES.examenAjeno);
-        assert.equal(validarAsignacion({ idsExamen: [UUID(301), UUID(302)] }, asignables, ordenes), 'Examen 2 ya está ordenado en este paso.');
-        assert.match(validarAsignacion({ idsExamen: [UUID(301)], indicaciones: 'x'.repeat(MAX_TEXTO + 1) }, asignables), /255/);
+        assert.equal(ControladorConsulta.validarAsignacion({ idsExamen: [UUID(301)] }, asignables, ordenes), null);
+        assert.equal(ControladorConsulta.validarAsignacion({ idsExamen: [UUID(301)], indicaciones: 'x'.repeat(MAX_TEXTO) }, asignables), null);
+        assert.equal(ControladorConsulta.validarAsignacion({ idsExamen: [] }, asignables), MENSAJES.seleccionVacia);
+        assert.equal(ControladorConsulta.validarAsignacion({}, asignables), MENSAJES.seleccionVacia);
+        assert.equal(ControladorConsulta.validarAsignacion({ idsExamen: [UUID(301), UUID(399)] }, asignables), MENSAJES.examenAjeno);
+        assert.equal(ControladorConsulta.validarAsignacion({ idsExamen: [UUID(301), UUID(302)] }, asignables, ordenes), 'Examen 2 ya está ordenado en este paso.');
+        assert.match(ControladorConsulta.validarAsignacion({ idsExamen: [UUID(301)], indicaciones: 'x'.repeat(MAX_TEXTO + 1) }, asignables), /255/);
     });
 });
 
-describe('servicioConsulta', () => {
+describe('ServicioConsulta', () => {
     test('adapta cada operación al servicio REST que le corresponde', async () => {
         const hechas = [];
         const espia = nombre => (...args) => { hechas.push([nombre, ...args]); return { listar: () => hechas.push(['listar']) }; };
-        const s = servicioConsulta({
+        const s = new ServicioConsulta({
             atencion: { contexto: espia('contexto'), consulta: espia('consulta'), salirDeConsulta: espia('salirDeConsulta') },
             consultas: { retomar: espia('retomar'), cerrar: espia('cerrar') },
             pasos: { buscarPorId: espia('paso'), ordenesExamen: espia('ordenesExamen'), examenesAsignables: espia('asignables'),
@@ -207,7 +203,7 @@ describe('servicioConsulta', () => {
         const peticiones = [];
         const fetchImpl = async (url, opciones) => { peticiones.push({ url, opciones }); return new Response(null, { status: 204 }); };
         const atencion = new AtencionService({ baseUrl: 'http://api.prueba/galeno/api', fetchImpl, autenticar: async () => ({ csrfToken: 'csrf-prueba' }) });
-        const respuesta = await servicioConsulta({ atencion }).salirDeConsulta();
+        const respuesta = await new ServicioConsulta({ atencion }).salirDeConsulta();
         assert.equal(peticiones[0].url, 'http://api.prueba/galeno/api/atencion/consulta');
         assert.equal(peticiones[0].opciones.method, 'DELETE');
         assert.equal(peticiones[0].opciones.headers.get('X-CSRF-Token'), 'csrf-prueba');
@@ -279,7 +275,7 @@ describe('ControladorConsulta: carga', () => {
             assert.deepEqual(nombres(), ['consulta', 'retomar', 'consulta'], 'sin datos clínicos del paso');
             assert.equal(controlador.estado.error, null);
             assert.equal(controlador.estado.atendiendo, false);
-            assert.equal(controlador.estado.aviso, mensajeDeErrorConsulta(errorHttp(status, code, 'Motivo del backend.')));
+            assert.equal(controlador.estado.aviso, ControladorConsulta.mensajeDeErrorConsulta(errorHttp(status, code, 'Motivo del backend.')));
             assert.equal(controlador.bloqueo, 'Le corresponde a Persona Responsable.');
         });
     }
@@ -490,7 +486,7 @@ describe('ControladorConsulta: sin conexión', () => {
 describe('ControladorConsulta: salir de la consulta (F8)', () => {
     test('cerrarAntesRetomar tiene texto propio y no usa el message del backend', () => {
         assert.equal(MENSAJES.enCurso, 'Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.');
-        assert.equal(mensajeDeErrorConsulta(errorHttp(409, 'consulta.cerrarAntesRetomar', 'Cierre la consulta en curso antes de retomar otra.')),
+        assert.equal(ControladorConsulta.mensajeDeErrorConsulta(errorHttp(409, 'consulta.cerrarAntesRetomar', 'Cierre la consulta en curso antes de retomar otra.')),
             MENSAJES.enCurso);
     });
 

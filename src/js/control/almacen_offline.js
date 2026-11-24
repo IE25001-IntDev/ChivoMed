@@ -10,14 +10,53 @@ export const NOMBRE_BASE = "chivomed-offline";
 export const ALMACEN = "registros";
 const VERSION_BASE = 1;
 
-/** Devuelve el almacén, o null si el entorno no tiene IndexedDB. */
-export function crearAlmacenOffline(fabrica = globalThis.indexedDB) {
-    if (!fabrica || typeof fabrica.open !== "function") return null;
-    let conexion = null;
+export class AlmacenOffline {
+    #fabrica;
+    /** Promesa de la base abierta; null hasta el primer uso o tras un fallo al abrir. */
+    #conexion = null;
 
-    const abrir = () => {
-        conexion ??= new Promise((resolve, reject) => {
-            const solicitud = fabrica.open(NOMBRE_BASE, VERSION_BASE);
+    /** Se crea con AlmacenOffline.crear(), que revisa antes que el entorno tenga IndexedDB. */
+    constructor(fabrica) {
+        this.#fabrica = fabrica;
+        Object.freeze(this);
+    }
+
+    /** Devuelve el almacén, o null si el entorno no tiene IndexedDB. */
+    static crear(fabrica = globalThis.indexedDB) {
+        if (!fabrica || typeof fabrica.open !== "function") return null;
+        return new AlmacenOffline(fabrica);
+    }
+
+    /** { [clave]: valor } con las claves pedidas que existen; {} si falla. */
+    leer(claves) {
+        return new Promise(resolve => resolve(this.#operar("readonly", almacen => claves.map(clave => [clave, almacen.get(clave)]))))
+            .then(solicitudes => {
+                const registros = {};
+                for (const [clave, solicitud] of solicitudes) {
+                    if (solicitud.result !== undefined) registros[clave] = solicitud.result;
+                }
+                return registros;
+            })
+            .catch(() => ({}));
+    }
+
+    /** Guarda (o borra, con `valor` null) un registro. Resuelve true si se escribió. */
+    guardar(clave, valor) {
+        return new Promise(resolve => resolve(this.#operar("readwrite", almacen => (valor == null ? almacen.delete(clave) : almacen.put(valor, clave)))))
+            .then(() => true)
+            .catch(() => false);
+    }
+
+    /** Borra todos los registros. Resuelve true si se borró. */
+    borrar() {
+        return new Promise(resolve => resolve(this.#operar("readwrite", almacen => almacen.clear())))
+            .then(() => true)
+            .catch(() => false);
+    }
+
+    #abrir() {
+        this.#conexion ??= new Promise((resolve, reject) => {
+            const solicitud = this.#fabrica.open(NOMBRE_BASE, VERSION_BASE);
             solicitud.onupgradeneeded = () => {
                 const base = solicitud.result;
                 if (!base.objectStoreNames.contains(ALMACEN)) base.createObjectStore(ALMACEN);
@@ -26,48 +65,21 @@ export function crearAlmacenOffline(fabrica = globalThis.indexedDB) {
             solicitud.onerror = () => reject(solicitud.error ?? new Error("IndexedDB no disponible"));
             solicitud.onblocked = () => reject(new Error("IndexedDB bloqueada"));
         }).catch(error => {
-            conexion = null; // El siguiente intento vuelve a abrir.
+            this.#conexion = null; // El siguiente intento vuelve a abrir.
             throw error;
         });
-        return conexion;
-    };
+        return this.#conexion;
+    }
 
     /** Ejecuta `accion(almacen)` en una transacción y resuelve cuando termina. */
-    const operar = (modo, accion) => new Promise(resolve => resolve(abrir()))
-        .then(base => new Promise((resolve, reject) => {
-            const transaccion = base.transaction(ALMACEN, modo);
-            const resultado = accion(transaccion.objectStore(ALMACEN));
-            transaccion.oncomplete = () => resolve(resultado);
-            transaccion.onerror = () => reject(transaccion.error ?? new Error("Transacción fallida"));
-            transaccion.onabort = () => reject(transaccion.error ?? new Error("Transacción abortada"));
-        }));
-
-    return Object.freeze({
-        /** { [clave]: valor } con las claves pedidas que existen; {} si falla. */
-        leer(claves) {
-            return new Promise(resolve => resolve(operar("readonly", almacen => claves.map(clave => [clave, almacen.get(clave)]))))
-                .then(solicitudes => {
-                    const registros = {};
-                    for (const [clave, solicitud] of solicitudes) {
-                        if (solicitud.result !== undefined) registros[clave] = solicitud.result;
-                    }
-                    return registros;
-                })
-                .catch(() => ({}));
-        },
-
-        /** Guarda (o borra, con `valor` null) un registro. Resuelve true si se escribió. */
-        guardar(clave, valor) {
-            return new Promise(resolve => resolve(operar("readwrite", almacen => (valor == null ? almacen.delete(clave) : almacen.put(valor, clave)))))
-                .then(() => true)
-                .catch(() => false);
-        },
-
-        /** Borra todos los registros. Resuelve true si se borró. */
-        borrar() {
-            return new Promise(resolve => resolve(operar("readwrite", almacen => almacen.clear())))
-                .then(() => true)
-                .catch(() => false);
-        },
-    });
+    #operar(modo, accion) {
+        return new Promise(resolve => resolve(this.#abrir()))
+            .then(base => new Promise((resolve, reject) => {
+                const transaccion = base.transaction(ALMACEN, modo);
+                const resultado = accion(transaccion.objectStore(ALMACEN));
+                transaccion.oncomplete = () => resolve(resultado);
+                transaccion.onerror = () => reject(transaccion.error ?? new Error("Transacción fallida"));
+                transaccion.onabort = () => reject(transaccion.error ?? new Error("Transacción abortada"));
+            }));
+    }
 }

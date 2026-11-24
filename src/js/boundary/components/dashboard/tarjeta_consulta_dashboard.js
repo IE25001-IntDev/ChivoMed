@@ -12,12 +12,12 @@
  * 'atender' { idConsulta }. El botón dice "Cerrar consulta" si al rol activo solo le falta cerrarla.
  * Todos los datos se pintan con textContent; la plantilla es fija.
  */
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
-import { arbolDePasos, etiquetaEstado, accionAtender } from "../../../control/controladores/controlador_consultas.js";
-import { formatearFecha, formatearFechaHora } from "../../../control/fechas_sv.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
+import { ControladorConsultas } from "../../../control/controladores/controlador_consultas.js";
+import { FechasSV } from "../../../control/fechas_sv.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <article class="tarjeta-consulta" id="tarjeta" aria-labelledby="paciente">
   <header class="cabecera-consulta">
     <div class="paciente">
@@ -94,7 +94,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.$("atender").addEventListener("click", this.#alAtender);
         this.#pintarTodo();
@@ -115,11 +115,11 @@ class TarjetaConsultaDashboard extends HTMLElement {
         this.$("paciente").textContent = paciente.nombre;
         const edad = paciente.edad === null ? "Edad no registrada" : `${paciente.edad} ${paciente.edad === 1 ? "año" : "años"}`;
         this.$("generales").textContent = paciente.fechaNacimiento
-            ? `${edad} · Nació el ${formatearFecha(paciente.fechaNacimiento)}` : edad;
+            ? `${edad} · Nació el ${FechasSV.formatearFecha(paciente.fechaNacimiento)}` : edad;
         this.$("documentos").textContent = paciente.documentos.length
             ? paciente.documentos.map(d => `${d.tipoDocumento} ${d.numero}`).join(" · ") : "Sin documentos registrados";
-        this.$("inicio").textContent = formatearFechaHora(c.fechaInicio);
-        this.$("estado").textContent = c.fechaFin ? `Cerrada el ${formatearFechaHora(c.fechaFin)}` : "Abierta";
+        this.$("inicio").textContent = FechasSV.formatearFechaHora(c.fechaInicio);
+        this.$("estado").textContent = c.fechaFin ? `Cerrada el ${FechasSV.formatearFechaHora(c.fechaFin)}` : "Abierta";
         this.$("pendiente").hidden = !c.pendienteParaMi;
         this.$("en-curso").hidden = !this.#enCurso;
         this.$("tarjeta").className = c.pendienteParaMi ? "tarjeta-consulta pendiente" : "tarjeta-consulta";
@@ -145,10 +145,10 @@ class TarjetaConsultaDashboard extends HTMLElement {
         seccion.append(this.#texto("h4", p.nombre));
         if (p.fechaInicio) {
             seccion.append(this.#texto("p", p.fechaFin
-                ? `${formatearFechaHora(p.fechaInicio)} – ${formatearFechaHora(p.fechaFin)}`
-                : `Desde ${formatearFechaHora(p.fechaInicio)}`, "meta"));
+                ? `${FechasSV.formatearFechaHora(p.fechaInicio)} – ${FechasSV.formatearFechaHora(p.fechaFin)}`
+                : `Desde ${FechasSV.formatearFechaHora(p.fechaInicio)}`, "meta"));
         }
-        const arbol = arbolDePasos(p.pasos);
+        const arbol = ControladorConsultas.arbolDePasos(p.pasos);
         seccion.append(arbol.length ? this.#lista(arbol, "arbol-pasos") : this.#texto("p", "Sin pasos registrados.", "vacio"));
         return seccion;
     }
@@ -172,10 +172,10 @@ class TarjetaConsultaDashboard extends HTMLElement {
         const titulo = document.createElement("p");
         titulo.className = "paso-titulo";
         const estadoClase = paso.estado === "PENDIENTE" ? "pendiente" : paso.estado === "COMPLETADO" ? "completado" : "otro";
-        titulo.append(this.#texto("span", paso.nombre, "paso-nombre"), this.#texto("span", etiquetaEstado(paso.estado), `insignia insignia-estado ${estadoClase}`));
+        titulo.append(this.#texto("span", paso.nombre, "paso-nombre"), this.#texto("span", ControladorConsultas.etiquetaEstado(paso.estado), `insignia insignia-estado ${estadoClase}`));
         const responsable = paso.responsable
             ? [paso.responsable.nombre, paso.responsable.rol].filter(Boolean).join(" · ") : "Sin responsable asignado";
-        const fechas = `${formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? formatearFechaHora(paso.fechaFin) : "En curso"}`;
+        const fechas = `${FechasSV.formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? FechasSV.formatearFechaHora(paso.fechaFin) : "En curso"}`;
         caja.append(titulo, this.#texto("p", responsable, "meta"), this.#texto("p", fechas, "meta"));
         if (paso.tieneValor) {
             const id = `registro-${paso.idConsultaProcedimientoPaso}`;
@@ -218,7 +218,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
                 const contenido = v.valor === null || v.valor === undefined || v.valor === ""
                     ? this.#texto("p", "Sin valor registrado.", "meta") : this.#texto("p", v.valor, "valor");
                 registro.panel.replaceChildren(contenido);
-                if (v.fechaFin) registro.panel.append(this.#texto("p", `Registrado el ${formatearFechaHora(v.fechaFin)}`, "meta"));
+                if (v.fechaFin) registro.panel.append(this.#texto("p", `Registrado el ${FechasSV.formatearFechaHora(v.fechaFin)}`, "meta"));
             }
         }
     }
@@ -228,11 +228,11 @@ class TarjetaConsultaDashboard extends HTMLElement {
         const c = this.#consulta;
         const ver = this.#verSinConexion;
         if (c) {
-            const cerrar = accionAtender(c) === "cerrar";
+            const cerrar = ControladorConsultas.accionAtender(c) === "cerrar";
             this.$("atender").textContent = ver ? "Ver sin conexión" : cerrar ? "Cerrar consulta" : "Atender";
             // Nombre accesible único: varias tarjetas tienen el mismo botón visible.
             const accion = ver ? "Ver sin conexión la consulta de" : cerrar ? "Cerrar la consulta de" : "Atender a";
-            this.$("atender").setAttribute("aria-label", `${accion} ${c.paciente.nombre}, ${formatearFechaHora(c.fechaInicio)}`);
+            this.$("atender").setAttribute("aria-label", `${accion} ${c.paciente.nombre}, ${FechasSV.formatearFechaHora(c.fechaInicio)}`);
         }
         this.$("atender").disabled = Boolean(motivo) && !ver;
         this.$("motivo").hidden = !motivo;

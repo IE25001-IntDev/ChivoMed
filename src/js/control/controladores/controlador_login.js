@@ -4,11 +4,11 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  */
-import { listarTiposDocumento, iniciarSesion, esEmpleado } from "../auth_service.js";
-import { RUTAS, RUTA_POR_DEFECTO, inicioPorRol } from "../../boundary/rutas.js";
-import { rutaDeRetorno, resolverRuta } from "../../boundary/router.js";
-import { autoformatear, crearValidadorFormato } from "../formato_documento.js";
-import { crearEstado } from "../estado_reactivo.js";
+import { AuthService, auth } from "../auth_service.js";
+import { RUTAS, RUTA_POR_DEFECTO, TablaRutas } from "../../boundary/rutas.js";
+import { Router } from "../../boundary/router.js";
+import { FormatoDocumento } from "../formato_documento.js";
+import { EstadoReactivo } from "../estado_reactivo.js";
 import { Validaciones } from "../validaciones.js";
 
 export const MENSAJES = Object.freeze({
@@ -18,27 +18,22 @@ export const MENSAJES = Object.freeze({
     sesionFinalizada: "Inicia sesión con tu documento para continuar.",
 });
 
-/** Ruta tras el login: protegida solo si el rol permite páginas de empleado. */
-export function destinoTrasLogin(query, sesion) {
-    const inicio = inicioPorRol(sesion) ?? RUTA_POR_DEFECTO;
-    const volver = rutaDeRetorno(query?.get?.("volver") ?? null, RUTAS);
-    if (!volver) return inicio;
-    const protegida = resolverRuta(volver, RUTAS).ruta?.empleado;
-    return protegida && !esEmpleado(sesion) ? inicio : volver;
-}
-
 const SIN_ERRORES = Object.freeze({ tipo: null, numero: null });
 
 export class ControladorLogin {
+    /** Estado reactivo del controlador (composición): `estado` lo publica y `suscribir` delega en él. */
+    #reactivo;
+    /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
+    suscribir = fn => this.#reactivo.suscribir(fn);
     #servicio;
 
     /**
      * @param opciones opcional, con `servicio`: objeto con las funciones `listarTiposDocumento` e
      *   `iniciarSesion` (por defecto, las de auth_service.js).
      */
-    constructor({ servicio = { listarTiposDocumento, iniciarSesion } } = {}) {
+    constructor({ servicio = auth } = {}) {
         this.#servicio = servicio;
-        const { estado, suscribir } = crearEstado({
+        this.#reactivo = new EstadoReactivo({
             cargandoTipos: false,
             tipos: Object.freeze([]),
             errorTipos: null,
@@ -47,9 +42,7 @@ export class ControladorLogin {
             mensaje: null,
         });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
-        this.estado = estado;
-        /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
-        this.suscribir = suscribir;
+        this.estado = this.#reactivo.estado;
     }
 
     #actualizar(cambios) {
@@ -66,7 +59,7 @@ export class ControladorLogin {
      * corto (se está borrando), se devuelve tal cual.
      */
     formatearNumero(idTipoDocumento, valor, anterior) {
-        return autoformatear(valor, this.tipo(idTipoDocumento)?.expresionRegular, anterior);
+        return FormatoDocumento.autoformatear(valor, this.tipo(idTipoDocumento)?.expresionRegular, anterior);
     }
 
     cargarTipos() {
@@ -91,7 +84,7 @@ export class ControladorLogin {
         if (!numero) errores.numero = MENSAJES.numeroRequerido;
         else if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) errores.numero = MENSAJES.numeroLargo;
         else if (tipo) {
-            const formato = crearValidadorFormato(tipo.expresionRegular);
+            const formato = FormatoDocumento.crearValidadorFormato(tipo.expresionRegular);
             if (formato && !formato(numero)) {
                 errores.numero = tipo.indicaciones
                     ? `El número no tiene el formato de ${tipo.nombre}. ${tipo.indicaciones}`
@@ -125,5 +118,14 @@ export class ControladorLogin {
                     return null;
                 }));
         });
+    }
+
+    /** Ruta tras el login: protegida solo si el rol permite páginas de empleado. */
+    static destinoTrasLogin(query, sesion) {
+        const inicio = TablaRutas.inicioPorRol(sesion) ?? RUTA_POR_DEFECTO;
+        const volver = Router.rutaDeRetorno(query?.get?.("volver") ?? null, RUTAS);
+        if (!volver) return inicio;
+        const protegida = Router.resolverRuta(volver, RUTAS).ruta?.empleado;
+        return protegida && !AuthService.esEmpleado(sesion) ? inicio : volver;
     }
 }

@@ -21,9 +21,9 @@
  * El foco inicial va a la X; devolverlo al botón "Ver ticket" al cerrar le toca a la vista.
  * Los datos van con textContent.
  */
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../../control/fechas_sv.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
+import { FechasSV } from "../../../control/fechas_sv.js";
 
 export const TEXTOS = Object.freeze({
     cargando: "Cargando el ticket…",
@@ -32,12 +32,7 @@ export const TEXTOS = Object.freeze({
     descargado: "PDF descargado.",
 });
 
-/** true si el navegador dice que puede mostrar un PDF dentro de la página. */
-export function detectarVisorPdf(navegador = globalThis.navigator) {
-    return navegador?.pdfViewerEnabled === true;
-}
-
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <dialog class="invitacion ventana-ticket" id="ventana" aria-labelledby="titulo" aria-describedby="detalle">
   <div class="invitacion-cuerpo ticket-cuerpo">
     <div class="ticket-encabezado">
@@ -85,7 +80,7 @@ class VentanaTicket extends HTMLElement {
     #alClicDialogo = event => { if (event.target === this.shadowRoot.getElementById("ventana")) this.#emitir("cerrar-ticket"); };
 
     /** Si el navegador puede mostrar un PDF en la página; por defecto, navigator.pdfViewerEnabled. */
-    visorPdf = detectarVisorPdf();
+    visorPdf = VentanaTicket.detectarVisorPdf();
 
     constructor() {
         super();
@@ -102,7 +97,7 @@ class VentanaTicket extends HTMLElement {
     connectedCallback() {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) {
-            raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("pwa.css"), hojaDeEstilos("citas.css"), PLANTILLA.clonar());
+            raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("pwa.css"), Estilos.hojaDeEstilos("citas.css"), PLANTILLA.clonar());
         }
         this.$ = id => raiz.getElementById(id);
         this.#escuchar("addEventListener");
@@ -136,7 +131,7 @@ class VentanaTicket extends HTMLElement {
             if (dialogo.open) dialogo.close();
             return;
         }
-        this.$("detalle").textContent = [formatearFechaHora(cita.fechaInicio), cita.nombreClinica].filter(Boolean).join(" · ");
+        this.$("detalle").textContent = [FechasSV.formatearFechaHora(cita.fechaInicio), cita.nombreClinica].filter(Boolean).join(" · ");
         const estado = ticket?.estado ?? null;
         const listo = estado === "listo" && Boolean(ticket.archivo?.blob);
         const mostrar = listo && this.visorPdf === true;
@@ -182,6 +177,11 @@ class VentanaTicket extends HTMLElement {
         if (this.#url) URL.revokeObjectURL(this.#url);
         this.#url = null;
         this.#blob = null;
+    }
+
+    /** true si el navegador dice que puede mostrar un PDF dentro de la página. */
+    static detectarVisorPdf(navegador = globalThis.navigator) {
+        return navegador?.pdfViewerEnabled === true;
     }
 }
 

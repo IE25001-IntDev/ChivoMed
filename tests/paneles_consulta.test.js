@@ -1,8 +1,8 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { normalizarConsultas } from '../src/js/control/controladores/controlador_consultas.js';
-import { pasosPendientes, MENSAJES } from '../src/js/control/controladores/controlador_consulta.js';
+import { ControladorConsultas } from '../src/js/control/controladores/controlador_consultas.js';
+import { ControladorConsulta, MENSAJES } from '../src/js/control/controladores/controlador_consulta.js';
 import { UUID, paso, pendiente, procedimiento, consultaB6, examen } from './dobles/consulta.js';
 
 before(async () => {
@@ -21,10 +21,10 @@ function montar(tag, modelo, tipos) {
     return { el, eventos, $: id => el.shadowRoot.getElementById(id), q: s => el.shadowRoot.querySelectorAll(s) };
 }
 
-const [consulta] = normalizarConsultas([consultaB6()]);
+const [consulta] = ControladorConsultas.normalizarConsultas([consultaB6()]);
 const pasoActual = consulta.procedimientos[0].pasos[1];
 const modeloPaso = (extra = {}) => ({
-    paso: pasoActual, procedimiento: 'Procedimiento 1', pendientes: pasosPendientes(consulta), indicaFin: false,
+    paso: pasoActual, procedimiento: 'Procedimiento 1', pendientes: ControladorConsulta.pasosPendientes(consulta), indicaFin: false,
     borrador: '', editable: true, aviso: null, motivo: null, ofrecerRetroceso: true, motivoRetroceso: null,
     confirmando: false, accion: null, ...extra,
 });
@@ -32,7 +32,7 @@ const EVENTOS_PASO = ['cambiar-borrador', 'avanzar', 'retroceder', 'confirmar', 
 
 describe('<panel-paso-actual>', () => {
     test('muestra el paso con textContent: un nombre con HTML se pinta como texto', () => {
-        const [rara] = normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [pendiente(2, { nombre: '<img src=x onerror=alert(1)>' })])] })]);
+        const [rara] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [pendiente(2, { nombre: '<img src=x onerror=alert(1)>' })])] })]);
         const { $, q } = montar('panel-paso-actual', modeloPaso({ paso: rara.procedimientos[0].pasos[0] }), EVENTOS_PASO);
         assert.equal($('nombre').textContent, '<img src=x onerror=alert(1)>');
         assert.equal(q('img').length, 0);
@@ -107,8 +107,8 @@ describe('<panel-paso-actual>', () => {
     test('el selector solo aparece con varios pendientes, marca el actual y emite elegir-paso', () => {
         const uno = montar('panel-paso-actual', modeloPaso(), EVENTOS_PASO);
         assert.equal(uno.$('selector').hidden, true);
-        const [varios] = normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [pendiente(2, { nivel: 0 })]), procedimiento(2, [pendiente(4, { nivel: 0 })])] })]);
-        const pendientes = pasosPendientes(varios);
+        const [varios] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [procedimiento(1, [pendiente(2, { nivel: 0 })]), procedimiento(2, [pendiente(4, { nivel: 0 })])] })]);
+        const pendientes = ControladorConsulta.pasosPendientes(varios);
         const { $, q, eventos } = montar('panel-paso-actual', modeloPaso({ pendientes, paso: pendientes[1].paso }), EVENTOS_PASO);
         assert.equal($('selector').hidden, false);
         const radios = q('input[type="radio"]');

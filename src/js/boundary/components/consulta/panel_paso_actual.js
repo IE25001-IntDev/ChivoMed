@@ -9,11 +9,11 @@
  * El texto que se escribe no se pisa: el campo solo se actualiza si el borrador del modelo cambió
  * por otra razón (precarga de un paso reabierto, cambio de paso).
  */
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../../control/fechas_sv.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
+import { FechasSV } from "../../../control/fechas_sv.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="panel" aria-labelledby="titulo">
   <h2 id="titulo" tabindex="-1">Paso actual</h2>
   <fieldset class="selector-pasos" id="selector" hidden>
@@ -73,7 +73,7 @@ class PanelPasoActual extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.$("valor").addEventListener("input", this.#alEscribir);
         this.$("avanzar").addEventListener("click", this.#alAvanzar);
@@ -113,7 +113,7 @@ class PanelPasoActual extends HTMLElement {
             this.$("procedimiento").textContent = m.procedimiento ? `Procedimiento: ${m.procedimiento}` : "";
             this.$("responsable").textContent = paso.responsable
                 ? `Responsable: ${[paso.responsable.nombre, paso.responsable.rol].filter(Boolean).join(" · ")}` : "Sin responsable asignado";
-            this.$("desde").textContent = paso.fechaInicio ? `Pendiente desde ${formatearFechaHora(paso.fechaInicio)}` : "";
+            this.$("desde").textContent = paso.fechaInicio ? `Pendiente desde ${FechasSV.formatearFechaHora(paso.fechaInicio)}` : "";
         }
         // No se pisa lo que el usuario escribe: solo si el modelo trae otro texto.
         if (this.$("valor").value !== m.borrador) this.$("valor").value = m.borrador;

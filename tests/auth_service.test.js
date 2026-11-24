@@ -1,7 +1,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-    iniciarSesion, obtenerSesion, cerrarSesion, listarTiposDocumento, MENSAJES_POR_CODIGO, esEmpleado, nombreDeRol, ROL_SIN_NOMBRE,
+    AuthService, auth, MENSAJES_POR_CODIGO, ROL_SIN_NOMBRE,
 } from "../src/js/control/auth_service.js";
 
 const TIPO = "10000000-0000-4000-8000-0000000000aa";
@@ -41,7 +41,7 @@ test("el login envía tipo y número de documento, sin contraseña, y verifica l
         llamadas.push({ url, opciones });
         return url.endsWith("/login") ? new Response(null, { status: 204 }) : Response.json(sesion());
     };
-    assert.deepEqual(await iniciarSesion(TIPO, "  00000000-0 "), sesion());
+    assert.deepEqual(await auth.iniciarSesion(TIPO, "  00000000-0 "), sesion());
     assert.equal(llamadas.length, 2);
     assert.equal(llamadas[0].url, "/galeno/api/auth/login");
     assert.equal(llamadas[0].opciones.method, "POST");
@@ -63,7 +63,7 @@ test("no envía el login con un tipo que no es UUID o un número vacío, largo o
     globalThis.fetch = async () => assert.fail("No debe enviar la petición");
     for (const [tipo, numero] of [["", "123"], ["no-uuid", "123"], [null, "123"], [TIPO, ""], [TIPO, "   "],
         [TIPO, undefined], [TIPO, "1".repeat(51)], [TIPO, "123\r\nX-Inyectada: 1"]]) {
-        await assert.rejects(iniciarSesion(tipo, numero), { status: 400, message: /tipo y el número de documento/ });
+        await assert.rejects(auth.iniciarSesion(tipo, numero), { status: 400, message: /tipo y el número de documento/ });
     }
 });
 
@@ -74,7 +74,7 @@ test("un documento rechazado no consulta /me, no expone el error interno ni avis
         peticiones++;
         return Response.json({ message: "Detalle interno que no debe mostrarse" }, { status: 401 });
     };
-    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
+    await assert.rejects(auth.iniciarSesion(TIPO, "00000000-0"), {
         status: 401, message: "No encontramos una persona con ese documento activo.",
     });
     assert.equal(peticiones, 1);
@@ -84,24 +84,24 @@ test("un documento rechazado no consulta /me, no expone el error interno ni avis
 test("un 403 auth.origen del login explica el origen; los demás 403 conservan su mensaje", async () => {
     const error403 = code => async () => Response.json({ status: 403, code, message: "Detalle interno" }, { status: 403 });
     globalThis.fetch = error403("auth.origen");
-    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
+    await assert.rejects(auth.iniciarSesion(TIPO, "00000000-0"), {
         status: 403, code: "auth.origen", message: MENSAJES_POR_CODIGO["auth.origen"],
     });
     assert.match(MENSAJES_POR_CODIGO["auth.origen"], /http:\/\/localhost:3000/);
     for (const code of ["auth.csrf", "constructor", null]) {
         globalThis.fetch = error403(code);
-        await assert.rejects(iniciarSesion(TIPO, "00000000-0"), {
+        await assert.rejects(auth.iniciarSesion(TIPO, "00000000-0"), {
             status: 403, message: "Este acceso es solo para el personal de la clínica.",
         });
     }
     globalThis.fetch = async () => new Response("<html>403</html>", { status: 403, headers: { "Content-Type": "text/html" } });
-    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), error => error.code === null && /solo para el personal/.test(error.message));
+    await assert.rejects(auth.iniciarSesion(TIPO, "00000000-0"), error => error.code === null && /solo para el personal/.test(error.message));
 });
 
 test("un 401 de /auth/me sí avisa sesión expirada", async () => {
     const expiraciones = contarExpiraciones();
     globalThis.fetch = async () => new Response(null, { status: 401 });
-    await assert.rejects(obtenerSesion(), { status: 401 });
+    await assert.rejects(auth.obtenerSesion(), { status: 401 });
     assert.equal(expiraciones.valor, 1);
 });
 
@@ -109,23 +109,23 @@ test("un 401 de /auth/me sí avisa sesión expirada", async () => {
 for (const codigo of ["DOCTOR", "ENFERMERA", "ADMINISTRACION", "OTRO_ROL", null]) {
     test(`acepta la identidad autenticada con código ${codigo}`, async () => {
         globalThis.fetch = async () => Response.json(sesion(codigo));
-        const recibida = await obtenerSesion();
+        const recibida = await auth.obtenerSesion();
         assert.equal(recibida.rolActivo.codigo, codigo);
-        assert.ok(esEmpleado(recibida));
+        assert.ok(AuthService.esEmpleado(recibida));
     });
 }
 
 test("acepta nombreRol null y lo muestra con un texto neutro, nunca con el código", async () => {
     globalThis.fetch = async () => Response.json(sesion("ENFERMERA", null));
-    const recibida = await obtenerSesion();
-    assert.equal(nombreDeRol(recibida.rolActivo), ROL_SIN_NOMBRE);
-    assert.equal(nombreDeRol({ nombreRol: "  Enfermera " }), "Enfermera");
+    const recibida = await auth.obtenerSesion();
+    assert.equal(AuthService.nombreDeRol(recibida.rolActivo), ROL_SIN_NOMBRE);
+    assert.equal(AuthService.nombreDeRol({ nombreRol: "  Enfermera " }), "Enfermera");
 });
 
 test("esEmpleado: rechaza PACIENTE, la falta de rol y un rol sin identificador", () => {
-    assert.equal(esEmpleado(sesion("PACIENTE")), false);
-    assert.equal(esEmpleado({ rolActivo: { codigo: "DOCTOR" } }), false);
-    for (const valor of [null, undefined, {}, { rolActivo: null }]) assert.equal(esEmpleado(valor), false);
+    assert.equal(AuthService.esEmpleado(sesion("PACIENTE")), false);
+    assert.equal(AuthService.esEmpleado({ rolActivo: { codigo: "DOCTOR" } }), false);
+    for (const valor of [null, undefined, {}, { rolActivo: null }]) assert.equal(AuthService.esEmpleado(valor), false);
 });
 
 test("los tipos de documento se piden sin sesión y solo se devuelven los activos y bien formados", async () => {
@@ -141,7 +141,7 @@ test("los tipos de documento se piden sin sesión y solo se devuelven los activo
             null,
         ]);
     };
-    const tipos = await listarTiposDocumento();
+    const tipos = await auth.listarTiposDocumento();
     assert.equal(llamadas.length, 1);
     assert.equal(llamadas[0].url, "/galeno/api/publico/tipos-documento");
     assert.equal(llamadas[0].opciones.method, "GET");
@@ -158,7 +158,7 @@ test("si los tipos de documento fallan se informa sin avisar sesión expirada", 
     for (const respuesta of [new Response(null, { status: 401 }), new Response(null, { status: 500 }),
         Response.json({ no: "es una lista" }), new Response("<html></html>")]) {
         globalThis.fetch = async () => respuesta;
-        await assert.rejects(listarTiposDocumento(), /tipos de documento|no está disponible/);
+        await assert.rejects(auth.listarTiposDocumento(), /tipos de documento|no está disponible/);
     }
     assert.equal(expiraciones.valor, 0);
 });
@@ -166,15 +166,15 @@ test("si los tipos de documento fallan se informa sin avisar sesión expirada", 
 test("acepta sesiones con rol PACIENTE o sin rol y rechaza sesiones mal formadas", async () => {
     for (const datos of [sesion("PACIENTE"), { ...sesion(), rolActivo: null }]) {
         globalThis.fetch = async () => Response.json(datos);
-        const recibida = await obtenerSesion();
+        const recibida = await auth.obtenerSesion();
         assert.equal(recibida.rolActivo?.codigo ?? null, datos.rolActivo?.codigo ?? null);
-        assert.equal(esEmpleado(recibida), false);
+        assert.equal(AuthService.esEmpleado(recibida), false);
     }
     for (const datos of [null, {}, sesion(""), sesion(42), sesion("DOCTOR", 7),
         { ...sesion(), usuario: { idUsuario: { toString: "invalido" } } },
         { ...sesion(), csrfToken: "" }, { ...sesion(), csrfToken: "token\r\ninyectado" }]) {
         globalThis.fetch = async () => Response.json(datos);
-        await assert.rejects(obtenerSesion(), /No pudimos cargar tu acceso/);
+        await assert.rejects(auth.obtenerSesion(), /No pudimos cargar tu acceso/);
     }
 });
 
@@ -182,20 +182,20 @@ test("un HTTP 200 con HTML o JSON roto no concede acceso", async () => {
     for (const respuesta of [new Response("<html>Login</html>"),
         new Response("{", { headers: { "Content-Type": "application/json" } })]) {
         globalThis.fetch = async () => respuesta;
-        await assert.rejects(obtenerSesion(), /No pudimos verificar tu sesión/);
+        await assert.rejects(auth.obtenerSesion(), /No pudimos verificar tu sesión/);
     }
 });
 
 test("un POST de login correcto no basta si /me rechaza la sesión", async () => {
     globalThis.fetch = async url => new Response(null, { status: url.endsWith("/login") ? 204 : 401 });
-    await assert.rejects(iniciarSesion(TIPO, "00000000-0"), { status: 401 });
+    await assert.rejects(auth.iniciarSesion(TIPO, "00000000-0"), { status: 401 });
 });
 
 test("distingue una sesión vencida, servicio ausente y exceso de intentos", async () => {
     for (const [status, mensaje] of [[401, /sesión ha finalizado/], [403, /autorizar/],
         [404, /todavía no está disponible/], [429, /demasiados intentos/], [500, /más tarde/]]) {
         globalThis.fetch = async () => new Response(null, { status });
-        await assert.rejects(obtenerSesion(), error => error.status === status && mensaje.test(error.message));
+        await assert.rejects(auth.obtenerSesion(), error => error.status === status && mensaje.test(error.message));
     }
 });
 
@@ -203,23 +203,23 @@ test("informa errores de conexión y tiempo de espera sin revelar detalles", asy
     for (const [error, mensaje] of [[new TypeError("detalle de red"), /conectar/],
         [new DOMException("detalle interno", "TimeoutError"), /tardó demasiado/]]) {
         globalThis.fetch = async () => { throw error; };
-        await assert.rejects(obtenerSesion(), mensaje);
+        await assert.rejects(auth.obtenerSesion(), mensaje);
     }
 });
 
 test("sin respuesta del servidor el error lleva el código de red; una respuesta HTTP no", async () => {
     globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
-    await assert.rejects(obtenerSesion(), error => error.status === 0 && error.code === "conexion.error");
+    await assert.rejects(auth.obtenerSesion(), error => error.status === 0 && error.code === "conexion.error");
     globalThis.fetch = async () => new Response(null, { status: 500 });
-    await assert.rejects(obtenerSesion(), error => error.status === 500 && error.code === null);
+    await assert.rejects(auth.obtenerSesion(), error => error.status === 500 && error.code === null);
 });
 
 test("502, 503 y 504 son sin conexión con el servidor: status 0 y el código de red, en sesión, login y catálogo", async () => {
     for (const status of [502, 503, 504]) {
         globalThis.fetch = async () => Response.json({ code: "sin.red" }, { status });
-        await assert.rejects(obtenerSesion(), error => error.status === 0 && error.code === "conexion.error" && /conectar/.test(error.message));
-        await assert.rejects(iniciarSesion(TIPO, "00000000-0"), error => error.status === 0 && error.code === "conexion.error");
-        await assert.rejects(listarTiposDocumento(), error => error.status === 0 && error.code === "conexion.error");
+        await assert.rejects(auth.obtenerSesion(), error => error.status === 0 && error.code === "conexion.error" && /conectar/.test(error.message));
+        await assert.rejects(auth.iniciarSesion(TIPO, "00000000-0"), error => error.status === 0 && error.code === "conexion.error");
+        await assert.rejects(auth.listarTiposDocumento(), error => error.status === 0 && error.code === "conexion.error");
     }
 });
 
@@ -236,12 +236,12 @@ test("avisa servidor-caido o servidor-respondio en document; la copia del servic
     for (const [fetch, esperado] of casos) {
         avisos.length = 0;
         globalThis.fetch = fetch;
-        await obtenerSesion().catch(() => {});
+        await auth.obtenerSesion().catch(() => {});
         assert.deepEqual(avisos.filter(a => a !== "sesion-expirada"), [esperado]);
     }
     avisos.length = 0;
     globalThis.fetch = async () => Response.json([{ idTipoDocumento: TIPO, nombre: "DUI" }], { headers: { "X-ChivoMed-Copia": "1" } });
-    assert.equal((await listarTiposDocumento()).length, 1, "la copia se sigue usando");
+    assert.equal((await auth.listarTiposDocumento()).length, 1, "la copia se sigue usando");
     assert.deepEqual(avisos, ["servidor-caido"]);
 });
 
@@ -253,12 +253,12 @@ test("el logout envía el token CSRF y conserva el error si falla el servidor", 
         assert.equal(opciones.credentials, "include");
         return new Response(null, { status: 500 });
     };
-    await assert.rejects(cerrarSesion(sesion().csrfToken), { status: 500 });
+    await assert.rejects(auth.cerrarSesion(sesion().csrfToken), { status: 500 });
 });
 
 test("no intenta cerrar una sesión sin token CSRF válido", async () => {
     globalThis.fetch = async () => { assert.fail("No debe enviar la petición"); };
     for (const token of [undefined, "", "  ", "token\ninyectado"]) {
-        await assert.rejects(cerrarSesion(token), /verificar tu sesión/);
+        await assert.rejects(auth.cerrarSesion(token), /verificar tu sesión/);
     }
 });

@@ -23,14 +23,14 @@
  *    "Nueva búsqueda" la borra.
  * Todo llega por inyección para probarse con node --test.
  */
-import CitasPublicasService, { segundosDeEspera } from "../citas_publicas_service.js";
-import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../auth_service.js";
-import { crearValidadorFormato, sinRestriccion } from "../formato_documento.js";
-import { crearEstado } from "../estado_reactivo.js";
-import { hoySV, sumarDias, diasEntre, esFechaISO, FechasSV } from "../fechas_sv.js";
+import CitasPublicasService from "../citas_publicas_service.js";
+import { auth, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../auth_service.js";
+import { FormatoDocumento } from "../formato_documento.js";
+import { EstadoReactivo } from "../estado_reactivo.js";
+import { FechasSV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "../memoria_vistas.js";
 import { conexion as conexionCompartida } from "../conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../controlador_conexion.js";
+import { ControladorConexion, MENSAJE_SIN_DATOS } from "../controlador_conexion.js";
 import { Validaciones } from "../validaciones.js";
 
 /** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
@@ -64,160 +64,29 @@ export const MENSAJES = Object.freeze({
     generico: "No pudimos completar la búsqueda. Inténtalo de nuevo más tarde.",
     ticketNoExiste: "No pudimos generar el ticket de esta cita.",
     ticketFallido: "No pudimos descargar el ticket. Inténtalo de nuevo.",
-    tiposSinRed: motivoSinConexion("cargar los tipos de documento"),
-    sinRedBuscar: motivoSinConexion("buscar"),
-    sinRedTicket: motivoSinConexion("ver el ticket"),
+    tiposSinRed: ControladorConexion.motivoSinConexion("cargar los tipos de documento"),
+    sinRedBuscar: ControladorConexion.motivoSinConexion("buscar"),
+    sinRedTicket: ControladorConexion.motivoSinConexion("ver el ticket"),
     faltaTipo: "Falta elegir el tipo de documento.",
     faltaNumero: "Falta completar el número de documento.",
     faltaClinica: "Falta elegir la clínica.",
     faltaFechas: "Falta escribir un rango de fechas válido.",
     limite: hora => `Hiciste muchas búsquedas seguidas. Podrás intentarlo de nuevo a las ${hora}.`,
-    memoria: mensajeGuardado,
+    memoria: ControladorConexion.mensajeGuardado,
     sinDatos: MENSAJE_SIN_DATOS,
 });
 
-/** De hoy − 30 a hoy + 30 días de El Salvador: se ven citas pasadas, de hoy y futuras. */
-export function rangoPorDefecto(reloj = () => new Date()) {
-    const hoy = hoySV(reloj);
-    return { desde: sumarDias(hoy, -DIAS_POR_DEFECTO), hasta: sumarDias(hoy, DIAS_POR_DEFECTO) };
-}
-
-/** Error del número para el tipo elegido (null si es válido). Mismas reglas que @NotBlank/@Size/@Pattern. */
-export function validarNumero(tipo, numeroDocumento) {
-    if (!tipo) return MENSAJES.tipoRequerido;
-    const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
-    if (!numero) return MENSAJES.numeroRequerido;
-    if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) return MENSAJES.numeroLargo;
-    if (/[\r\n]/.test(numero)) return MENSAJES.numeroSaltos;
-    const formato = crearValidadorFormato(tipo.expresionRegular);
-    if (formato && !formato(numero)) {
-        return tipo.indicaciones
-            ? `El número no tiene el formato de ${tipo.nombre}. ${tipo.indicaciones}`
-            : `El número no tiene el formato de ${tipo.nombre}.`;
-    }
-    return null;
-}
-
-/**
- * Máscara del número a partir de la expresión regular del tipo: una posición por carácter, cada una
- * `{ clase }` (p. ej. "[0-9]") o `{ literal }` (p. ej. "-"), con `{n}` expandido.
- * `^[0-9]{8}-[0-9]$` → 8 × [0-9], "-", [0-9]. Devuelve null (sin máscara) si la expresión no
- * compila o tiene algo que no es de largo fijo: |, *, +, ?, grupos, {n,m}, "." u otros escapes.
- */
-export function mascaraDeExpresion(expresionRegular) {
-    if (sinRestriccion(expresionRegular)) return null;
-    try { new RegExp(expresionRegular); } catch { return null; }
-    const cuerpo = expresionRegular.trim().replace(/^\^/, "").replace(/(?<!\\)\$$/, "");
-    const posiciones = [];
-    let i = 0;
-    while (i < cuerpo.length) {
-        let posicion;
-        const c = cuerpo[i];
-        if (c === "[") {
-            const fin = cuerpo.indexOf("]", i + 2);
-            if (fin < 0) return null;
-            posicion = Object.freeze({ clase: cuerpo.slice(i, fin + 1) });
-            i = fin + 1;
-        } else if (c === "\\") {
-            const siguiente = cuerpo[i + 1];
-            if (siguiente === "d") posicion = Object.freeze({ clase: "[0-9]" });
-            else if (siguiente && /[-.\/\\^$*+?()[\]{}|]/.test(siguiente)) posicion = Object.freeze({ literal: siguiente });
-            else return null;
-            i += 2;
-        } else if ("|*+?(){}.^$".includes(c)) {
-            return null;
-        } else {
-            posicion = Object.freeze({ literal: c });
-            i += 1;
-        }
-        let veces = 1;
-        if (cuerpo[i] === "{") {
-            const m = /^\{(\d{1,2})\}/.exec(cuerpo.slice(i));
-            if (!m) return null;
-            veces = Number(m[1]);
-            i += m[0].length;
-        }
-        for (let n = 0; n < veces; n++) posiciones.push(posicion);
-    }
-    return posiciones.length ? Object.freeze(posiciones) : null;
-}
-
 const pruebasDeClase = new Map();
-function aceptaClase(clase, caracter) {
-    if (!pruebasDeClase.has(clase)) pruebasDeClase.set(clase, new RegExp(`^${clase}$`));
-    return pruebasDeClase.get(clase).test(caracter);
-}
-
-/**
- * Limpia `texto` con la máscara: en cada posición de clase entra solo un carácter que la cumpla
- * (la minúscula se convierte si la posición solo acepta mayúsculas); lo demás se descarta. Un literal
- * se pone solo cuando llega el siguiente carácter válido, así borrar funciona normal. Corta en el
- * largo de la máscara. Pegar texto pasa por la misma regla.
- */
-export function aplicarMascara(mascara, texto) {
-    if (!mascara) return typeof texto === "string" ? texto : "";
-    let salida = "";
-    for (const caracter of typeof texto === "string" ? texto : "") {
-        if (salida.length >= mascara.length) break;
-        const posicion = mascara[salida.length];
-        if (posicion.literal !== undefined) {
-            if (caracter === posicion.literal) { salida += caracter; continue; }
-            // El literal se completa solo si el carácter cabe en la posición siguiente.
-            let j = salida.length;
-            let literales = "";
-            while (j < mascara.length && mascara[j].literal !== undefined) literales += mascara[j++].literal;
-            const valido = j < mascara.length ? caracterValido(mascara[j], caracter) : null;
-            if (valido) salida += literales + valido;
-            continue;
-        }
-        const valido = caracterValido(posicion, caracter);
-        if (valido) salida += valido;
-    }
-    return salida;
-}
-
-function caracterValido(posicion, caracter) {
-    if (aceptaClase(posicion.clase, caracter)) return caracter;
-    const mayuscula = caracter.toUpperCase();
-    return mayuscula !== caracter && aceptaClase(posicion.clase, mayuscula) ? mayuscula : null;
-}
-
-/** Error del rango (null si es válido): fechas reales, desde ≤ hasta y diferencia ≤ 366 días. */
-export function validarRango(desde, hasta) {
-    if (!esFechaISO(desde) || !esFechaISO(hasta)) return MENSAJES.fechasInvalidas;
-    const dias = diasEntre(desde, hasta);
-    if (dias < 0) return MENSAJES.rangoInvertido;
-    if (dias > MAX_DIAS_RANGO) return MENSAJES.rangoLargo;
-    return null;
-}
-
-export function pasoAlcanzable(paso, alcanzado) {
-    return Number.isInteger(paso) && paso >= 1 && paso <= alcanzado && paso <= PASOS.length;
-}
-
-/** Por qué no se puede hacer un POST ahora (sin red o bloqueado por el límite); null si se puede. */
-export function motivoNoBuscar({ enLinea, bloqueadoHasta }, ahora) {
-    if (!enLinea) return MENSAJES.sinRedBuscar;
-    if (bloqueadoHasta && bloqueadoHasta > ahora) return MENSAJES.limite(FechasSV.hora(bloqueadoHasta));
-    return null;
-}
-
-/** Texto para el usuario a partir de un DefaultError; nunca los detalles internos. */
-export function mensajeDeErrorCitas(error) {
-    const codigo = error?.code;
-    if (codigo && Object.hasOwn(MENSAJES_POR_CODIGO, codigo)) return MENSAJES_POR_CODIGO[codigo];
-    if (codigo === "citas.rango") return typeof error.message === "string" && error.message.trim() ? error.message : MENSAJES.rangoLargo;
-    if (codigo === "validacion.invalida" || codigo === "json.invalido") return MENSAJES.datos;
-    if (codigo === "cita.noExiste") return MENSAJES.ticketNoExiste;
-    if (error?.status === 0 || codigo === CODIGO_SIN_RED) return MENSAJES.conexion;
-    return MENSAJES.generico;
-}
 
 const SIN_ERRORES = Object.freeze({ tipo: null, numero: null, clinica: null, rango: null });
 const NADA_HABILITADO = Object.freeze({ numero: false, clinica: false, fechas: false, buscar: false });
 const VACIO = Object.freeze({});
 
 export class ControladorCitas {
+    /** Estado reactivo del controlador (composición): `estado` lo publica y `suscribir` delega en él. */
+    #reactivo;
+    /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
+    suscribir = fn => this.#reactivo.suscribir(fn);
     #servicio;
     #listarTipos;
     #conexion;
@@ -245,7 +114,7 @@ export class ControladorCitas {
      *   - `reloj`: función que devuelve la fecha actual.
      *   - `temporizador`: objeto con `programar(fn, ms)`, que devuelve un identificador, y `cancelar(identificador)`.
      */
-    constructor({ servicio, listarTiposDocumento = listarTiposHttp, conexion = conexionCompartida,
+    constructor({ servicio, listarTiposDocumento = () => auth.listarTiposDocumento(), conexion = conexionCompartida,
         memoria = memoriaCompartida, reloj = () => new Date(),
         temporizador = { programar: (fn, ms) => setTimeout(fn, ms), cancelar: t => clearTimeout(t) } } = {}) {
         this.#servicio = servicio ?? new CitasPublicasService();
@@ -254,7 +123,7 @@ export class ControladorCitas {
         this.#memoria = memoria;
         this.#reloj = reloj;
         this.#temporizador = temporizador;
-        const { estado, suscribir } = crearEstado({
+        this.#reactivo = new EstadoReactivo({
             tipos: Object.freeze([]),
             cargandoTipos: false,
             errorTipos: null,
@@ -263,7 +132,7 @@ export class ControladorCitas {
             idTipoDocumento: "",
             numeroDocumento: "",
             idClinica: null,
-            ...rangoPorDefecto(reloj),
+            ...ControladorCitas.rangoPorDefecto(reloj),
             /** null: sin pedir (o invalidadas); [] : la búsqueda no encontró nada. */
             clinicas: null,
             citas: null,
@@ -286,8 +155,7 @@ export class ControladorCitas {
             /** Qué falta para poder buscar; null si no falta nada (los motivos de red van aparte). */
             falta: MENSAJES.faltaTipo,
         });
-        this.estado = estado;
-        this.suscribir = suscribir;
+        this.estado = this.#reactivo.estado;
     }
 
     #actualizar(cambios) {
@@ -303,10 +171,10 @@ export class ControladorCitas {
     #derivar() {
         const e = this.estado;
         const tipo = this.tipo();
-        const numeroValido = Boolean(tipo) && validarNumero(tipo, e.numeroDocumento) === null;
+        const numeroValido = Boolean(tipo) && ControladorCitas.validarNumero(tipo, e.numeroDocumento) === null;
         const hayClinicas = numeroValido && Boolean(e.clinicas?.length);
         const clinica = hayClinicas && e.clinicas.some(c => c.idClinica === e.idClinica);
-        const rango = validarRango(e.desde, e.hasta) === null;
+        const rango = ControladorCitas.validarRango(e.desde, e.hasta) === null;
         const habilitado = {
             numero: Boolean(tipo),
             clinica: hayClinicas && e.cargando !== "clinicas",
@@ -340,7 +208,7 @@ export class ControladorCitas {
     }
 
     #motivo() {
-        return motivoNoBuscar(this.estado, this.#reloj().getTime());
+        return ControladorCitas.motivoNoBuscar(this.estado, this.#reloj().getTime());
     }
 
     /** Muestra lo guardado en memoria (si hay), se suscribe a la red y carga los tipos. */
@@ -413,7 +281,7 @@ export class ControladorCitas {
         this.#parCargado = null;
         this.#criteriosCargados = null;
         this.#actualizar({ clinicas: null, idClinica: null, citas: null, tickets: VACIO, ticketAbierto: null, cargando: null,
-            ...rangoPorDefecto(this.#reloj), alcanzado: Math.min(this.estado.alcanzado, 2), desdeMemoria: false });
+            ...ControladorCitas.rangoPorDefecto(this.#reloj), alcanzado: Math.min(this.estado.alcanzado, 2), desdeMemoria: false });
     }
 
     /** Clínica o fechas cambiaron: se invalidan solo los resultados. */
@@ -443,14 +311,14 @@ export class ControladorCitas {
     escribirNumero(valor) {
         const tipo = this.tipo(this.estado.idTipoDocumento);
         if (!tipo) return Promise.resolve();
-        const mascara = mascaraDeExpresion(tipo.expresionRegular);
-        const numero = aplicarMascara(mascara, typeof valor === "string" ? valor : "");
+        const mascara = ControladorCitas.mascaraDeExpresion(tipo.expresionRegular);
+        const numero = ControladorCitas.aplicarMascara(mascara, typeof valor === "string" ? valor : "");
         if (numero === this.estado.numeroDocumento) return Promise.resolve();
         const cambio = numero.trim() !== this.estado.numeroDocumento.trim();
         if (this.estado.errores.numero || this.estado.errores.clinica) this.#errores({ numero: null, clinica: null });
         this.#actualizar({ numeroDocumento: numero });
         if (cambio) this.#invalidarDocumento();
-        if (mascara && numero.length === mascara.length && !validarNumero(tipo, numero) && !this.estado.cargando) {
+        if (mascara && numero.length === mascara.length && !ControladorCitas.validarNumero(tipo, numero) && !this.estado.cargando) {
             return this.#buscarClinicas(false);
         }
         return Promise.resolve();
@@ -460,7 +328,7 @@ export class ControladorCitas {
     elegirClinica(idClinica) {
         if (!this.estado.clinicas?.some(c => c.idClinica === idClinica) || idClinica === this.estado.idClinica) return;
         this.#errores({ clinica: null, rango: null });
-        this.#actualizar({ idClinica, ...rangoPorDefecto(this.#reloj) });
+        this.#actualizar({ idClinica, ...ControladorCitas.rangoPorDefecto(this.#reloj) });
         this.#invalidarResultados();
     }
 
@@ -469,13 +337,13 @@ export class ControladorCitas {
         hasta = String(hasta ?? "");
         if (desde === this.estado.desde && hasta === this.estado.hasta) return;
         // El error del rango se ve al fijar las fechas: con fechas inválidas no se puede buscar.
-        this.#errores({ rango: validarRango(desde, hasta) });
+        this.#errores({ rango: ControladorCitas.validarRango(desde, hasta) });
         this.#actualizar({ desde, hasta });
         this.#invalidarResultados();
     }
 
     irA(paso) {
-        if (pasoAlcanzable(paso, this.estado.alcanzado)) this.#actualizar({ paso });
+        if (ControladorCitas.pasoAlcanzable(paso, this.estado.alcanzado)) this.#actualizar({ paso });
     }
 
     atras() {
@@ -536,7 +404,7 @@ export class ControladorCitas {
     #pedirClinicas(avanzar) {
         // Lo síncrono corre durante la llamada: #buscarClinicas mira `cargando` justo después.
         return new Promise(resolve => {
-            const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
+            const error = ControladorCitas.validarNumero(this.tipo(), this.estado.numeroDocumento);
             if (error) { this.#errores(this.tipo() ? { numero: error } : { tipo: error }); resolve(); return; }
             if (this.#parCargado === this.#par() && this.estado.clinicas) {
                 if (avanzar) this.#avanzar(3);
@@ -587,9 +455,9 @@ export class ControladorCitas {
         if (this.estado.cargando) return undefined;
         this.#actualizar({ mensaje: null });
         if (!this.tipo()) { this.#errores({ tipo: MENSAJES.tipoRequerido }); return undefined; }
-        const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
+        const error = ControladorCitas.validarNumero(this.tipo(), this.estado.numeroDocumento);
         if (error) { this.#errores({ numero: error }); return undefined; }
-        const errorRango = validarRango(this.estado.desde, this.estado.hasta);
+        const errorRango = ControladorCitas.validarRango(this.estado.desde, this.estado.hasta);
         if (errorRango) { this.#errores({ rango: errorRango }); return undefined; }
         const par = this.#par();
         const seguir = () => {
@@ -607,7 +475,7 @@ export class ControladorCitas {
 
     #buscarCitas() {
         return new Promise(resolve => {
-            const error = validarRango(this.estado.desde, this.estado.hasta);
+            const error = ControladorCitas.validarRango(this.estado.desde, this.estado.hasta);
             if (error) { this.#errores({ rango: error }); resolve(); return; }
             const criterios = this.#criterios();
             const clave = JSON.stringify(criterios);
@@ -632,7 +500,7 @@ export class ControladorCitas {
                 .catch(falla => {
                     if (id !== this.#secuencia) return;
                     this.#actualizar({ cargando: null });
-                    if (falla?.code === "citas.rango") this.#errores({ rango: mensajeDeErrorCitas(falla) });
+                    if (falla?.code === "citas.rango") this.#errores({ rango: ControladorCitas.mensajeDeErrorCitas(falla) });
                     else this.#fallo(falla);
                 }));
         });
@@ -640,8 +508,8 @@ export class ControladorCitas {
 
     /** 429: bloquea los POST hasta Retry-After; lo demás va a `mensaje`. */
     #fallo(error) {
-        if (error?.status !== 429) { this.#actualizar({ mensaje: mensajeDeErrorCitas(error) }); return; }
-        const segundos = segundosDeEspera(error);
+        if (error?.status !== 429) { this.#actualizar({ mensaje: ControladorCitas.mensajeDeErrorCitas(error) }); return; }
+        const segundos = CitasPublicasService.segundosDeEspera(error);
         const bloqueadoHasta = this.#reloj().getTime() + segundos * 1000;
         this.#temporizador.cancelar(this.#desbloqueo);
         this.#desbloqueo = this.#temporizador.programar(() => {
@@ -720,8 +588,144 @@ export class ControladorCitas {
         this.#criteriosCargados = null;
         this.#memoria.guardar(CLAVE_MEMORIA, null);
         this.#actualizar({ paso: 1, alcanzado: 1, idTipoDocumento: "", numeroDocumento: "", idClinica: null,
-            ...rangoPorDefecto(this.#reloj), clinicas: null, citas: null, cargando: null, errores: SIN_ERRORES,
+            ...ControladorCitas.rangoPorDefecto(this.#reloj), clinicas: null, citas: null, cargando: null, errores: SIN_ERRORES,
             mensaje: this.estado.bloqueadoHasta ? this.estado.mensaje : null,
             desdeMemoria: false, actualizadoEn: null, tickets: VACIO, ticketAbierto: null });
+    }
+
+    /** De hoy − 30 a hoy + 30 días de El Salvador: se ven citas pasadas, de hoy y futuras. */
+    static rangoPorDefecto(reloj = () => new Date()) {
+        const hoy = FechasSV.hoySV(reloj);
+        return { desde: FechasSV.sumarDias(hoy, -DIAS_POR_DEFECTO), hasta: FechasSV.sumarDias(hoy, DIAS_POR_DEFECTO) };
+    }
+
+    /** Error del número para el tipo elegido (null si es válido). Mismas reglas que @NotBlank/@Size/@Pattern. */
+    static validarNumero(tipo, numeroDocumento) {
+        if (!tipo) return MENSAJES.tipoRequerido;
+        const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
+        if (!numero) return MENSAJES.numeroRequerido;
+        if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) return MENSAJES.numeroLargo;
+        if (/[\r\n]/.test(numero)) return MENSAJES.numeroSaltos;
+        const formato = FormatoDocumento.crearValidadorFormato(tipo.expresionRegular);
+        if (formato && !formato(numero)) {
+            return tipo.indicaciones
+                ? `El número no tiene el formato de ${tipo.nombre}. ${tipo.indicaciones}`
+                : `El número no tiene el formato de ${tipo.nombre}.`;
+        }
+        return null;
+    }
+
+    /**
+     * Máscara del número a partir de la expresión regular del tipo: una posición por carácter, cada una
+     * `{ clase }` (p. ej. "[0-9]") o `{ literal }` (p. ej. "-"), con `{n}` expandido.
+     * `^[0-9]{8}-[0-9]$` → 8 × [0-9], "-", [0-9]. Devuelve null (sin máscara) si la expresión no
+     * compila o tiene algo que no es de largo fijo: |, *, +, ?, grupos, {n,m}, "." u otros escapes.
+     */
+    static mascaraDeExpresion(expresionRegular) {
+        if (FormatoDocumento.sinRestriccion(expresionRegular)) return null;
+        try { new RegExp(expresionRegular); } catch { return null; }
+        const cuerpo = expresionRegular.trim().replace(/^\^/, "").replace(/(?<!\\)\$$/, "");
+        const posiciones = [];
+        let i = 0;
+        while (i < cuerpo.length) {
+            let posicion;
+            const c = cuerpo[i];
+            if (c === "[") {
+                const fin = cuerpo.indexOf("]", i + 2);
+                if (fin < 0) return null;
+                posicion = Object.freeze({ clase: cuerpo.slice(i, fin + 1) });
+                i = fin + 1;
+            } else if (c === "\\") {
+                const siguiente = cuerpo[i + 1];
+                if (siguiente === "d") posicion = Object.freeze({ clase: "[0-9]" });
+                else if (siguiente && /[-.\/\\^$*+?()[\]{}|]/.test(siguiente)) posicion = Object.freeze({ literal: siguiente });
+                else return null;
+                i += 2;
+            } else if ("|*+?(){}.^$".includes(c)) {
+                return null;
+            } else {
+                posicion = Object.freeze({ literal: c });
+                i += 1;
+            }
+            let veces = 1;
+            if (cuerpo[i] === "{") {
+                const m = /^\{(\d{1,2})\}/.exec(cuerpo.slice(i));
+                if (!m) return null;
+                veces = Number(m[1]);
+                i += m[0].length;
+            }
+            for (let n = 0; n < veces; n++) posiciones.push(posicion);
+        }
+        return posiciones.length ? Object.freeze(posiciones) : null;
+    }
+
+    static #aceptaClase(clase, caracter) {
+        if (!pruebasDeClase.has(clase)) pruebasDeClase.set(clase, new RegExp(`^${clase}$`));
+        return pruebasDeClase.get(clase).test(caracter);
+    }
+
+    /**
+     * Limpia `texto` con la máscara: en cada posición de clase entra solo un carácter que la cumpla
+     * (la minúscula se convierte si la posición solo acepta mayúsculas); lo demás se descarta. Un literal
+     * se pone solo cuando llega el siguiente carácter válido, así borrar funciona normal. Corta en el
+     * largo de la máscara. Pegar texto pasa por la misma regla.
+     */
+    static aplicarMascara(mascara, texto) {
+        if (!mascara) return typeof texto === "string" ? texto : "";
+        let salida = "";
+        for (const caracter of typeof texto === "string" ? texto : "") {
+            if (salida.length >= mascara.length) break;
+            const posicion = mascara[salida.length];
+            if (posicion.literal !== undefined) {
+                if (caracter === posicion.literal) { salida += caracter; continue; }
+                // El literal se completa solo si el carácter cabe en la posición siguiente.
+                let j = salida.length;
+                let literales = "";
+                while (j < mascara.length && mascara[j].literal !== undefined) literales += mascara[j++].literal;
+                const valido = j < mascara.length ? ControladorCitas.#caracterValido(mascara[j], caracter) : null;
+                if (valido) salida += literales + valido;
+                continue;
+            }
+            const valido = ControladorCitas.#caracterValido(posicion, caracter);
+            if (valido) salida += valido;
+        }
+        return salida;
+    }
+
+    static #caracterValido(posicion, caracter) {
+        if (ControladorCitas.#aceptaClase(posicion.clase, caracter)) return caracter;
+        const mayuscula = caracter.toUpperCase();
+        return mayuscula !== caracter && ControladorCitas.#aceptaClase(posicion.clase, mayuscula) ? mayuscula : null;
+    }
+
+    /** Error del rango (null si es válido): fechas reales, desde ≤ hasta y diferencia ≤ 366 días. */
+    static validarRango(desde, hasta) {
+        if (!FechasSV.esFechaISO(desde) || !FechasSV.esFechaISO(hasta)) return MENSAJES.fechasInvalidas;
+        const dias = FechasSV.diasEntre(desde, hasta);
+        if (dias < 0) return MENSAJES.rangoInvertido;
+        if (dias > MAX_DIAS_RANGO) return MENSAJES.rangoLargo;
+        return null;
+    }
+
+    static pasoAlcanzable(paso, alcanzado) {
+        return Number.isInteger(paso) && paso >= 1 && paso <= alcanzado && paso <= PASOS.length;
+    }
+
+    /** Por qué no se puede hacer un POST ahora (sin red o bloqueado por el límite); null si se puede. */
+    static motivoNoBuscar({ enLinea, bloqueadoHasta }, ahora) {
+        if (!enLinea) return MENSAJES.sinRedBuscar;
+        if (bloqueadoHasta && bloqueadoHasta > ahora) return MENSAJES.limite(FechasSV.hora(bloqueadoHasta));
+        return null;
+    }
+
+    /** Texto para el usuario a partir de un DefaultError; nunca los detalles internos. */
+    static mensajeDeErrorCitas(error) {
+        const codigo = error?.code;
+        if (codigo && Object.hasOwn(MENSAJES_POR_CODIGO, codigo)) return MENSAJES_POR_CODIGO[codigo];
+        if (codigo === "citas.rango") return typeof error.message === "string" && error.message.trim() ? error.message : MENSAJES.rangoLargo;
+        if (codigo === "validacion.invalida" || codigo === "json.invalido") return MENSAJES.datos;
+        if (codigo === "cita.noExiste") return MENSAJES.ticketNoExiste;
+        if (error?.status === 0 || codigo === CODIGO_SIN_RED) return MENSAJES.conexion;
+        return MENSAJES.generico;
     }
 }

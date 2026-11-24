@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import CitasPublicasService, { segundosDeEspera, nombreDeArchivo } from '../src/js/control/citas_publicas_service.js';
+import CitasPublicasService from '../src/js/control/citas_publicas_service.js';
 import DefaultError from '../src/js/entities/default_error.js';
 
 // Datos inventados; nunca datos reales de pacientes.
@@ -95,9 +95,9 @@ describe('CitasPublicasService: ticket', () => {
     });
 
     test('nombreDeArchivo descarta rutas y caracteres raros', () => {
-        assert.equal(nombreDeArchivo('attachment; filename="../../x.pdf"', UUID(20)), 'x.pdf');
-        assert.equal(nombreDeArchivo('attachment', UUID(20)), 'ticket-cita-30000000.pdf');
-        assert.equal(nombreDeArchivo(undefined, UUID(20)), 'ticket-cita-30000000.pdf');
+        assert.equal(CitasPublicasService.nombreDeArchivo('attachment; filename="../../x.pdf"', UUID(20)), 'x.pdf');
+        assert.equal(CitasPublicasService.nombreDeArchivo('attachment', UUID(20)), 'ticket-cita-30000000.pdf');
+        assert.equal(CitasPublicasService.nombreDeArchivo(undefined, UUID(20)), 'ticket-cita-30000000.pdf');
     });
 });
 
@@ -107,12 +107,12 @@ describe('CitasPublicasService: límite de solicitudes', () => {
         const error = await servicio.clinicas(DOC).catch(e => e);
         assert.equal(error.status, 429);
         assert.equal(error.code, 'publico.demasiadasSolicitudes');
-        assert.equal(segundosDeEspera(error), 120);
+        assert.equal(CitasPublicasService.segundosDeEspera(error), 120);
     });
 
     test('segundosDeEspera usa 300 si falta o no es válido', () => {
-        assert.equal(segundosDeEspera({ headers: {} }), 300);
-        assert.equal(segundosDeEspera({ headers: { 'retry-after': 'mañana' } }), 300);
-        assert.equal(segundosDeEspera(null), 300);
+        assert.equal(CitasPublicasService.segundosDeEspera({ headers: {} }), 300);
+        assert.equal(CitasPublicasService.segundosDeEspera({ headers: { 'retry-after': 'mañana' } }), 300);
+        assert.equal(CitasPublicasService.segundosDeEspera(null), 300);
     });
 });

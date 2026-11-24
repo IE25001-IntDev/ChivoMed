@@ -11,12 +11,12 @@
  * 'asignar-examenes' { indicaciones }.
  * `limpiar()` vacía las indicaciones sin mover el foco; `enfocarError()` y `enfocarResultados()` lo mueven.
  */
-import { hojaDeEstilos } from "../../estilos.js";
-import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../../control/fechas_sv.js";
-import { MAX_TEXTO, nombreDeOrden } from "../../../control/controladores/controlador_consulta.js";
+import { Estilos } from "../../estilos.js";
+import { Plantilla } from "../../plantilla.js";
+import { FechasSV } from "../../../control/fechas_sv.js";
+import { ControladorConsulta, MAX_TEXTO } from "../../../control/controladores/controlador_consulta.js";
 
-const PLANTILLA = plantilla(`
+const PLANTILLA = new Plantilla(`
 <section class="panel" aria-labelledby="titulo">
   <h2 id="titulo">Exámenes</h2>
   <form class="formulario-orden" id="formulario" novalidate aria-label="Asignar exámenes">
@@ -51,8 +51,6 @@ const PLANTILLA = plantilla(`
   <p class="vacio" id="sin-ordenes" hidden>Todavía no hay órdenes en este paso.</p>
 </section>`);
 
-const contador = valor => `${valor.length}/${MAX_TEXTO} caracteres`;
-
 class PanelExamenesPaso extends HTMLElement {
     #modelo = null;
     #pintado = null;
@@ -63,7 +61,7 @@ class PanelExamenesPaso extends HTMLElement {
         event.preventDefault();
         this.#emitir("asignar-examenes", { indicaciones: this.$("indicaciones").value });
     };
-    #alEscribir = () => { this.$("contador-indicaciones").textContent = contador(this.$("indicaciones").value); };
+    #alEscribir = () => { this.$("contador-indicaciones").textContent = PanelExamenesPaso.#contador(this.$("indicaciones").value); };
     #alCambiarCategoria = () => { this.#emitir("cambiar-categoria", { idTipoExamen: this.$("categoria").value }); };
     #alMarcar = event => {
         const casilla = event.currentTarget ?? event.target;
@@ -84,7 +82,7 @@ class PanelExamenesPaso extends HTMLElement {
 
     connectedCallback() {
         const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
+        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
         this.$("formulario").addEventListener("submit", this.#alEnviar);
         this.$("indicaciones").addEventListener("input", this.#alEscribir);
@@ -234,12 +232,12 @@ class PanelExamenesPaso extends HTMLElement {
             const nombre = document.createElement("p");
             const disponible = Boolean(orden.idExamen) && asignables.some(e => e.idExamen === orden.idExamen);
             nombre.className = disponible ? "orden-nombre" : "orden-nombre no-disponible";
-            nombre.textContent = nombreDeOrden(orden, asignables);
+            nombre.textContent = ControladorConsulta.nombreDeOrden(orden, asignables);
             li.append(nombre);
             if (orden.fechaCreacion) {
                 const fecha = document.createElement("p");
                 fecha.className = "meta";
-                fecha.textContent = `Emitida el ${formatearFechaHora(orden.fechaCreacion)}`;
+                fecha.textContent = `Emitida el ${FechasSV.formatearFechaHora(orden.fechaCreacion)}`;
                 li.append(fecha);
             }
             if (orden.indicaciones) {
@@ -250,6 +248,10 @@ class PanelExamenesPaso extends HTMLElement {
             }
             return li;
         }));
+    }
+
+    static #contador(valor) {
+        return `${valor.length}/${MAX_TEXTO} caracteres`;
     }
 }
 

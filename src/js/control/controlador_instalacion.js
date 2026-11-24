@@ -20,14 +20,7 @@
  * y desde ahí no se invita, ni en una pestaña normal; beforeinstallprompt significa que no está
  * instalada y borra la marca. navigator.getInstalledRelatedApps(), si existe, sirve de apoyo.
  */
-import { crearEstado } from "./estado_reactivo.js";
-
-export const MODOS = Object.freeze({
-    NO_DISPONIBLE: "no-disponible",
-    DISPONIBLE: "disponible",
-    INSTALANDO: "instalando",
-    INSTALADA: "instalada",
-});
+import { EstadoReactivo } from "./estado_reactivo.js";
 
 /** Evento que emiten las vistas (en document) para invitar a instalar dentro del clic. */
 export const EVENTO_OFRECER = "ofrecer-instalacion";
@@ -37,6 +30,18 @@ export const EVENTO_INSTALAR = "instalar-al-descargar";
 export const CLAVE_INSTALADA = "chivomed:instalada";
 
 export class ControladorInstalacion {
+    /** Modos del botón "Instalar app" (estado.modo). */
+    static MODOS = Object.freeze({
+        NO_DISPONIBLE: "no-disponible",
+        DISPONIBLE: "disponible",
+        INSTALANDO: "instalando",
+        INSTALADA: "instalada",
+    });
+
+    /** Estado reactivo del controlador (composición): `estado` lo publica y `suscribir` delega en él. */
+    #reactivo;
+    /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
+    suscribir = fn => this.#reactivo.suscribir(fn);
     #ventana;
     #evento = null;
     /** El beforeinstallprompt recibido ya se usó (prompt()) y no llegó otro. */
@@ -54,11 +59,9 @@ export class ControladorInstalacion {
      */
     constructor({ ventana }) {
         this.#ventana = ventana;
-        const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null, invitacion: false, instrucciones: false });
+        this.#reactivo = new EstadoReactivo({ modo: ControladorInstalacion.MODOS.NO_DISPONIBLE, mensaje: null, invitacion: false, instrucciones: false });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
-        this.estado = estado;
-        /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
-        this.suscribir = suscribir;
+        this.estado = this.#reactivo.estado;
     }
 
     /** true si la app ya corre instalada (ventana independiente) o en iOS desde la pantalla de inicio. */
@@ -76,7 +79,7 @@ export class ControladorInstalacion {
         v.addEventListener("appinstalled", this.#alInstalar);
         this.#consulta = v.matchMedia?.("(display-mode: standalone)") ?? null;
         this.#consulta?.addEventListener?.("change", this.#alCambiarModo);
-        if (this.yaInstalada()) this.#actualizar({ modo: MODOS.INSTALADA, mensaje: null });
+        if (this.yaInstalada()) this.#actualizar({ modo: ControladorInstalacion.MODOS.INSTALADA, mensaje: null });
         this.#consultarRelacionadas();
     }
 
@@ -122,7 +125,7 @@ export class ControladorInstalacion {
      */
     invitar() {
         if (this.estado.invitacion || this.yaInstalada() || this.#marcaInstalada() || this.#relacionada
-            || this.estado.modo === MODOS.INSTALADA || this.estado.modo === MODOS.INSTALANDO) return false;
+            || this.estado.modo === ControladorInstalacion.MODOS.INSTALADA || this.estado.modo === ControladorInstalacion.MODOS.INSTALANDO) return false;
         const instrucciones = !this.#evento;
         this.#actualizar({ invitacion: true, instrucciones });
         return true;
@@ -131,7 +134,7 @@ export class ControladorInstalacion {
     /** true si no hay que ofrecer la instalación: ya instalada o instalándose. */
     #instaladaOInstalando() {
         return this.yaInstalada() || this.#marcaInstalada() || this.#relacionada
-            || this.estado.modo === MODOS.INSTALADA || this.estado.modo === MODOS.INSTALANDO;
+            || this.estado.modo === ControladorInstalacion.MODOS.INSTALADA || this.estado.modo === ControladorInstalacion.MODOS.INSTALANDO;
     }
 
     /**
@@ -141,7 +144,7 @@ export class ControladorInstalacion {
      */
     ofrecerAlDescargar() {
         if (this.#instaladaOInstalando() || this.estado.invitacion) return null;
-        if (this.#evento && this.estado.modo === MODOS.DISPONIBLE) return this.instalar();
+        if (this.#evento && this.estado.modo === ControladorInstalacion.MODOS.DISPONIBLE) return this.instalar();
         if (!this.#usado) this.invitar();
         return null;
     }
@@ -161,29 +164,29 @@ export class ControladorInstalacion {
     /** Muestra el diálogo del navegador. Devuelve "accepted", "dismissed" o null si no se pudo. */
     instalar() {
         return new Promise(resolve => {
-            if (!this.#evento || this.estado.modo !== MODOS.DISPONIBLE) {
+            if (!this.#evento || this.estado.modo !== ControladorInstalacion.MODOS.DISPONIBLE) {
                 resolve(null);
                 return;
             }
             const evento = this.#evento;
             this.#evento = null; // El evento solo se puede usar una vez.
             this.#usado = true;
-            this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: null });
+            this.#actualizar({ modo: ControladorInstalacion.MODOS.INSTALANDO, mensaje: null });
             // prompt() se llama en el acto, dentro del gesto del usuario.
             resolve(new Promise(mostrar => mostrar(evento.prompt()))
                 .then(() => evento.userChoice)
                 .then(({ outcome }) => {
                     if (outcome === "accepted") {
                         // appinstalled confirma; mientras tanto se informa que se está instalando.
-                        if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: "Instalando ChivoMed…" });
+                        if (this.estado.modo !== ControladorInstalacion.MODOS.INSTALADA) this.#actualizar({ modo: ControladorInstalacion.MODOS.INSTALANDO, mensaje: "Instalando ChivoMed…" });
                     } else {
-                        if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: null });
+                        if (this.estado.modo !== ControladorInstalacion.MODOS.INSTALADA) this.#actualizar({ modo: ControladorInstalacion.MODOS.NO_DISPONIBLE, mensaje: null });
                     }
                     return outcome;
                 })
                 .catch(() => {
-                    if (this.estado.modo !== MODOS.INSTALADA) {
-                        this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: "No se pudo abrir la instalación. Usa el menú del navegador." });
+                    if (this.estado.modo !== ControladorInstalacion.MODOS.INSTALADA) {
+                        this.#actualizar({ modo: ControladorInstalacion.MODOS.NO_DISPONIBLE, mensaje: "No se pudo abrir la instalación. Usa el menú del navegador." });
                     }
                     return null;
                 }));
@@ -196,15 +199,15 @@ export class ControladorInstalacion {
         this.#relacionada = false;
         this.#usado = false;
         this.#guardarMarca(false);
-        if (this.estado.modo === MODOS.INSTALADA || this.yaInstalada()) return;
+        if (this.estado.modo === ControladorInstalacion.MODOS.INSTALADA || this.yaInstalada()) return;
         this.#evento = evento;
-        this.#actualizar({ modo: MODOS.DISPONIBLE, mensaje: null });
+        this.#actualizar({ modo: ControladorInstalacion.MODOS.DISPONIBLE, mensaje: null });
     }
 
     #instalada() {
         this.#evento = null;
         this.#guardarMarca(true);
-        this.#actualizar({ modo: MODOS.INSTALADA, mensaje: "ChivoMed quedó instalada en este dispositivo.", invitacion: false });
+        this.#actualizar({ modo: ControladorInstalacion.MODOS.INSTALADA, mensaje: "ChivoMed quedó instalada en este dispositivo.", invitacion: false });
     }
 
     #actualizar(cambios) {
