@@ -406,45 +406,52 @@ export class ControladorConsultas {
         return this.buscar();
     }
 
-    async buscar() {
-        const { desde, hasta } = this.estado;
-        const errorRango = validarRango(desde, hasta);
-        this.estado.errorRango = errorRango;
-        if (errorRango) return;
-        const consultado = congelar({ desde, hasta });
-        const clave = this.#claveConsultas(desde, hasta);
-        const guardado = this.#guardadoPara(desde, hasta);
-        if (!this.#conexion.enLinea) {
-            this.#secuencia++;
-            if (guardado) this.#mostrar(guardado, consultado, { desdeMemoria: true });
-            else Object.assign(this.estado, { consultas: NINGUNA, consultado: null, valores: VACIO, cargando: false, error: MENSAJES.sinRed, desdeMemoria: false });
-            return;
-        }
-        const id = ++this.#secuencia;
-        if (guardado) this.#mostrar(guardado, consultado, { desdeMemoria: false });
-        Object.assign(this.estado, { cargando: true, error: null });
-        try {
-            const { data } = await this.#servicio.dashboard({ desde, hasta });
-            if (id !== this.#secuencia) return;
-            const consultas = normalizarConsultas(data);
-            const en = this.#reloj();
-            this.#memoria.guardar(clave, congelar({ consultas, en }));
-            this.#memoria.guardar(this.#claveUltimo(), congelar({ desde, hasta, consultas, en }));
-            // Al ingresar y al cambiar de rol se cargan las de hoy: las que me tocan quedan guardadas
-            // (mismo JSON que GET /atencion/consultas/{id}, sin pedir cada una) para verlas sin red.
-            const hoy = hoySV(this.#reloj);
-            if (desde === hoy && hasta === hoy) {
-                this.#memoria.guardar(this.#clavePendientes(), congelar({ consultas: congelar(consultas.filter(c => c.pendienteParaMi)), en }));
-            }
-            this.#mostrar({ consultas, en }, consultado, { desdeMemoria: false });
-        } catch (error) {
-            if (id !== this.#secuencia) return;
-            if (error?.status === 0 && guardado) {
-                this.#mostrar(guardado, consultado, { desdeMemoria: true });
+    buscar() {
+        return new Promise(resolve => {
+            const { desde, hasta } = this.estado;
+            const errorRango = validarRango(desde, hasta);
+            this.estado.errorRango = errorRango;
+            if (errorRango) { resolve(); return; }
+            const consultado = congelar({ desde, hasta });
+            const clave = this.#claveConsultas(desde, hasta);
+            const guardado = this.#guardadoPara(desde, hasta);
+            if (!this.#conexion.enLinea) {
+                this.#secuencia++;
+                if (guardado) this.#mostrar(guardado, consultado, { desdeMemoria: true });
+                else Object.assign(this.estado, { consultas: NINGUNA, consultado: null, valores: VACIO, cargando: false, error: MENSAJES.sinRed, desdeMemoria: false });
+                resolve();
                 return;
             }
-            Object.assign(this.estado, { cargando: false, error: mensajeDeError(error), consultas: NINGUNA, consultado: null, valores: VACIO, desdeMemoria: false });
+            const id = ++this.#secuencia;
+            if (guardado) this.#mostrar(guardado, consultado, { desdeMemoria: false });
+            Object.assign(this.estado, { cargando: true, error: null });
+            resolve(new Promise(pedir => pedir(this.#servicio.dashboard({ desde, hasta })))
+                .then(({ data }) => this.#recibirConsultas(data, { id, desde, hasta, clave, consultado }))
+                .catch(error => {
+                    if (id !== this.#secuencia) return;
+                    if (error?.status === 0 && guardado) {
+                        this.#mostrar(guardado, consultado, { desdeMemoria: true });
+                        return;
+                    }
+                    Object.assign(this.estado, { cargando: false, error: mensajeDeError(error), consultas: NINGUNA, consultado: null, valores: VACIO, desdeMemoria: false });
+                }));
+        });
+    }
+
+    /** Respuesta de GET /atencion/dashboard: la guarda en memoria y la muestra, si sigue vigente. */
+    #recibirConsultas(data, { id, desde, hasta, clave, consultado }) {
+        if (id !== this.#secuencia) return;
+        const consultas = normalizarConsultas(data);
+        const en = this.#reloj();
+        this.#memoria.guardar(clave, congelar({ consultas, en }));
+        this.#memoria.guardar(this.#claveUltimo(), congelar({ desde, hasta, consultas, en }));
+        // Al ingresar y al cambiar de rol se cargan las de hoy: las que me tocan quedan guardadas
+        // (mismo JSON que GET /atencion/consultas/{id}, sin pedir cada una) para verlas sin red.
+        const hoy = hoySV(this.#reloj);
+        if (desde === hoy && hasta === hoy) {
+            this.#memoria.guardar(this.#clavePendientes(), congelar({ consultas: congelar(consultas.filter(c => c.pendienteParaMi)), en }));
         }
+        this.#mostrar({ consultas, en }, consultado, { desdeMemoria: false });
     }
 
     #paso(idPaso) {
@@ -478,29 +485,34 @@ export class ControladorConsultas {
     }
 
     /** Pide el registro de un paso (también sirve para reintentar tras un error). */
-    async cargarRegistro(idPaso) {
-        if (!this.#paso(idPaso)?.tieneValor || this.estado.valores[idPaso]?.cargando) return;
-        const guardado = this.#memoria.leer(this.#claveValor(idPaso));
-        if (guardado) {
-            this.#valor(idPaso, { ...guardado, abierto: true, cargando: false, cargado: true, error: null });
-            return;
-        }
-        if (!this.#conexion.enLinea) {
-            this.#valor(idPaso, { abierto: true, cargando: false, error: MENSAJES.sinRedRegistro });
-            return;
-        }
-        const sesion = this.estado.sesion;
-        this.#valor(idPaso, { abierto: true, cargando: true, error: null });
-        try {
-            const { data } = await this.#servicio.valorPaso(idPaso);
-            if (this.estado.sesion !== sesion || !this.#paso(idPaso)) return;
-            const registro = congelar({ valor: typeof data?.valor === "string" ? data.valor : null, fechaFin: textoONull(data?.fechaFin) });
-            this.#memoria.guardar(this.#claveValor(idPaso), registro);
-            this.#valor(idPaso, { ...registro, cargando: false, cargado: true, error: null });
-        } catch (error) {
-            if (this.estado.sesion !== sesion || !this.#paso(idPaso)) return;
-            this.#valor(idPaso, { cargando: false, error: mensajeDeError(error, { registro: true }) });
-        }
+    cargarRegistro(idPaso) {
+        return new Promise(resolve => {
+            if (!this.#paso(idPaso)?.tieneValor || this.estado.valores[idPaso]?.cargando) { resolve(); return; }
+            const guardado = this.#memoria.leer(this.#claveValor(idPaso));
+            if (guardado) {
+                this.#valor(idPaso, { ...guardado, abierto: true, cargando: false, cargado: true, error: null });
+                resolve();
+                return;
+            }
+            if (!this.#conexion.enLinea) {
+                this.#valor(idPaso, { abierto: true, cargando: false, error: MENSAJES.sinRedRegistro });
+                resolve();
+                return;
+            }
+            const sesion = this.estado.sesion;
+            this.#valor(idPaso, { abierto: true, cargando: true, error: null });
+            resolve(new Promise(pedir => pedir(this.#servicio.valorPaso(idPaso)))
+                .then(({ data }) => {
+                    if (this.estado.sesion !== sesion || !this.#paso(idPaso)) return;
+                    const registro = congelar({ valor: typeof data?.valor === "string" ? data.valor : null, fechaFin: textoONull(data?.fechaFin) });
+                    this.#memoria.guardar(this.#claveValor(idPaso), registro);
+                    this.#valor(idPaso, { ...registro, cargando: false, cargado: true, error: null });
+                })
+                .catch(error => {
+                    if (this.estado.sesion !== sesion || !this.#paso(idPaso)) return;
+                    this.#valor(idPaso, { cargando: false, error: mensajeDeError(error, { registro: true }) });
+                }));
+        });
     }
 
     /** Lo que decide motivoNoAtender, tomado del estado: red y solo lectura. */

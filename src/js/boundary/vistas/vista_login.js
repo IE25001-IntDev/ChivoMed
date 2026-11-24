@@ -171,26 +171,29 @@ class VistaLogin extends HTMLElement {
         indicaciones.textContent = tipo?.indicaciones ?? "";
     }
 
-    async #enviar(event) {
-        event.preventDefault();
-        // Sin red o sin servidor no se envía, aunque el submit llegue sin pasar por el botón deshabilitado.
-        if (!conexion.enLinea) return;
-        const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
-        // Invitación a instalar (<install-prompt> abre su ventana); el login no la espera.
-        const invalido = this.#controlador.validar(datos);
-        if (!invalido.tipo && !invalido.numero && !this.#controlador.estado.enviando) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
-        const sesion = await this.#controlador.enviar(datos);
-        if (!this.isConnected) return;
-        if (sesion) {
-            this.dispatchEvent(new CustomEvent("navegar", {
-                bubbles: true, composed: true, detail: { ruta: destinoTrasLogin(this.contexto?.query, sesion) },
+    #enviar(event) {
+        return new Promise(resolve => {
+            event.preventDefault();
+            // Sin red o sin servidor no se envía, aunque el submit llegue sin pasar por el botón deshabilitado.
+            if (!conexion.enLinea) { resolve(); return; }
+            const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
+            // Invitación a instalar (<install-prompt> abre su ventana); el login no la espera.
+            const invalido = this.#controlador.validar(datos);
+            if (!invalido.tipo && !invalido.numero && !this.#controlador.estado.enviando) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
+            resolve(this.#controlador.enviar(datos).then(sesion => {
+                if (!this.isConnected) return;
+                if (sesion) {
+                    this.dispatchEvent(new CustomEvent("navegar", {
+                        bubbles: true, composed: true, detail: { ruta: destinoTrasLogin(this.contexto?.query, sesion) },
+                    }));
+                    return;
+                }
+                const { errores, mensaje } = this.#controlador.estado;
+                if (errores.tipo) this.$("tipo").focus();
+                else if (errores.numero) this.$("numero").focus();
+                else if (mensaje) this.$("numero").focus();
             }));
-            return;
-        }
-        const { errores, mensaje } = this.#controlador.estado;
-        if (errores.tipo) this.$("tipo").focus();
-        else if (errores.numero) this.$("numero").focus();
-        else if (mensaje) this.$("numero").focus();
+        });
     }
 }
 

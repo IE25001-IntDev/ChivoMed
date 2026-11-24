@@ -22,15 +22,16 @@ export function nombreDeRol(rolActivo) {
 let sesionActual;
 let sesionVista;
 export function fijarSesionVista(sesion) { sesionVista = sesion; }
-export async function verificarSesionActual() {
+export function verificarSesionActual() {
     const anterior = sesionVista ?? sesionActual;
-    const actual = await obtenerSesion();
-    if (anterior && (actual.usuario.idUsuario !== anterior.usuario.idUsuario
-        || actual.rolActivo?.idPersonaRol !== anterior.rolActivo?.idPersonaRol
-        || actual.rolActivo?.idClinica !== anterior.rolActivo?.idClinica)) {
-        throw new AuthError("La sesión cambió. Recarga la página antes de guardar.", 409);
-    }
-    return actual;
+    return new Promise(resolve => resolve(obtenerSesion())).then(actual => {
+        if (anterior && (actual.usuario.idUsuario !== anterior.usuario.idUsuario
+            || actual.rolActivo?.idPersonaRol !== anterior.rolActivo?.idPersonaRol
+            || actual.rolActivo?.idClinica !== anterior.rolActivo?.idClinica)) {
+            throw new AuthError("La sesión cambió. Recarga la página antes de guardar.", 409);
+        }
+        return actual;
+    });
 }
 
 export class AuthError extends Error {
@@ -75,16 +76,13 @@ export function avisarServidor(respuesta) {
  * GET liviano para saber si el backend volvió: el catálogo público con `?verificar=1`, que el
  * service worker nunca sirve desde su copia (solo guarda el catálogo sin query). true si respondió.
  */
-export async function verificarServidor() {
-    try {
-        const respuesta = await fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/publico/tipos-documento?verificar=1`, {
-            headers: { Accept: "application/json" }, credentials: API_CONFIG.credentials,
-            cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
-        });
-        return !STATUS_SIN_SERVIDOR.includes(respuesta.status) && !respuesta.headers.get(CABECERA_COPIA);
-    } catch {
-        return false;
-    }
+export function verificarServidor() {
+    return new Promise(resolve => resolve(fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/publico/tipos-documento?verificar=1`, {
+        headers: { Accept: "application/json" }, credentials: API_CONFIG.credentials,
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
+    })))
+        .then(respuesta => !STATUS_SIN_SERVIDOR.includes(respuesta.status) && !respuesta.headers.get(CABECERA_COPIA))
+        .catch(() => false);
 }
 
 const MENSAJES = Object.freeze({
@@ -115,14 +113,14 @@ export const MENSAJES_POR_CODIGO = Object.freeze({
 });
 
 /** `code` del cuerpo JSON de error, o null si no hay uno legible. No expone el resto del cuerpo. */
-async function codigoDeError(respuesta) {
-    try {
-        if (!respuesta.headers.get("Content-Type")?.includes("application/json")) return null;
-        const { code } = await respuesta.json();
-        return typeof code === "string" && code ? code : null;
-    } catch {
-        return null;
-    }
+function codigoDeError(respuesta) {
+    return new Promise(resolve => {
+        if (!respuesta.headers.get("Content-Type")?.includes("application/json")) {
+            resolve(null);
+            return;
+        }
+        resolve(respuesta.json().then(({ code }) => (typeof code === "string" && code ? code : null)));
+    }).catch(() => null);
 }
 
 /**
@@ -131,62 +129,71 @@ async function codigoDeError(respuesta) {
  *   `tipo`, que puede ser "login", "sesion" o "publico" y elige los mensajes; solo las rutas de
  *   sesión avisan "sesion-expirada" ante un 401.
  */
-async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesion" } = {}) {
-    const headers = { Accept: "application/json" };
-    if (datos !== undefined) headers["Content-Type"] = "application/json";
-    if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
-    let respuesta;
-    try {
-        respuesta = await fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/${ruta}`, {
+function solicitar(ruta, opciones = {}) {
+    return new Promise(resolve => {
+        const { method = "GET", datos, csrfToken, tipo = "sesion" } = opciones;
+        const headers = { Accept: "application/json" };
+        if (datos !== undefined) headers["Content-Type"] = "application/json";
+        if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+        // Dos argumentos: el try original solo envolvía el fetch; lo de #responder se propaga tal cual.
+        resolve(new Promise(enviar => enviar(fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/${ruta}`, {
             method, headers,
             body: datos === undefined ? undefined : JSON.stringify(datos),
             credentials: API_CONFIG.credentials,
             cache: "no-store",
             redirect: "error",
             signal: AbortSignal.timeout(10000),
-        });
-    } catch (error) {
-        avisarServidor(null);
-        throw new AuthError(error.name === "TimeoutError" || error.name === "AbortError"
-            ? "La solicitud tardó demasiado. Inténtalo de nuevo."
-            : "No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
-    }
+        }))).then(respuesta => responder(respuesta, tipo), error => {
+            avisarServidor(null);
+            throw new AuthError(error.name === "TimeoutError" || error.name === "AbortError"
+                ? "La solicitud tardó demasiado. Inténtalo de nuevo."
+                : "No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
+        }));
+    });
+}
+
+/** Respuesta del fetch de `solicitar`: la devuelve si es ok; si no, rechaza con el AuthError que corresponde. */
+function responder(respuesta, tipo) {
     avisarServidor(respuesta);
     // 502, 503 y 504: sin conexión con el servidor, igual que un fallo de red (como en DefaultService).
     if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
         throw new AuthError("No pudimos conectar con el servicio. Inténtalo de nuevo.", 0, CODIGO_SIN_RED);
     }
-    if (!respuesta.ok) {
-        if (respuesta.status === 401 && tipo === "sesion" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));
-        const mensajes = {
-            ...MENSAJES[tipo],
-            404: "El servicio de acceso todavía no está disponible.",
-            429: "Hay demasiados intentos. Espera un momento antes de volver a intentarlo.",
-        };
-        const general = tipo === "publico" ? MENSAJES.publico[400] : "El servicio no está disponible. Inténtalo más tarde.";
-        const codigo = await codigoDeError(respuesta);
+    if (respuesta.ok) return respuesta;
+    if (respuesta.status === 401 && tipo === "sesion" && typeof document !== "undefined") document.dispatchEvent(new Event("sesion-expirada"));
+    const mensajes = {
+        ...MENSAJES[tipo],
+        404: "El servicio de acceso todavía no está disponible.",
+        429: "Hay demasiados intentos. Espera un momento antes de volver a intentarlo.",
+    };
+    const general = tipo === "publico" ? MENSAJES.publico[400] : "El servicio no está disponible. Inténtalo más tarde.";
+    return codigoDeError(respuesta).then(codigo => {
         const porCodigo = codigo && Object.hasOwn(MENSAJES_POR_CODIGO, codigo) ? MENSAJES_POR_CODIGO[codigo] : null;
         throw new AuthError(porCodigo ?? mensajes[respuesta.status] ?? general, respuesta.status, codigo);
-    }
-    return respuesta;
+    });
 }
 
-async function leerJson(respuesta, mensaje) {
-    try {
+function leerJson(respuesta, mensaje) {
+    return new Promise(resolve => {
         if (!respuesta.headers.get("Content-Type")?.includes("application/json")) throw new Error();
-        return await respuesta.json();
-    } catch {
+        resolve(respuesta.json());
+    }).catch(() => {
         throw new AuthError(mensaje);
-    }
+    });
 }
 
 /**
  * Tipos de documento activos para el login, sin sesión (GET /publico/tipos-documento).
  * Devuelve objetos con los campos de TipoDocumentoDto, ordenados por nombre.
  */
-export async function listarTiposDocumento() {
+export function listarTiposDocumento() {
     const mensaje = "No pudimos cargar los tipos de documento.";
-    const datos = await leerJson(await solicitar("publico/tipos-documento", { tipo: "publico" }), mensaje);
+    return new Promise(resolve => resolve(solicitar("publico/tipos-documento", { tipo: "publico" })))
+        .then(respuesta => leerJson(respuesta, mensaje))
+        .then(datos => normalizarTipos(datos, mensaje));
+}
+
+function normalizarTipos(datos, mensaje) {
     if (!Array.isArray(datos)) throw new AuthError(mensaje);
     const opcional = valor => (typeof valor === "string" && valor.trim() ? valor : null);
     return datos
@@ -206,8 +213,14 @@ export async function listarTiposDocumento() {
 //   rolActivo: { idPersonaRol, codigo, nombreRol, idClinica, nombreClinica } | null, csrfToken }
 // `idUsuario` se conserva como alias de `idPersona`; el backend ya no tiene tabla usuario.
 // `codigo` y `rolActivo` pueden ser null; los permisos de páginas dependen del rol.
-export async function obtenerSesion() {
-    const sesion = await leerJson(await solicitar("auth/me"), "No pudimos verificar tu sesión. Inténtalo de nuevo.");
+export function obtenerSesion() {
+    return new Promise(resolve => resolve(solicitar("auth/me")))
+        .then(respuesta => leerJson(respuesta, "No pudimos verificar tu sesión. Inténtalo de nuevo."))
+        .then(validarSesion);
+}
+
+/** Valida la respuesta de /auth/me y la guarda como sesión actual; si no es válida, lanza AuthError. */
+function validarSesion(sesion) {
     const identificador = valor => typeof valor === "string" && Validaciones.UUID.test(valor);
     const { usuario, rolActivo, csrfToken } = sesion ?? {};
     const rolInvalido = rolActivo !== null && (rolActivo === undefined || !identificador(rolActivo?.idPersonaRol)
@@ -229,20 +242,25 @@ export async function obtenerSesion() {
  * Login de persona por documento, sin contraseña:
  * POST /auth/login con { idTipoDocumento, numeroDocumento } → 204 y cookie de sesión; luego GET /auth/me.
  */
-export async function iniciarSesion(idTipoDocumento, numeroDocumento) {
-    const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
-    if (typeof idTipoDocumento !== "string" || !Validaciones.UUID.test(idTipoDocumento)
-        || !numero || numero.length > Validaciones.MAX_NUMERO_DOCUMENTO || /[\r\n]/.test(numero)) {
-        throw new AuthError(MENSAJES.login[400], 400);
-    }
-    await solicitar("auth/login", { method: "POST", tipo: "login", datos: { idTipoDocumento, numeroDocumento: numero } });
-    return obtenerSesion();
+export function iniciarSesion(idTipoDocumento, numeroDocumento) {
+    // La validación lanza un 400 síncrono: dentro del ejecutor sigue siendo un rechazo.
+    return new Promise(resolve => {
+        const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
+        if (typeof idTipoDocumento !== "string" || !Validaciones.UUID.test(idTipoDocumento)
+            || !numero || numero.length > Validaciones.MAX_NUMERO_DOCUMENTO || /[\r\n]/.test(numero)) {
+            throw new AuthError(MENSAJES.login[400], 400);
+        }
+        resolve(solicitar("auth/login", { method: "POST", tipo: "login", datos: { idTipoDocumento, numeroDocumento: numero } }));
+    }).then(() => obtenerSesion());
 }
 
-export async function cerrarSesion(csrfToken) {
-    if (typeof csrfToken !== "string" || !csrfToken.trim() || /[\r\n]/.test(csrfToken)) {
-        throw new AuthError("No pudimos verificar tu sesión. Recarga la página.");
-    }
-    await solicitar("auth/logout", { method: "POST", csrfToken });
-    sesionActual = null;
+export function cerrarSesion(csrfToken) {
+    return new Promise(resolve => {
+        if (typeof csrfToken !== "string" || !csrfToken.trim() || /[\r\n]/.test(csrfToken)) {
+            throw new AuthError("No pudimos verificar tu sesión. Recarga la página.");
+        }
+        resolve(solicitar("auth/logout", { method: "POST", csrfToken }));
+    }).then(() => {
+        sesionActual = null;
+    });
 }

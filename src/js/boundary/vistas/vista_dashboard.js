@@ -231,28 +231,32 @@ class VistaDashboard extends HTMLElement {
     }
 
     /** F8: "Salir de la consulta". El foco va a la confirmación o al motivo del fallo. */
-    async #salir() {
-        const salio = await this.#controlador.salirDeConsulta();
-        if (!this.isConnected) return;
-        const { aviso, error } = this.#controlador.estado;
-        if (salio) this.$("confirmacion").focus();
-        else if (aviso) this.$("aviso").focus();
-        else if (error) this.$("error").focus();
+    #salir() {
+        return new Promise(resolve => resolve(this.#controlador.salirDeConsulta())).then(salio => {
+            if (!this.isConnected) return;
+            const { aviso, error } = this.#controlador.estado;
+            if (salio) this.$("confirmacion").focus();
+            else if (aviso) this.$("aviso").focus();
+            else if (error) this.$("error").focus();
+        });
     }
 
-    async #enviar(event) {
-        event.preventDefault();
-        const seleccion = this.#seleccion();
-        if (!seleccion) return;
-        const cambio = await this.#controlador.cambiar(seleccion);
-        if (!this.isConnected || cambio) return;
-        // Rechazado: la selección vuelve al rol vigente y el foco va al motivo.
-        const activa = this.#controlador.estado.activa?.idPersonaRol;
-        for (const radio of this.shadowRoot.querySelectorAll('input[name="asignacion"]')) radio.checked = radio.value === activa;
-        this.#pintarBoton(this.#controlador.estado);
-        const { aviso, error } = this.#controlador.estado;
-        if (aviso) this.$("aviso").focus();
-        else if (error) this.$("error").focus();
+    #enviar(event) {
+        return new Promise(resolve => {
+            event.preventDefault();
+            const seleccion = this.#seleccion();
+            if (!seleccion) { resolve(); return; }
+            resolve(this.#controlador.cambiar(seleccion).then(cambio => {
+                if (!this.isConnected || cambio) return;
+                // Rechazado: la selección vuelve al rol vigente y el foco va al motivo.
+                const activa = this.#controlador.estado.activa?.idPersonaRol;
+                for (const radio of this.shadowRoot.querySelectorAll('input[name="asignacion"]')) radio.checked = radio.value === activa;
+                this.#pintarBoton(this.#controlador.estado);
+                const { aviso, error } = this.#controlador.estado;
+                if (aviso) this.$("aviso").focus();
+                else if (error) this.$("error").focus();
+            }));
+        });
     }
 }
 

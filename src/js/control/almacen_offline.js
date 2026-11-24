@@ -33,50 +33,41 @@ export function crearAlmacenOffline(fabrica = globalThis.indexedDB) {
     };
 
     /** Ejecuta `accion(almacen)` en una transacción y resuelve cuando termina. */
-    const operar = async (modo, accion) => {
-        const base = await abrir();
-        return new Promise((resolve, reject) => {
+    const operar = (modo, accion) => new Promise(resolve => resolve(abrir()))
+        .then(base => new Promise((resolve, reject) => {
             const transaccion = base.transaction(ALMACEN, modo);
             const resultado = accion(transaccion.objectStore(ALMACEN));
             transaccion.oncomplete = () => resolve(resultado);
             transaccion.onerror = () => reject(transaccion.error ?? new Error("Transacción fallida"));
             transaccion.onabort = () => reject(transaccion.error ?? new Error("Transacción abortada"));
-        });
-    };
+        }));
 
     return Object.freeze({
         /** { [clave]: valor } con las claves pedidas que existen; {} si falla. */
-        async leer(claves) {
-            try {
-                const solicitudes = await operar("readonly", almacen => claves.map(clave => [clave, almacen.get(clave)]));
-                const registros = {};
-                for (const [clave, solicitud] of solicitudes) {
-                    if (solicitud.result !== undefined) registros[clave] = solicitud.result;
-                }
-                return registros;
-            } catch {
-                return {};
-            }
+        leer(claves) {
+            return new Promise(resolve => resolve(operar("readonly", almacen => claves.map(clave => [clave, almacen.get(clave)]))))
+                .then(solicitudes => {
+                    const registros = {};
+                    for (const [clave, solicitud] of solicitudes) {
+                        if (solicitud.result !== undefined) registros[clave] = solicitud.result;
+                    }
+                    return registros;
+                })
+                .catch(() => ({}));
         },
 
         /** Guarda (o borra, con `valor` null) un registro. Resuelve true si se escribió. */
-        async guardar(clave, valor) {
-            try {
-                await operar("readwrite", almacen => (valor == null ? almacen.delete(clave) : almacen.put(valor, clave)));
-                return true;
-            } catch {
-                return false;
-            }
+        guardar(clave, valor) {
+            return new Promise(resolve => resolve(operar("readwrite", almacen => (valor == null ? almacen.delete(clave) : almacen.put(valor, clave)))))
+                .then(() => true)
+                .catch(() => false);
         },
 
         /** Borra todos los registros. Resuelve true si se borró. */
-        async borrar() {
-            try {
-                await operar("readwrite", almacen => almacen.clear());
-                return true;
-            } catch {
-                return false;
-            }
+        borrar() {
+            return new Promise(resolve => resolve(operar("readwrite", almacen => almacen.clear())))
+                .then(() => true)
+                .catch(() => false);
         },
     });
 }

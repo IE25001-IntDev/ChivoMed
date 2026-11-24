@@ -198,109 +198,128 @@ export class ControladorDashboard {
         if (enLinea && (this.estado.desdeMemoria || this.estado.error)) this.cargar();
     }
 
-    async cargar() {
-        const tieneDatos = this.#hayDatos;
-        if (!this.#conexion.enLinea) {
-            this.#actualizar(tieneDatos
-                ? { cargando: false, desdeMemoria: true, error: null }
-                : { cargando: false, error: MENSAJES.sinRed });
-            return;
-        }
-        const id = ++this.#secuencia;
-        this.#actualizar({ cargando: true, error: null });
-        // GET /atencion sale a la vez que las asignaciones; si falla, solo se pierde el aviso.
-        const contexto = this.#leerEnCurso().then(enCurso => {
-            if (id === this.#secuencia) this.#actualizar({ enCurso });
-        });
-        try {
-            const { data } = await this.#servicio.asignaciones();
-            await contexto;
-            if (id !== this.#secuencia) return;
-            this.#asignaciones = normalizarAsignaciones(data);
-            this.#hayDatos = true;
-            const en = this.#reloj();
-            this.#memoria.guardar(this.#clave(), Object.freeze({ asignaciones: this.#asignaciones, en }));
-            this.#actualizar({ ...this.#derivados(), cargando: false, vacio: !this.#asignaciones.length,
-                desdeMemoria: false, actualizadoEn: en, error: null });
-        } catch (error) {
-            await contexto;
-            if (id !== this.#secuencia) return;
-            if (error?.status === 0 && tieneDatos) {
-                this.#actualizar({ cargando: false, desdeMemoria: true, error: null });
+    cargar() {
+        return new Promise(resolve => {
+            const tieneDatos = this.#hayDatos;
+            if (!this.#conexion.enLinea) {
+                this.#actualizar(tieneDatos
+                    ? { cargando: false, desdeMemoria: true, error: null }
+                    : { cargando: false, error: MENSAJES.sinRed });
+                resolve();
                 return;
             }
-            this.#actualizar({ cargando: false, error: mensajeDeError(error) });
-        }
+            const id = ++this.#secuencia;
+            this.#actualizar({ cargando: true, error: null });
+            // GET /atencion sale a la vez que las asignaciones; si falla, solo se pierde el aviso.
+            const contexto = this.#leerEnCurso().then(enCurso => {
+                if (id === this.#secuencia) this.#actualizar({ enCurso });
+            });
+            resolve(new Promise(pedir => pedir(this.#servicio.asignaciones()))
+                .then(({ data }) => contexto.then(() => {
+                    if (id !== this.#secuencia) return;
+                    this.#asignaciones = normalizarAsignaciones(data);
+                    this.#hayDatos = true;
+                    const en = this.#reloj();
+                    this.#memoria.guardar(this.#clave(), Object.freeze({ asignaciones: this.#asignaciones, en }));
+                    this.#actualizar({ ...this.#derivados(), cargando: false, vacio: !this.#asignaciones.length,
+                        desdeMemoria: false, actualizadoEn: en, error: null });
+                }))
+                // .catch después del .then: también atrapa los errores de normalizar y guardar, como el try.
+                .catch(error => contexto.then(() => {
+                    if (id !== this.#secuencia) return;
+                    if (error?.status === 0 && tieneDatos) {
+                        this.#actualizar({ cargando: false, desdeMemoria: true, error: null });
+                        return;
+                    }
+                    this.#actualizar({ cargando: false, error: mensajeDeError(error) });
+                })));
+        });
     }
 
     /** Cambia el rol activo. Devuelve true solo si el backend lo aceptó y la sesión se refrescó. */
-    async cambiar(idPersonaRol) {
-        if (this.estado.cambiando) return false;
-        const destino = this.#asignaciones.find(a => a.idPersonaRol === idPersonaRol);
-        if (!destino || destino.idPersonaRol === this.estado.activa?.idPersonaRol) return false;
-        if (this.estado.soloLectura || !this.#conexion.enLinea) {
-            // Sin red, sin servidor o en solo lectura: el mismo motivo.
-            this.#actualizar({ aviso: MENSAJES.soloLectura });
-            return false;
-        }
-        this.#actualizar({ cambiando: idPersonaRol, error: null, aviso: null });
-        try {
-            await this.#servicio.cambiarRol(idPersonaRol);
-        } catch (error) {
-            // Consulta en curso: no es un fallo, es el motivo por el que no se puede cambiar. Se
-            // ofrecen "Ir a la consulta en curso" y "Salir de la consulta"; si aún no se conoce su
-            // id, se pide GET /atencion una sola vez.
-            if (error?.code === CODIGO_CERRAR_ANTES) {
-                const enCurso = this.estado.enCurso ?? await this.#leerEnCurso();
-                this.#actualizar({ cambiando: null, aviso: mensajeDeError(error), confirmacion: null, enCurso });
-            } else {
-                this.#actualizar({ cambiando: null, error: mensajeDeError(error, { cambio: true }) });
+    cambiar(idPersonaRol) {
+        return new Promise(resolve => {
+            if (this.estado.cambiando) { resolve(false); return; }
+            const destino = this.#asignaciones.find(a => a.idPersonaRol === idPersonaRol);
+            if (!destino || destino.idPersonaRol === this.estado.activa?.idPersonaRol) { resolve(false); return; }
+            if (this.estado.soloLectura || !this.#conexion.enLinea) {
+                // Sin red, sin servidor o en solo lectura: el mismo motivo.
+                this.#actualizar({ aviso: MENSAJES.soloLectura });
+                resolve(false);
+                return;
             }
+            this.#actualizar({ cambiando: idPersonaRol, error: null, aviso: null });
+            // Dos argumentos: el primer try solo envolvía cambiarRol.
+            resolve(new Promise(cambiar => cambiar(this.#servicio.cambiarRol(idPersonaRol)))
+                .then(() => this.#refrescarSesion(), error => this.#rechazoDeCambio(error)));
+        });
+    }
+
+    /**
+     * Consulta en curso: no es un fallo, es el motivo por el que no se puede cambiar. Se ofrecen
+     * "Ir a la consulta en curso" y "Salir de la consulta"; si aún no se conoce su id, se pide
+     * GET /atencion una sola vez. Resuelve false.
+     */
+    #rechazoDeCambio(error) {
+        if (error?.code !== CODIGO_CERRAR_ANTES) {
+            this.#actualizar({ cambiando: null, error: mensajeDeError(error, { cambio: true }) });
             return false;
         }
-        let sesion;
-        try {
-            sesion = await this.#obtenerSesion();
-        } catch {
+        const publicar = enCurso => {
+            this.#actualizar({ cambiando: null, aviso: mensajeDeError(error), confirmacion: null, enCurso });
+            return false;
+        };
+        // `??` no esperaba si ya había valor: se ramifica para no agregar una microtarea.
+        const conocido = this.estado.enCurso;
+        if (conocido !== null && conocido !== undefined) return publicar(conocido);
+        return this.#leerEnCurso().then(publicar);
+    }
+
+    /** Tras cambiar el rol, relee la sesión. Resuelve true si se refrescó. */
+    #refrescarSesion() {
+        // Dos argumentos: el segundo try solo envolvía obtenerSesion.
+        return new Promise(resolve => resolve(this.#obtenerSesion())).then(sesion => {
+            this.#actualizar({ sesion });
+            // Con el rol ya cambiado, la confirmación de salida y el motivo del 409 dejan de aplicar.
+            this.#actualizar({ ...this.#derivados(), cambiando: null, sesionCambiada: sesion, confirmacion: null, aviso: null });
+            return true;
+        }, () => {
             this.#actualizar({ cambiando: null, error: MENSAJES.sesionNoActualizada });
             return false;
-        }
-        this.#actualizar({ sesion });
-        // Con el rol ya cambiado, la confirmación de salida y el motivo del 409 dejan de aplicar.
-        this.#actualizar({ ...this.#derivados(), cambiando: null, sesionCambiada: sesion, confirmacion: null, aviso: null });
-        return true;
+        });
     }
 
     /** idConsulta en curso según GET /atencion, o null si no hay, no es un UUID o la petición falla. */
-    async #leerEnCurso() {
-        try {
-            const { data } = await this.#servicio.contexto();
-            return typeof data?.idConsulta === "string" && Validaciones.UUID.test(data.idConsulta) ? data.idConsulta : null;
-        } catch {
-            return null;
-        }
+    #leerEnCurso() {
+        return new Promise(resolve => resolve(this.#servicio.contexto()))
+            .then(({ data }) => (typeof data?.idConsulta === "string" && Validaciones.UUID.test(data.idConsulta) ? data.idConsulta : null))
+            // .catch: el try también envolvía la desestructuración.
+            .catch(() => null);
     }
 
     /**
      * F8: sale de la consulta en curso sin cerrarla (DELETE /atencion/consulta). No reintenta el
      * cambio de rol: el usuario vuelve a pulsar "Usar este rol". Devuelve true si el backend respondió.
      */
-    async salirDeConsulta() {
-        if (this.estado.saliendo || this.estado.cambiando) return false;
-        if (this.estado.soloLectura || !this.#conexion.enLinea) {
-            // Sin red, sin servidor o en solo lectura: el mismo motivo.
-            this.#actualizar({ aviso: MENSAJES.soloLectura });
-            return false;
-        }
-        this.#actualizar({ saliendo: true, error: null, confirmacion: null });
-        try {
-            await this.#servicio.salirDeConsulta();
-        } catch (error) {
-            // 401: mismo texto que el resto de acciones; DefaultService ya emitió 'sesion-expirada'.
-            this.#actualizar({ saliendo: false, error: mensajeDeError(error) });
-            return false;
-        }
-        this.#actualizar({ saliendo: false, enCurso: null, aviso: null, confirmacion: MENSAJES.salioDeConsulta });
-        return true;
+    salirDeConsulta() {
+        return new Promise(resolve => {
+            if (this.estado.saliendo || this.estado.cambiando) { resolve(false); return; }
+            if (this.estado.soloLectura || !this.#conexion.enLinea) {
+                // Sin red, sin servidor o en solo lectura: el mismo motivo.
+                this.#actualizar({ aviso: MENSAJES.soloLectura });
+                resolve(false);
+                return;
+            }
+            this.#actualizar({ saliendo: true, error: null, confirmacion: null });
+            // Dos argumentos: el try solo envolvía el DELETE.
+            resolve(new Promise(salir => salir(this.#servicio.salirDeConsulta())).then(() => {
+                this.#actualizar({ saliendo: false, enCurso: null, aviso: null, confirmacion: MENSAJES.salioDeConsulta });
+                return true;
+            }, error => {
+                // 401: mismo texto que el resto de acciones; DefaultService ya emitió 'sesion-expirada'.
+                this.#actualizar({ saliendo: false, error: mensajeDeError(error) });
+                return false;
+            }));
+        });
     }
 }

@@ -388,16 +388,22 @@ export class ControladorCitas {
         if (enLinea && this.estado.errorTipos) this.cargarTipos();
     }
 
-    async cargarTipos() {
-        if (this.estado.cargandoTipos || this.estado.tipos.length) return;
-        this.#actualizar({ cargandoTipos: true, errorTipos: null });
-        try {
-            const tipos = await this.#listarTipos();
-            this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([...tipos]) });
-        } catch (error) {
-            const sinRed = error?.code === CODIGO_SIN_RED || error?.status === 0;
-            this.#actualizar({ cargandoTipos: false, errorTipos: sinRed ? MENSAJES.tiposSinRed : (error?.message || MENSAJES.generico) });
-        }
+    cargarTipos() {
+        return new Promise(resolve => {
+            if (this.estado.cargandoTipos || this.estado.tipos.length) {
+                resolve();
+                return;
+            }
+            this.#actualizar({ cargandoTipos: true, errorTipos: null });
+            resolve(new Promise(listar => listar(this.#listarTipos()))
+                .then(tipos => {
+                    this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([...tipos]) });
+                })
+                .catch(error => {
+                    const sinRed = error?.code === CODIGO_SIN_RED || error?.status === 0;
+                    this.#actualizar({ cargandoTipos: false, errorTipos: sinRed ? MENSAJES.tiposSinRed : (error?.message || MENSAJES.generico) });
+                }));
+        });
     }
 
     /** Tipo o número cambiaron: se invalidan clínicas, clínica elegida y resultados. */
@@ -527,31 +533,37 @@ export class ControladorCitas {
         return promesa;
     }
 
-    async #pedirClinicas(avanzar) {
-        const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
-        if (error) { this.#errores(this.tipo() ? { numero: error } : { tipo: error }); return; }
-        if (this.#parCargado === this.#par() && this.estado.clinicas) {
-            if (avanzar) this.#avanzar(3);
-            return;
-        }
-        const guardadas = this.#clinicasPorPar.get(this.#par());
-        if (guardadas) { this.#mostrarClinicas(guardadas, avanzar); return; }
-        const motivo = this.#motivo();
-        if (motivo) { this.#actualizar({ mensaje: motivo }); return; }
-        const id = ++this.#secuencia;
-        const par = this.#par();
-        this.#actualizar({ cargando: "clinicas", mensaje: null });
-        try {
-            const clinicas = Object.freeze([...await this.#servicio.clinicas(this.#documento())]);
-            if (id !== this.#secuencia) return;
-            this.#clinicasPorPar.set(par, clinicas);
-            this.#actualizar({ cargando: null });
-            if (par === this.#par()) this.#mostrarClinicas(clinicas, avanzar);
-        } catch (error) {
-            if (id !== this.#secuencia) return;
-            this.#actualizar({ cargando: null });
-            this.#fallo(error);
-        }
+    #pedirClinicas(avanzar) {
+        // Lo síncrono corre durante la llamada: #buscarClinicas mira `cargando` justo después.
+        return new Promise(resolve => {
+            const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
+            if (error) { this.#errores(this.tipo() ? { numero: error } : { tipo: error }); resolve(); return; }
+            if (this.#parCargado === this.#par() && this.estado.clinicas) {
+                if (avanzar) this.#avanzar(3);
+                resolve();
+                return;
+            }
+            const guardadas = this.#clinicasPorPar.get(this.#par());
+            if (guardadas) { this.#mostrarClinicas(guardadas, avanzar); resolve(); return; }
+            const motivo = this.#motivo();
+            if (motivo) { this.#actualizar({ mensaje: motivo }); resolve(); return; }
+            const id = ++this.#secuencia;
+            const par = this.#par();
+            this.#actualizar({ cargando: "clinicas", mensaje: null });
+            resolve(new Promise(pedir => pedir(this.#servicio.clinicas(this.#documento())))
+                .then(lista => {
+                    const clinicas = Object.freeze([...lista]);
+                    if (id !== this.#secuencia) return;
+                    this.#clinicasPorPar.set(par, clinicas);
+                    this.#actualizar({ cargando: null });
+                    if (par === this.#par()) this.#mostrarClinicas(clinicas, avanzar);
+                })
+                .catch(falla => {
+                    if (id !== this.#secuencia) return;
+                    this.#actualizar({ cargando: null });
+                    this.#fallo(falla);
+                }));
+        });
     }
 
     /** Carga las opciones de clínica al salir del documento, sin mover la pantalla. */
@@ -562,53 +574,68 @@ export class ControladorCitas {
     }
 
     /** Valida la barra, carga clínicas si hace falta y luego consulta las citas. */
-    async buscar() {
-        if (this.estado.cargando === "clinicas") await this.#esperarClinicas();
-        if (this.estado.cargando) return;
-        this.#actualizar({ mensaje: null });
-        if (!this.tipo()) { this.#errores({ tipo: MENSAJES.tipoRequerido }); return; }
-        const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
-        if (error) { this.#errores({ numero: error }); return; }
-        const errorRango = validarRango(this.estado.desde, this.estado.hasta);
-        if (errorRango) { this.#errores({ rango: errorRango }); return; }
-        const par = this.#par();
-        if (!this.estado.clinicas) await this.#buscarClinicas(false);
-        if (par !== this.#par()) return;
-        if (!this.estado.clinicas || this.estado.mensaje) return;
-        if (!this.estado.clinicas.some(c => c.idClinica === this.estado.idClinica)) {
-            this.#errores(this.estado.clinicas.length ? { clinica: MENSAJES.clinicaRequerida } : { numero: MENSAJES.sinClinicas });
-            return;
-        }
-        return this.#buscarCitas();
+    buscar() {
+        return new Promise(resolve => {
+            // Solo se espera si hay clínicas en camino; si no, todo sigue en esta misma llamada.
+            if (this.estado.cargando === "clinicas") resolve(this.#esperarClinicas().then(() => this.#buscarSinEspera()));
+            else resolve(this.#buscarSinEspera());
+        });
     }
 
-    async #buscarCitas() {
-        const error = validarRango(this.estado.desde, this.estado.hasta);
-        if (error) { this.#errores({ rango: error }); return; }
-        const criterios = this.#criterios();
-        const clave = JSON.stringify(criterios);
-        if (this.#criteriosCargados === clave && this.estado.citas) { this.#avanzar(5); return; }
-        const motivo = this.#motivo();
-        if (motivo) { this.#actualizar({ mensaje: motivo }); return; }
-        const id = ++this.#secuencia;
-        const documento = this.#documento();
-        this.#actualizar({ cargando: "citas", mensaje: null });
-        try {
-            const citas = Object.freeze([...await this.#servicio.citas(documento, criterios)]);
-            if (id !== this.#secuencia) return;
-            const en = this.#reloj().getTime();
-            this.#criteriosCargados = clave;
-            this.#memoria.guardar(CLAVE_MEMORIA, Object.freeze({
-                criterios: Object.freeze({ ...documento, ...criterios }), clinicas: this.estado.clinicas, citas, en,
-            }));
-            this.#actualizar({ cargando: null, citas, tickets: VACIO, ticketAbierto: null, desdeMemoria: false, actualizadoEn: en });
-            this.#avanzar(5);
-        } catch (error) {
-            if (id !== this.#secuencia) return;
-            this.#actualizar({ cargando: null });
-            if (error?.code === "citas.rango") this.#errores({ rango: mensajeDeErrorCitas(error) });
-            else this.#fallo(error);
-        }
+    /** Resto de buscar(), una vez que no hay clínicas en camino. */
+    #buscarSinEspera() {
+        if (this.estado.cargando) return undefined;
+        this.#actualizar({ mensaje: null });
+        if (!this.tipo()) { this.#errores({ tipo: MENSAJES.tipoRequerido }); return undefined; }
+        const error = validarNumero(this.tipo(), this.estado.numeroDocumento);
+        if (error) { this.#errores({ numero: error }); return undefined; }
+        const errorRango = validarRango(this.estado.desde, this.estado.hasta);
+        if (errorRango) { this.#errores({ rango: errorRango }); return undefined; }
+        const par = this.#par();
+        const seguir = () => {
+            if (par !== this.#par()) return undefined;
+            if (!this.estado.clinicas || this.estado.mensaje) return undefined;
+            if (!this.estado.clinicas.some(c => c.idClinica === this.estado.idClinica)) {
+                this.#errores(this.estado.clinicas.length ? { clinica: MENSAJES.clinicaRequerida } : { numero: MENSAJES.sinClinicas });
+                return undefined;
+            }
+            return this.#buscarCitas();
+        };
+        if (!this.estado.clinicas) return this.#buscarClinicas(false).then(seguir);
+        return seguir();
+    }
+
+    #buscarCitas() {
+        return new Promise(resolve => {
+            const error = validarRango(this.estado.desde, this.estado.hasta);
+            if (error) { this.#errores({ rango: error }); resolve(); return; }
+            const criterios = this.#criterios();
+            const clave = JSON.stringify(criterios);
+            if (this.#criteriosCargados === clave && this.estado.citas) { this.#avanzar(5); resolve(); return; }
+            const motivo = this.#motivo();
+            if (motivo) { this.#actualizar({ mensaje: motivo }); resolve(); return; }
+            const id = ++this.#secuencia;
+            const documento = this.#documento();
+            this.#actualizar({ cargando: "citas", mensaje: null });
+            resolve(new Promise(pedir => pedir(this.#servicio.citas(documento, criterios)))
+                .then(lista => {
+                    const citas = Object.freeze([...lista]);
+                    if (id !== this.#secuencia) return;
+                    const en = this.#reloj().getTime();
+                    this.#criteriosCargados = clave;
+                    this.#memoria.guardar(CLAVE_MEMORIA, Object.freeze({
+                        criterios: Object.freeze({ ...documento, ...criterios }), clinicas: this.estado.clinicas, citas, en,
+                    }));
+                    this.#actualizar({ cargando: null, citas, tickets: VACIO, ticketAbierto: null, desdeMemoria: false, actualizadoEn: en });
+                    this.#avanzar(5);
+                })
+                .catch(falla => {
+                    if (id !== this.#secuencia) return;
+                    this.#actualizar({ cargando: null });
+                    if (falla?.code === "citas.rango") this.#errores({ rango: mensajeDeErrorCitas(falla) });
+                    else this.#fallo(falla);
+                }));
+        });
     }
 
     /** 429: bloquea los POST hasta Retry-After; lo demás va a `mensaje`. */
@@ -643,29 +670,32 @@ export class ControladorCitas {
      * bloqueado por el límite no se pide: la ventana muestra el motivo. Errores como siempre: 404
      * cita.noExiste, sin conexión, 429 (bloquea los POST hasta Retry-After) y cualquier otro.
      */
-    async cargarTicket(idConsulta) {
-        if (this.estado.ticketAbierto !== idConsulta) return;
-        const actual = this.estado.tickets[idConsulta]?.estado;
-        if (actual === "descargando" || actual === "listo") return;
-        const motivo = this.estado.enLinea ? this.#motivo() : MENSAJES.sinRedTicket;
-        if (motivo) { this.#ticket(idConsulta, { estado: "error", error: motivo }); return; }
-        this.#ticket(idConsulta, { estado: "descargando" });
-        const pendiente = this.estado.tickets[idConsulta];
-        try {
-            const archivo = await this.#servicio.ticket(idConsulta, this.#documento());
-            if (this.estado.tickets[idConsulta] !== pendiente) return;
-            this.#ticket(idConsulta, { estado: "listo", archivo, descargado: false });
-        } catch (error) {
-            if (this.estado.tickets[idConsulta] !== pendiente) return;
-            if (error?.status === 429) {
-                this.#fallo(error);
-                this.#ticket(idConsulta, { estado: "error", error: this.estado.mensaje });
-                return;
-            }
-            const mensaje = error?.code === "cita.noExiste" ? MENSAJES.ticketNoExiste
-                : error?.status === 0 ? MENSAJES.conexion : MENSAJES.ticketFallido;
-            this.#ticket(idConsulta, { estado: "error", error: mensaje });
-        }
+    cargarTicket(idConsulta) {
+        return new Promise(resolve => {
+            if (this.estado.ticketAbierto !== idConsulta) { resolve(); return; }
+            const actual = this.estado.tickets[idConsulta]?.estado;
+            if (actual === "descargando" || actual === "listo") { resolve(); return; }
+            const motivo = this.estado.enLinea ? this.#motivo() : MENSAJES.sinRedTicket;
+            if (motivo) { this.#ticket(idConsulta, { estado: "error", error: motivo }); resolve(); return; }
+            this.#ticket(idConsulta, { estado: "descargando" });
+            const pendiente = this.estado.tickets[idConsulta];
+            resolve(new Promise(pedir => pedir(this.#servicio.ticket(idConsulta, this.#documento())))
+                .then(archivo => {
+                    if (this.estado.tickets[idConsulta] !== pendiente) return;
+                    this.#ticket(idConsulta, { estado: "listo", archivo, descargado: false });
+                })
+                .catch(error => {
+                    if (this.estado.tickets[idConsulta] !== pendiente) return;
+                    if (error?.status === 429) {
+                        this.#fallo(error);
+                        this.#ticket(idConsulta, { estado: "error", error: this.estado.mensaje });
+                        return;
+                    }
+                    const mensaje = error?.code === "cita.noExiste" ? MENSAJES.ticketNoExiste
+                        : error?.status === 0 ? MENSAJES.conexion : MENSAJES.ticketFallido;
+                    this.#ticket(idConsulta, { estado: "error", error: mensaje });
+                }));
+        });
     }
 
     /** La vista ya entregó el PDF al navegador; se conserva mientras la ventana siga abierta. */

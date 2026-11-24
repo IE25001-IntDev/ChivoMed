@@ -452,64 +452,83 @@ export class ControladorConsulta {
      * abierta y le toca al rol activo. Un rechazo por rol la deja en solo lectura con su motivo.
      * Sin red o en solo lectura muestra lo guardado en memoria, si existe.
      */
-    async #cargar({ retomar = false } = {}) {
-        const id = ++this.#secuencia;
-        const { idConsulta, soloLectura } = this.estado;
-        if (!this.#conexion.enLinea || soloLectura) {
-            this.#mostrarMemoria(id);
-            return;
-        }
-        this.estado.cargando = true;
-        try {
-            let consulta = await this.#leerConsulta(idConsulta);
-            if (id !== this.#secuencia) return;
-            let atendiendo = this.estado.atendiendo;
-            let aviso = null;
-            if (retomar) {
-                atendiendo = false;
-                if (consulta.pendienteParaMi && !consulta.fechaFin) {
-                    try {
-                        await this.#servicio.retomar(idConsulta);
-                        atendiendo = true;
-                    } catch (error) {
-                        // Ya no le toca (o se cerró): se vuelve a leer y queda en solo lectura con su motivo.
-                        // Cualquier otro rechazo detiene la carga.
-                        if (error?.code !== "consulta.yaCerrada" && !CODIGOS_POR_ROL.includes(error?.code)) throw error;
-                        if (id !== this.#secuencia) return;
-                        aviso = mensajeDeErrorConsulta(error);
-                        consulta = await this.#leerConsulta(idConsulta);
-                    }
-                    if (id !== this.#secuencia) return;
-                }
-            }
-            Object.assign(this.estado, { consulta, atendiendo, cargando: false, error: null, desdeMemoria: false });
-            if (aviso) this.estado.aviso = aviso;
-            await this.#cargarDetalle(id);
-        } catch (error) {
-            if (id !== this.#secuencia) return;
-            if (error?.status === 0 && this.#guardado()) {
+    #cargar(opciones = {}) {
+        return new Promise(resolve => {
+            const { retomar = false } = opciones;
+            const id = ++this.#secuencia;
+            const { idConsulta, soloLectura } = this.estado;
+            if (!this.#conexion.enLinea || soloLectura) {
                 this.#mostrarMemoria(id);
+                resolve();
                 return;
             }
-            Object.assign(this.estado, { cargando: false, consulta: null, detalle: SIN_DETALLE, error: mensajeDeErrorConsulta(error), desdeMemoria: false });
-            if (error?.code === "consulta.cerrarAntesRetomar") await this.#buscarEnCurso(id);
+            this.estado.cargando = true;
+            // .catch al final: el try original envolvía la lectura, el retomar y el detalle.
+            resolve(new Promise(leer => leer(this.#leerConsulta(idConsulta)))
+                .then(consulta => {
+                    if (id !== this.#secuencia) return undefined;
+                    if (!retomar) return this.#aplicarCarga(id, consulta, this.estado.atendiendo, null);
+                    if (!consulta.pendienteParaMi || consulta.fechaFin) return this.#aplicarCarga(id, consulta, false, null);
+                    return this.#retomarSiToca(id, idConsulta, consulta);
+                })
+                .catch(error => this.#fallaDeCarga(id, error)));
+        });
+    }
+
+    /**
+     * PUT …/sesion de una consulta abierta que le toca al rol activo. Si ya no le toca (o se cerró),
+     * la vuelve a leer y queda en solo lectura con su motivo; cualquier otro rechazo detiene la carga.
+     */
+    #retomarSiToca(id, idConsulta, consulta) {
+        // Dos argumentos: el try interno solo envolvía el PUT; lo que relanza va al catch de #cargar.
+        return new Promise(retomar => retomar(this.#servicio.retomar(idConsulta)))
+            .then(() => ({ consulta, atendiendo: true, aviso: null }), error => {
+                if (error?.code !== "consulta.yaCerrada" && !CODIGOS_POR_ROL.includes(error?.code)) throw error;
+                if (id !== this.#secuencia) return null;
+                const aviso = mensajeDeErrorConsulta(error);
+                return this.#leerConsulta(idConsulta).then(releida => ({ consulta: releida, atendiendo: false, aviso }));
+            })
+            .then(resultado => {
+                if (resultado === null || id !== this.#secuencia) return undefined;
+                return this.#aplicarCarga(id, resultado.consulta, resultado.atendiendo, resultado.aviso);
+            });
+    }
+
+    /** Publica la consulta leída y pide el detalle del paso actual. */
+    #aplicarCarga(id, consulta, atendiendo, aviso) {
+        Object.assign(this.estado, { consulta, atendiendo, cargando: false, error: null, desdeMemoria: false });
+        if (aviso) this.estado.aviso = aviso;
+        return this.#cargarDetalle(id);
+    }
+
+    /** El catch de #cargar: lo guardado si no hubo red, o el error (y el enlace a la consulta en curso). */
+    #fallaDeCarga(id, error) {
+        if (id !== this.#secuencia) return undefined;
+        if (error?.status === 0 && this.#guardado()) {
+            this.#mostrarMemoria(id);
+            return undefined;
         }
+        Object.assign(this.estado, { cargando: false, consulta: null, detalle: SIN_DETALLE, error: mensajeDeErrorConsulta(error), desdeMemoria: false });
+        if (error?.code === "consulta.cerrarAntesRetomar") return this.#buscarEnCurso(id);
+        return undefined;
     }
 
-    async #leerConsulta(idConsulta) {
-        const { data } = await this.#servicio.consulta(idConsulta);
-        const [consulta] = normalizarConsultas([data]);
-        if (!consulta || consulta.idConsulta !== idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
-        return consulta;
+    #leerConsulta(idConsulta) {
+        return new Promise(resolve => resolve(this.#servicio.consulta(idConsulta))).then(({ data }) => {
+            const [consulta] = normalizarConsultas([data]);
+            if (!consulta || consulta.idConsulta !== idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
+            return consulta;
+        });
     }
 
-    async #buscarEnCurso(id) {
-        try {
-            const { data } = await this.#servicio.contexto();
-            if (id !== this.#secuencia) return;
-            const enCurso = Validaciones.esTexto(data?.idConsulta) && data.idConsulta !== this.estado.idConsulta ? data.idConsulta : null;
-            this.estado.enCurso = enCurso;
-        } catch { /* Sin el enlace, el mensaje sigue siendo útil. */ }
+    #buscarEnCurso(id) {
+        return new Promise(resolve => resolve(this.#servicio.contexto()))
+            .then(({ data }) => {
+                if (id !== this.#secuencia) return;
+                const enCurso = Validaciones.esTexto(data?.idConsulta) && data.idConsulta !== this.estado.idConsulta ? data.idConsulta : null;
+                this.estado.enCurso = enCurso;
+            })
+            .catch(() => { /* Sin el enlace, el mensaje sigue siendo útil. */ });
     }
 
     /**
@@ -517,44 +536,54 @@ export class ControladorConsulta {
      * de su definición. Solo si el rol activo atiende la consulta (los datos clínicos del paso no
      * se piden en solo lectura).
      */
-    async #cargarDetalle(idCarga = this.#secuencia) {
-        const paso = this.pasoActual;
-        const consulta = this.estado.consulta;
-        const idDetalle = ++this.#secuenciaDetalle;
-        if (!paso || !this.atiende || consulta?.fechaFin) {
-            this.estado.detalle = SIN_DETALLE;
-            this.estado.borrador = "";
-            if (this.estado.aviso === MENSAJES.reabierto) this.estado.aviso = null;
-            this.#reiniciarExamenes();
-            this.#guardarEnMemoria();
-            return;
-        }
-        const idPaso = paso.idConsultaProcedimientoPaso;
-        const previo = this.estado.detalle.idPaso === idPaso ? this.estado.detalle : SIN_DETALLE;
-        // F9: el filtro, la selección y el resultado son del paso; otro paso empieza de cero.
-        if (previo === SIN_DETALLE) this.#reiniciarExamenes();
-        this.estado.detalle = congelar({ ...previo, idPaso, cargando: true, error: null });
-        try {
-            const [registro, ordenes, asignables] = await Promise.all([
+    #cargarDetalle(idCarga = this.#secuencia) {
+        return new Promise(resolve => {
+            const paso = this.pasoActual;
+            const consulta = this.estado.consulta;
+            const idDetalle = ++this.#secuenciaDetalle;
+            if (!paso || !this.atiende || consulta?.fechaFin) {
+                this.estado.detalle = SIN_DETALLE;
+                this.estado.borrador = "";
+                if (this.estado.aviso === MENSAJES.reabierto) this.estado.aviso = null;
+                this.#reiniciarExamenes();
+                this.#guardarEnMemoria();
+                resolve();
+                return;
+            }
+            const idPaso = paso.idConsultaProcedimientoPaso;
+            const previo = this.estado.detalle.idPaso === idPaso ? this.estado.detalle : SIN_DETALLE;
+            // F9: el filtro, la selección y el resultado son del paso; otro paso empieza de cero.
+            if (previo === SIN_DETALLE) this.#reiniciarExamenes();
+            this.estado.detalle = congelar({ ...previo, idPaso, cargando: true, error: null });
+            const aplicar = (registro, ordenes, asignables, definicion) => {
+                if (idDetalle !== this.#secuenciaDetalle || idCarga !== this.#secuencia) return;
+                const valorGuardado = Validaciones.esTexto(registro?.data?.valor) ? registro.data.valor : null;
+                this.estado.detalle = congelar({
+                    idPaso, cargando: false, error: null, valorGuardado,
+                    indicaFin: definicion ? definicion.data?.indicaFin === true : null,
+                    ordenes: normalizarOrdenes(ordenes?.data), asignables: normalizarAsignables(asignables?.data),
+                });
+                this.#depurarExamenes();
+                this.#restaurarBorrador();
+                this.#guardarEnMemoria();
+            };
+            // Las tres peticiones salen durante la llamada, como antes; .catch al final, como el try.
+            resolve(new Promise(pedir => pedir(Promise.all([
                 this.#servicio.paso(idPaso), this.#servicio.ordenes(idPaso), this.#servicio.asignables(idPaso),
-            ]);
-            const idDefinicion = registro?.data?.idProcedimientoPaso;
-            const definicion = idDefinicion ? await this.#servicio.definicion(idDefinicion) : null;
-            if (idDetalle !== this.#secuenciaDetalle || idCarga !== this.#secuencia) return;
-            const valorGuardado = Validaciones.esTexto(registro?.data?.valor) ? registro.data.valor : null;
-            this.estado.detalle = congelar({
-                idPaso, cargando: false, error: null, valorGuardado,
-                indicaFin: definicion ? definicion.data?.indicaFin === true : null,
-                ordenes: normalizarOrdenes(ordenes?.data), asignables: normalizarAsignables(asignables?.data),
-            });
-            this.#depurarExamenes();
-            this.#restaurarBorrador();
-            this.#guardarEnMemoria();
-        } catch (error) {
-            if (idDetalle !== this.#secuenciaDetalle || idCarga !== this.#secuencia) return;
-            const error_ = [0, 401, 403, 404].includes(error?.status) ? mensajeDeErrorConsulta(error) : MENSAJES.detalle;
-            this.estado.detalle = congelar({ ...previo, idPaso, cargando: false, error: error_ });
-        }
+            ])))
+                .then(([registro, ordenes, asignables]) => {
+                    const idDefinicion = registro?.data?.idProcedimientoPaso;
+                    // Sin definición no se esperaba nada: se sigue sin agregar una microtarea.
+                    if (!idDefinicion) return aplicar(registro, ordenes, asignables, null);
+                    return Promise.resolve(this.#servicio.definicion(idDefinicion))
+                        .then(definicion => aplicar(registro, ordenes, asignables, definicion));
+                })
+                .catch(error => {
+                    if (idDetalle !== this.#secuenciaDetalle || idCarga !== this.#secuencia) return;
+                    const error_ = [0, 401, 403, 404].includes(error?.status) ? mensajeDeErrorConsulta(error) : MENSAJES.detalle;
+                    this.estado.detalle = congelar({ ...previo, idPaso, cargando: false, error: error_ });
+                }));
+        });
     }
 
     /** F9: vuelve el filtro a "Todas" y vacía la selección y el resultado. */
@@ -642,27 +671,29 @@ export class ControladorConsulta {
      * con #cargar, que la lee y solo pide PUT …/sesion si sigue abierta y `pendienteParaMi`; si no,
      * queda en solo lectura. Devuelve true si el DELETE se hizo.
      */
-    async salirYAtender() {
-        const { enCurso, saliendo, cargando } = this.estado;
-        if (!enCurso || saliendo || cargando) return false;
-        if (!this.#conexion.enLinea || this.estado.soloLectura) {
-            this.estado.error = MENSAJES.sinRedSalir;
-            return false;
-        }
-        const id = this.#secuencia;
-        this.estado.saliendo = true;
-        try {
-            await this.#servicio.salirDeConsulta();
-        } catch (error) {
-            if (id !== this.#secuencia) return false;
-            // El enlace a la consulta en curso se conserva: sigue en la sesión.
-            Object.assign(this.estado, { saliendo: false, error: mensajeDeErrorConsulta(error) });
-            return false;
-        }
-        if (id !== this.#secuencia) return false;
-        Object.assign(this.estado, { saliendo: false, error: null, enCurso: null, errorAccion: null });
-        await this.#cargar({ retomar: true });
-        return true;
+    salirYAtender() {
+        return new Promise(resolve => {
+            const { enCurso, saliendo, cargando } = this.estado;
+            if (!enCurso || saliendo || cargando) { resolve(false); return; }
+            if (!this.#conexion.enLinea || this.estado.soloLectura) {
+                this.estado.error = MENSAJES.sinRedSalir;
+                resolve(false);
+                return;
+            }
+            const id = this.#secuencia;
+            this.estado.saliendo = true;
+            // Dos argumentos: el try solo envolvía el DELETE.
+            resolve(new Promise(salir => salir(this.#servicio.salirDeConsulta())).then(() => {
+                if (id !== this.#secuencia) return false;
+                Object.assign(this.estado, { saliendo: false, error: null, enCurso: null, errorAccion: null });
+                return this.#cargar({ retomar: true }).then(() => true);
+            }, error => {
+                if (id !== this.#secuencia) return false;
+                // El enlace a la consulta en curso se conserva: sigue en la sesión.
+                Object.assign(this.estado, { saliendo: false, error: mensajeDeErrorConsulta(error) });
+                return false;
+            }));
+        });
     }
 
     /** null si se puede pedir el retroceso; si no, su motivo. Solo se ofrece si el paso no es el primero. */
@@ -675,42 +706,48 @@ export class ControladorConsulta {
      * paso actual; si falla deja el motivo en `errorAccion` sin perder lo cargado ni el borrador.
      * Algunos rechazos significan que lo mostrado quedó viejo, así que también se recarga.
      */
-    async #ejecutar(accion, operacion, { alTerminar, alFallar, recargarTras = new Set(["consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]) } = {}) {
-        Object.assign(this.estado, { accion, errorAccion: null, confirmando: null });
-        const idCarga = this.#secuencia;
-        let ok = false;
-        try {
-            await operacion();
-            if (idCarga !== this.#secuencia) return false;
-            ok = true;
-            await alTerminar?.();
-        } catch (error) {
-            if (idCarga !== this.#secuencia) return false;
-            this.estado.errorAccion = mensajeDeErrorConsulta(error);
-            if (recargarTras.has(error?.code)) await this.#recargar();
-            await alFallar?.(error);
-        } finally {
-            if (idCarga === this.#secuencia) {
-                Object.assign(this.estado, { accion: null, acabado: congelar({ accion, ok }) });
-            }
-        }
-        return ok;
+    #ejecutar(accion, operacion, opciones = {}) {
+        return new Promise(resolve => {
+            const { alTerminar, alFallar, recargarTras = new Set(["consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]) } = opciones;
+            Object.assign(this.estado, { accion, errorAccion: null, confirmando: null });
+            const idCarga = this.#secuencia;
+            let ok = false;
+            // .catch después del .then: el try también envolvía alTerminar.
+            resolve(new Promise(operar => operar(operacion()))
+                .then(() => {
+                    if (idCarga !== this.#secuencia) return false;
+                    ok = true;
+                    return Promise.resolve(alTerminar?.()).then(() => ok);
+                })
+                .catch(error => {
+                    if (idCarga !== this.#secuencia) return false;
+                    this.estado.errorAccion = mensajeDeErrorConsulta(error);
+                    const recarga = recargarTras.has(error?.code) ? this.#recargar() : Promise.resolve();
+                    return recarga.then(() => alFallar?.(error)).then(() => ok);
+                })
+                .finally(() => {
+                    if (idCarga === this.#secuencia) {
+                        Object.assign(this.estado, { accion: null, acabado: congelar({ accion, ok }) });
+                    }
+                }));
+        });
     }
 
     /** Vuelve a leer la consulta y el paso actual, sin retomarla. Un fallo no borra lo mostrado. */
-    async #recargar() {
+    #recargar() {
         const id = this.#secuencia;
-        try {
-            const { data } = await this.#servicio.consulta(this.estado.idConsulta);
-            if (id !== this.#secuencia) return;
-            const [consulta] = normalizarConsultas([data]);
-            if (!consulta || consulta.idConsulta !== this.estado.idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
-            this.estado.consulta = consulta;
-            await this.#cargarDetalle(id);
-        } catch (error) {
-            if (id !== this.#secuencia) return;
-            this.estado.errorAccion ??= mensajeDeErrorConsulta(error);
-        }
+        return new Promise(resolve => resolve(this.#servicio.consulta(this.estado.idConsulta)))
+            .then(({ data }) => {
+                if (id !== this.#secuencia) return undefined;
+                const [consulta] = normalizarConsultas([data]);
+                if (!consulta || consulta.idConsulta !== this.estado.idConsulta) throw Object.assign(new Error("ausente"), { status: 404 });
+                this.estado.consulta = consulta;
+                return this.#cargarDetalle(id);
+            })
+            .catch(error => {
+                if (id !== this.#secuencia) return;
+                this.estado.errorAccion ??= mensajeDeErrorConsulta(error);
+            });
     }
 
     #olvidarBorrador(idPaso) {
@@ -726,11 +763,11 @@ export class ControladorConsulta {
         const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
         const valor = this.estado.borrador.trim() || null;
         return this.#ejecutar("avanzar", () => this.#servicio.completar(idPaso, valor), {
-            alTerminar: async () => {
+            alTerminar: () => new Promise(resolve => {
                 this.#olvidarBorrador(idPaso);
                 Object.assign(this.estado, { idElegido: null, aviso: null, borrador: "" });
-                await this.#recargar();
-            },
+                resolve(this.#recargar());
+            }),
         });
     }
 
@@ -748,15 +785,17 @@ export class ControladorConsulta {
         if (!puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
         const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
         let anterior = null;
-        return this.#ejecutar("retroceder", async () => { anterior = (await this.#servicio.retroceder(idPaso))?.data ?? null; }, {
-            alTerminar: async () => {
+        const operacion = () => new Promise(resolve => resolve(this.#servicio.retroceder(idPaso)))
+            .then(respuesta => { anterior = respuesta?.data ?? null; });
+        return this.#ejecutar("retroceder", operacion, {
+            alTerminar: () => new Promise(resolve => {
                 this.#olvidarBorrador(idPaso);
                 const idAnterior = Validaciones.esTexto(anterior?.idConsultaProcedimientoPaso) ? anterior.idConsultaProcedimientoPaso : null;
                 // El paso reabierto muestra su valor guardado, no un borrador viejo de antes de completarlo.
                 if (idAnterior) this.#olvidarBorrador(idAnterior);
                 Object.assign(this.estado, { idElegido: idAnterior, aviso: null, borrador: "" });
-                await this.#recargar();
-            },
+                resolve(this.#recargar());
+            }),
         });
     }
 
@@ -780,11 +819,11 @@ export class ControladorConsulta {
         const notas = this.#observaciones ? { observaciones: this.#observaciones } : {};
         return this.#ejecutar("cierre", () => this.#servicio.cerrar(this.estado.idConsulta, notas), {
             recargarTras: new Set(["consulta.completeAntesCerrar", "consulta.procedimientoSinFinal", "consulta.yaCerrada", ...CODIGOS_POR_ROL]),
-            alTerminar: async () => {
+            alTerminar: () => new Promise(resolve => {
                 this.#observaciones = "";
                 this.estado.aviso = MENSAJES.cerradaAhora;
-                await this.#recargar();
-            },
+                resolve(this.#recargar());
+            }),
         });
     }
 
@@ -802,14 +841,16 @@ export class ControladorConsulta {
     }
 
     /** Vuelve a pedir, en paralelo, las órdenes y/o los asignables del paso, sin recargar la consulta. */
-    async #actualizarListas(idPaso, campos) {
-        const respuestas = await Promise.all(campos.map(c => (c === "ordenes" ? this.#servicio.ordenes(idPaso) : this.#servicio.asignables(idPaso))));
-        if (this.estado.detalle.idPaso !== idPaso) return;
-        const cambios = {};
-        campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? normalizarOrdenes(respuestas[i]?.data) : normalizarAsignables(respuestas[i]?.data); });
-        this.estado.detalle = congelar({ ...this.estado.detalle, ...cambios });
-        this.#depurarExamenes();
-        this.#guardarEnMemoria();
+    #actualizarListas(idPaso, campos) {
+        return new Promise(resolve => resolve(Promise.all(campos.map(c => (c === "ordenes" ? this.#servicio.ordenes(idPaso) : this.#servicio.asignables(idPaso))))))
+            .then(respuestas => {
+                if (this.estado.detalle.idPaso !== idPaso) return;
+                const cambios = {};
+                campos.forEach((c, i) => { cambios[c] = c === "ordenes" ? normalizarOrdenes(respuestas[i]?.data) : normalizarAsignables(respuestas[i]?.data); });
+                this.estado.detalle = congelar({ ...this.estado.detalle, ...cambios });
+                this.#depurarExamenes();
+                this.#guardarEnMemoria();
+            });
     }
 
     // ---------------------------------------------------------------- F9: varios exámenes
@@ -841,52 +882,66 @@ export class ControladorConsulta {
      * `resultadoExamenes`, deja seleccionados los que fallaron y recarga las órdenes una sola vez (y los
      * asignables si alguno dejó de serlo). Devuelve true si al menos una orden se emitió y no hubo corte.
      */
-    async asignarExamenes({ indicaciones } = {}) {
-        if (this.motivoNoActuar) return false;
-        const { asignables, ordenes } = this.estado.detalle;
-        const idsExamen = this.estado.seleccionExamenes;
-        const invalida = validarAsignacion({ idsExamen, indicaciones }, asignables, ordenes);
-        if (invalida) {
-            this.estado.errorAccion = invalida;
-            return false;
-        }
-        const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
-        const nombre = id => asignables.find(e => e.idExamen === id).nombre;
-        const resultados = [];
-        let recargarAsignables = false;
-        const publicar = () => {
-            const emitidos = new Set(resultados.filter(r => r.ok).map(r => r.idExamen));
-            Object.assign(this.estado, {
-                resultadoExamenes: congelar(resultados),
-                seleccionExamenes: congelar(this.estado.seleccionExamenes.filter(id => !emitidos.has(id))),
-            });
-        };
-        this.estado.resultadoExamenes = null;
-        const ok = await this.#ejecutar("orden", async () => {
-            for (const [i, idExamen] of idsExamen.entries()) {
-                try {
-                    await this.#servicio.ordenar(idPaso, { idExamen, indicaciones });
-                    resultados.push(congelar({ idExamen, nombre: nombre(idExamen), ok: true, mensaje: MENSAJES.ordenEmitida }));
-                } catch (error) {
-                    resultados.push(congelar({ idExamen, nombre: nombre(idExamen), ok: false, mensaje: mensajeDeErrorConsulta(error) }));
-                    if (ERRORES_POR_EXAMEN.includes(error?.code)) {
-                        recargarAsignables ||= error.code === "consulta.examenNoAsignable";
-                        continue;
-                    }
-                    for (const resto of idsExamen.slice(i + 1)) {
-                        resultados.push(congelar({ idExamen: resto, nombre: nombre(resto), ok: false, mensaje: MENSAJES.noEnviado }));
-                    }
-                    publicar();
-                    throw error;
-                }
+    asignarExamenes(opciones = {}) {
+        return new Promise(resolve => {
+            const { indicaciones } = opciones;
+            if (this.motivoNoActuar) { resolve(false); return; }
+            const { asignables, ordenes } = this.estado.detalle;
+            const idsExamen = this.estado.seleccionExamenes;
+            const invalida = validarAsignacion({ idsExamen, indicaciones }, asignables, ordenes);
+            if (invalida) {
+                this.estado.errorAccion = invalida;
+                resolve(false);
+                return;
             }
-            publicar();
-        }, {
-            recargarTras: RECARGAR_TRAS_ORDEN,
-            alTerminar: () => this.#actualizarListas(idPaso, recargarAsignables ? ["ordenes", "asignables"] : ["ordenes"])
-                .catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
+            const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
+            const resultados = [];
+            const publicar = () => {
+                const emitidos = new Set(resultados.filter(r => r.ok).map(r => r.idExamen));
+                Object.assign(this.estado, {
+                    resultadoExamenes: congelar(resultados),
+                    seleccionExamenes: congelar(this.estado.seleccionExamenes.filter(id => !emitidos.has(id))),
+                });
+            };
+            const serie = {
+                idPaso, idsExamen, indicaciones, resultados, publicar, recargarAsignables: false,
+                nombre: id => asignables.find(e => e.idExamen === id).nombre,
+            };
+            this.estado.resultadoExamenes = null;
+            resolve(this.#ejecutar("orden", () => this.#ordenarDesde(0, serie).then(publicar), {
+                recargarTras: RECARGAR_TRAS_ORDEN,
+                alTerminar: () => this.#actualizarListas(idPaso, serie.recargarAsignables ? ["ordenes", "asignables"] : ["ordenes"])
+                    .catch(error => { this.estado.errorAccion = mensajeDeErrorConsulta(error); }),
+            }).then(ok => ok && resultados.some(r => r.ok)));
         });
-        return ok && resultados.some(r => r.ok);
+    }
+
+    /**
+     * F9: emite la orden del examen `i` y, al terminar, la del siguiente: EN SERIE, como el for…of
+     * original (nunca en paralelo). Un error propio del examen se anota y se sigue; cualquier otro
+     * marca los que faltan como "No se envió.", publica y corta la serie relanzando el error.
+     */
+    #ordenarDesde(i, serie) {
+        if (i >= serie.idsExamen.length) return Promise.resolve();
+        const idExamen = serie.idsExamen[i];
+        // .catch después del .then: el try también envolvía el registro del éxito.
+        return new Promise(resolve => resolve(this.#servicio.ordenar(serie.idPaso, { idExamen, indicaciones: serie.indicaciones })))
+            .then(() => {
+                serie.resultados.push(congelar({ idExamen, nombre: serie.nombre(idExamen), ok: true, mensaje: MENSAJES.ordenEmitida }));
+            })
+            .catch(error => {
+                serie.resultados.push(congelar({ idExamen, nombre: serie.nombre(idExamen), ok: false, mensaje: mensajeDeErrorConsulta(error) }));
+                if (ERRORES_POR_EXAMEN.includes(error?.code)) {
+                    serie.recargarAsignables ||= error.code === "consulta.examenNoAsignable";
+                    return;
+                }
+                for (const resto of serie.idsExamen.slice(i + 1)) {
+                    serie.resultados.push(congelar({ idExamen: resto, nombre: serie.nombre(resto), ok: false, mensaje: MENSAJES.noEnviado }));
+                }
+                serie.publicar();
+                throw error;
+            })
+            .then(() => this.#ordenarDesde(i + 1, serie));
     }
 
     cambiarBorrador(valor) {

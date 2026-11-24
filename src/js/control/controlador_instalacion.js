@@ -81,14 +81,20 @@ export class ControladorInstalacion {
     }
 
     /** Apoyo: si el navegador dice que ChivoMed está instalada, no se invita. Si no existe o falla, nada. */
-    async #consultarRelacionadas() {
-        const navegador = this.#ventana?.navigator;
-        if (typeof navegador?.getInstalledRelatedApps !== "function") return;
-        try {
-            const apps = await navegador.getInstalledRelatedApps();
-            // Un beforeinstallprompt llegado mientras tanto manda: no está instalada.
-            if (Array.isArray(apps) && apps.length > 0 && !this.#evento) this.#relacionada = true;
-        } catch { /* Se sigue con la marca. */ }
+    #consultarRelacionadas() {
+        return new Promise(resolve => {
+            const navegador = this.#ventana?.navigator;
+            if (typeof navegador?.getInstalledRelatedApps !== "function") {
+                resolve();
+                return;
+            }
+            resolve(new Promise(consultar => consultar(navegador.getInstalledRelatedApps()))
+                .then(apps => {
+                    // Un beforeinstallprompt llegado mientras tanto manda: no está instalada.
+                    if (Array.isArray(apps) && apps.length > 0 && !this.#evento) this.#relacionada = true;
+                })
+                .catch(() => { /* Se sigue con la marca. */ }));
+        });
     }
 
     detener() {
@@ -153,28 +159,35 @@ export class ControladorInstalacion {
     }
 
     /** Muestra el diálogo del navegador. Devuelve "accepted", "dismissed" o null si no se pudo. */
-    async instalar() {
-        if (!this.#evento || this.estado.modo !== MODOS.DISPONIBLE) return null;
-        const evento = this.#evento;
-        this.#evento = null; // El evento solo se puede usar una vez.
-        this.#usado = true;
-        this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: null });
-        try {
-            await evento.prompt();
-            const { outcome } = await evento.userChoice;
-            if (outcome === "accepted") {
-                // appinstalled confirma; mientras tanto se informa que se está instalando.
-                if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: "Instalando ChivoMed…" });
-            } else {
-                if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: null });
+    instalar() {
+        return new Promise(resolve => {
+            if (!this.#evento || this.estado.modo !== MODOS.DISPONIBLE) {
+                resolve(null);
+                return;
             }
-            return outcome;
-        } catch {
-            if (this.estado.modo !== MODOS.INSTALADA) {
-                this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: "No se pudo abrir la instalación. Usa el menú del navegador." });
-            }
-            return null;
-        }
+            const evento = this.#evento;
+            this.#evento = null; // El evento solo se puede usar una vez.
+            this.#usado = true;
+            this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: null });
+            // prompt() se llama en el acto, dentro del gesto del usuario.
+            resolve(new Promise(mostrar => mostrar(evento.prompt()))
+                .then(() => evento.userChoice)
+                .then(({ outcome }) => {
+                    if (outcome === "accepted") {
+                        // appinstalled confirma; mientras tanto se informa que se está instalando.
+                        if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: "Instalando ChivoMed…" });
+                    } else {
+                        if (this.estado.modo !== MODOS.INSTALADA) this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: null });
+                    }
+                    return outcome;
+                })
+                .catch(() => {
+                    if (this.estado.modo !== MODOS.INSTALADA) {
+                        this.#actualizar({ modo: MODOS.NO_DISPONIBLE, mensaje: "No se pudo abrir la instalación. Usa el menú del navegador." });
+                    }
+                    return null;
+                }));
+        });
     }
 
     #ofrecer(evento) {

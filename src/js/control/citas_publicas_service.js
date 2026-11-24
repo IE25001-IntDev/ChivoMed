@@ -58,29 +58,37 @@ export default class CitasPublicasService extends DefaultService {
         return { idTipoDocumento, numeroDocumento: typeof numeroDocumento === "string" ? numeroDocumento.trim() : "" };
     }
 
-    async clinicas(documento) {
-        const { data } = await this.solicitar("POST", "publico/clinicas", { data: this.#documento(documento) });
-        return normalizarClinicas(data);
+    clinicas(documento) {
+        return new Promise(resolve => resolve(this.solicitar("POST", "publico/clinicas", { data: this.#documento(documento) })))
+            .then(({ data }) => normalizarClinicas(data));
     }
 
-    async citas(documento, { idClinica, desde, hasta }) {
-        const { data } = await this.solicitar("POST", "publico/citas",
-            { data: { ...this.#documento(documento), idClinica, desde, hasta } });
-        return normalizarCitas(data);
+    citas(documento, filtro) {
+        // Se desestructura dentro del ejecutor: sin filtro, el TypeError sigue siendo un rechazo.
+        return new Promise(resolve => {
+            const { idClinica, desde, hasta } = filtro;
+            resolve(this.solicitar("POST", "publico/citas",
+                { data: { ...this.#documento(documento), idClinica, desde, hasta } }));
+        }).then(({ data }) => normalizarCitas(data));
     }
 
     /** { blob, nombre } del PDF. Una respuesta que no es PDF se trata como error. */
-    async ticket(idConsulta, documento) {
-        // ruta() exige el id y lo codifica: "publico/{id}" → "publico/citas/{id}/ticket".
-        const ruta = `publico/citas/${this.ruta(idConsulta).slice(this.recurso.length + 1)}/ticket`;
-        const { data, headers } = await this.solicitar("POST", ruta, {
-            data: this.#documento(documento), respuesta: "blob",
-            headers: { Accept: "application/pdf, application/json" },
+    ticket(idConsulta, documento) {
+        let ruta;
+        // ruta() lanza TypeError sin id: dentro del ejecutor sigue siendo un rechazo.
+        return new Promise(resolve => {
+            // ruta() exige el id y lo codifica: "publico/{id}" → "publico/citas/{id}/ticket".
+            ruta = `publico/citas/${this.ruta(idConsulta).slice(this.recurso.length + 1)}/ticket`;
+            resolve(this.solicitar("POST", ruta, {
+                data: this.#documento(documento), respuesta: "blob",
+                headers: { Accept: "application/pdf, application/json" },
+            }));
+        }).then(({ data, headers }) => {
+            if (!String(headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+                throw new DefaultError({ status: 200, code: "respuesta.invalida",
+                    message: "GalenoSV no devolvió un PDF.", path: ruta, headers });
+            }
+            return Object.freeze({ blob: data, nombre: nombreDeArchivo(headers["content-disposition"], idConsulta) });
         });
-        if (!String(headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
-            throw new DefaultError({ status: 200, code: "respuesta.invalida",
-                message: "GalenoSV no devolvió un PDF.", path: ruta, headers });
-        }
-        return Object.freeze({ blob: data, nombre: nombreDeArchivo(headers["content-disposition"], idConsulta) });
     }
 }

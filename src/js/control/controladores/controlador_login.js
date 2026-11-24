@@ -69,14 +69,17 @@ export class ControladorLogin {
         return autoformatear(valor, this.tipo(idTipoDocumento)?.expresionRegular, anterior);
     }
 
-    async cargarTipos() {
-        this.#actualizar({ cargandoTipos: true, errorTipos: null });
-        try {
-            const tipos = await this.#servicio.listarTiposDocumento();
-            this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([...tipos]) });
-        } catch (error) {
-            this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([]), errorTipos: error.message });
-        }
+    cargarTipos() {
+        return new Promise(resolve => {
+            this.#actualizar({ cargandoTipos: true, errorTipos: null });
+            resolve(new Promise(listar => listar(this.#servicio.listarTiposDocumento()))
+                .then(tipos => {
+                    this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([...tipos]) });
+                })
+                .catch(error => {
+                    this.#actualizar({ cargandoTipos: false, tipos: Object.freeze([]), errorTipos: error.message });
+                }));
+        });
     }
 
     /** Devuelve los errores de cada campo (null si es válido) sin modificar el estado. */
@@ -99,21 +102,28 @@ export class ControladorLogin {
     }
 
     /** Devuelve la sesión si existe la persona y el documento activo. */
-    async enviar(datos) {
-        if (this.estado.enviando) return null;
-        const errores = this.validar(datos);
-        if (errores.tipo || errores.numero) {
-            this.#actualizar({ errores, mensaje: null });
-            return null;
-        }
-        this.#actualizar({ enviando: true, errores, mensaje: null });
-        try {
-            const sesion = await this.#servicio.iniciarSesion(datos.idTipoDocumento, datos.numeroDocumento.trim());
-            this.#actualizar({ enviando: false });
-            return sesion;
-        } catch (error) {
-            this.#actualizar({ enviando: false, mensaje: error.message });
-            return null;
-        }
+    enviar(datos) {
+        return new Promise(resolve => {
+            if (this.estado.enviando) {
+                resolve(null);
+                return;
+            }
+            const errores = this.validar(datos);
+            if (errores.tipo || errores.numero) {
+                this.#actualizar({ errores, mensaje: null });
+                resolve(null);
+                return;
+            }
+            this.#actualizar({ enviando: true, errores, mensaje: null });
+            resolve(new Promise(iniciar => iniciar(this.#servicio.iniciarSesion(datos.idTipoDocumento, datos.numeroDocumento.trim())))
+                .then(sesion => {
+                    this.#actualizar({ enviando: false });
+                    return sesion;
+                })
+                .catch(error => {
+                    this.#actualizar({ enviando: false, mensaje: error.message });
+                    return null;
+                }));
+        });
     }
 }

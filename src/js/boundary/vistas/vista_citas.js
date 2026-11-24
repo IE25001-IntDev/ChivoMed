@@ -167,14 +167,17 @@ class VistaCitas extends HTMLElement {
     }
 
     /** Envía todos los filtros de una vez y enfoca el primer dato que necesite atención. */
-    async #buscar(event) {
-        event.preventDefault();
-        const c = this.#controlador;
-        // Invitación a instalar (<install-prompt> abre su ventana); la búsqueda no la espera.
-        if (c.estado.habilitado.buscar) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
-        await c.buscar();
-        if (!this.isConnected) return;
-        if (!this.#enfocarError() && c.estado.citas) this.$("h-resultados").focus();
+    #buscar(event) {
+        return new Promise(resolve => {
+            event.preventDefault();
+            const c = this.#controlador;
+            // Invitación a instalar (<install-prompt> abre su ventana); la búsqueda no la espera.
+            if (c.estado.habilitado.buscar) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
+            resolve(c.buscar().then(() => {
+                if (!this.isConnected) return;
+                if (!this.#enfocarError() && c.estado.citas) this.$("h-resultados").focus();
+            }));
+        });
     }
 
     /** Lleva el foco al primer campo con error. Devuelve true si había alguno. */
@@ -342,13 +345,26 @@ class VistaCitas extends HTMLElement {
      * "Descargar PDF": entrega el PDF ya cargado (sin otra petición) y después, en el mismo toque,
      * pide ofrecer la instalación. Si el PDF no se pudo cargar, lo vuelve a pedir antes.
      */
-    async #descargarPdf(idConsulta) {
+    #descargarPdf(idConsulta) {
+        return new Promise(resolve => {
+            const c = this.#controlador;
+            if (!idConsulta || c.estado.ticketAbierto !== idConsulta) { resolve(); return; }
+            // Con el PDF ya listo se entrega en el acto, dentro del mismo clic (gesto del usuario).
+            if (c.estado.tickets[idConsulta]?.estado === "listo") {
+                this.#entregarTicket(idConsulta);
+                resolve();
+                return;
+            }
+            resolve(c.cargarTicket(idConsulta).then(() => {
+                if (!this.isConnected) return;
+                this.#entregarTicket(idConsulta);
+            }));
+        });
+    }
+
+    /** Entrega el PDF de la ventana abierta si está listo y luego invita a instalar. */
+    #entregarTicket(idConsulta) {
         const c = this.#controlador;
-        if (!idConsulta || c.estado.ticketAbierto !== idConsulta) return;
-        if (c.estado.tickets[idConsulta]?.estado !== "listo") {
-            await c.cargarTicket(idConsulta);
-            if (!this.isConnected) return;
-        }
         const ticket = c.estado.tickets[idConsulta];
         if (c.estado.ticketAbierto !== idConsulta || ticket?.estado !== "listo") return;
         this.#entregar(ticket.archivo);

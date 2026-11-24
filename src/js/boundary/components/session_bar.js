@@ -69,24 +69,26 @@ class SessionBar extends HTMLElement {
         raiz.getElementById("salir").disabled = !this.#sesion || sinRed || this.#saliendo;
     }
 
-    async #salir() {
-        const boton = this.shadowRoot.getElementById("salir");
-        const error = this.shadowRoot.getElementById("error");
-        this.#saliendo = true;
-        boton.disabled = true;
-        boton.textContent = "Cerrando sesión…";
-        try {
-            await cerrarSesion(this.#sesion?.csrfToken);
-            this.#avisarCierre();
-        } catch (falla) {
-            if (falla.status === 401) { this.#avisarCierre(); return; }
-            error.textContent = falla.message;
-            error.hidden = false;
-        } finally {
-            this.#saliendo = false;
-            boton.textContent = "Cerrar sesión";
-            this.#pintarRed();
-        }
+    #salir() {
+        return new Promise(resolve => {
+            const boton = this.shadowRoot.getElementById("salir");
+            const error = this.shadowRoot.getElementById("error");
+            this.#saliendo = true;
+            boton.disabled = true;
+            boton.textContent = "Cerrando sesión…";
+            resolve(new Promise(cerrar => cerrar(cerrarSesion(this.#sesion?.csrfToken)))
+                .then(() => this.#avisarCierre())
+                .catch(falla => {
+                    if (falla.status === 401) { this.#avisarCierre(); return; }
+                    error.textContent = falla.message;
+                    error.hidden = false;
+                })
+                .finally(() => {
+                    this.#saliendo = false;
+                    boton.textContent = "Cerrar sesión";
+                    this.#pintarRed();
+                }));
+        });
     }
 
     #avisarCierre() {

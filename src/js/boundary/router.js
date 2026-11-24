@@ -107,23 +107,42 @@ export class Router {
         this.#opciones.ventana.location.replace(`#${ruta}`);
     }
 
-    async procesar() {
-        const id = ++this.#secuencia;
-        const vigente = () => id === this.#secuencia;
-        const o = this.#opciones;
-        const resultado = resolverRuta(o.ventana.location.hash, o.rutas);
-        const { path, query, params } = resultado;
+    procesar() {
+        // El ejecutor corre en el acto: la secuencia sube y autenticar() se llama durante la llamada, como antes.
+        return new Promise(resolve => {
+            const id = ++this.#secuencia;
+            const vigente = () => id === this.#secuencia;
+            const o = this.#opciones;
+            const resultado = resolverRuta(o.ventana.location.hash, o.rutas);
+            const { path, query, params } = resultado;
 
-        if (path === "/") return this.#redirigir(o.porDefecto);
+            if (path === "/") {
+                resolve(this.#redirigir(o.porDefecto));
+                return;
+            }
 
-        const ruta = resultado.ruta ?? o.noEncontrada;
-        const contexto = { ruta, path, params, query, sesion: null, soloLectura: false };
+            const ruta = resultado.ruta ?? o.noEncontrada;
+            const contexto = { ruta, path, params, query, sesion: null, soloLectura: false };
 
-        if (ruta.empleado || ruta.soloInvitados) {
-            try {
-                contexto.sesion = await o.autenticar();
-            } catch (error) {
-                if (!vigente()) return;
+            if (!(ruta.empleado || ruta.soloInvitados)) {
+                resolve(this.#cargarYMontar(ruta, contexto, vigente));
+                return;
+            }
+
+            // Lo que seguía después del try/catch de autenticar(), con o sin sesión.
+            const continuar = () => {
+                if (!vigente()) return undefined;
+                if (contexto.sesion) {
+                    const inicio = o.inicioPorRol(contexto.sesion);
+                    if (ruta.soloInvitados && inicio) return this.#redirigir(inicio);
+                    if (ruta.empleado && !o.esEmpleado(contexto.sesion)) {
+                        return this.#redirigir(inicio ?? o.porDefecto);
+                    }
+                }
+                return this.#cargarYMontar(ruta, contexto, vigente);
+            };
+            const sinSesion = error => {
+                if (!vigente()) return undefined;
                 if (ruta.empleado) {
                     if (error?.status === 401) {
                         const volver = query.size ? `${path}?${query}` : path;
@@ -143,27 +162,22 @@ export class Router {
                     }
                 }
                 // Solo invitados: sin sesión (o sin poder verificarla) se muestra el login.
-            }
-            if (!vigente()) return;
-            if (contexto.sesion) {
-                const inicio = o.inicioPorRol(contexto.sesion);
-                if (ruta.soloInvitados && inicio) return this.#redirigir(inicio);
-                if (ruta.empleado && !o.esEmpleado(contexto.sesion)) {
-                    return this.#redirigir(inicio ?? o.porDefecto);
-                }
-            }
-        }
-
-        return this.#cargarYMontar(ruta, contexto, vigente);
+                return continuar();
+            };
+            // Dos argumentos: el try original solo envolvía autenticar(); los errores de lo que sigue se propagan.
+            resolve(new Promise(autenticar => autenticar(o.autenticar())).then(sesion => {
+                contexto.sesion = sesion;
+                return continuar();
+            }, sinSesion));
+        });
     }
 
-    async #cargarYMontar(ruta, contexto, vigente) {
-        try {
-            await ruta.cargar?.();
-        } catch (error) {
+    #cargarYMontar(ruta, contexto, vigente) {
+        // Dos argumentos: el try original solo envolvía cargar(); un error al montar se propaga.
+        return new Promise(resolve => resolve(ruta.cargar?.())).then(() => {
+            if (vigente()) this.#opciones.montar(ruta.tag, contexto);
+        }, error => {
             if (vigente()) this.#opciones.mostrarError(error, contexto);
-            return;
-        }
-        if (vigente()) this.#opciones.montar(ruta.tag, contexto);
+        });
     }
 }

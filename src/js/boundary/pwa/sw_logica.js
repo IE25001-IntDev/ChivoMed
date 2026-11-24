@@ -161,51 +161,62 @@
     }
 
     /** Nombres { shell, datos } de la copia vigente de esta versión; los de la instalación si no hay. */
-    async function cachesVigentes(caches) {
-        try {
-            // Abrir crea el caché: solo se abre si ya existe.
-            if (!(await caches.keys()).includes(CACHE_VIGENTE)) return { shell: CACHE_SHELL, datos: CACHE_DATOS };
-            const guardado = await (await caches.open(CACHE_VIGENTE)).match(CLAVE_VIGENTE);
-            const { shell, datos } = guardado ? await guardado.json() : {};
-            if (typeof shell === "string" && shell.startsWith(`${CACHE_SHELL}-`)
-                && typeof datos === "string" && datos.startsWith(`${CACHE_DATOS}-`)) return { shell, datos };
-        } catch { /* Sin puntero legible se usan los de la instalación. */ }
-        return { shell: CACHE_SHELL, datos: CACHE_DATOS };
+    function cachesVigentes(caches) {
+        // Abrir crea el caché: solo se abre si ya existe.
+        return new Promise(resolve => resolve(caches.keys()))
+            .then(claves => {
+                if (!claves.includes(CACHE_VIGENTE)) return { shell: CACHE_SHELL, datos: CACHE_DATOS };
+                return Promise.resolve(caches.open(CACHE_VIGENTE))
+                    .then(puntero => puntero.match(CLAVE_VIGENTE))
+                    .then(guardado => (guardado ? guardado.json() : {}))
+                    .then(({ shell, datos }) => {
+                        if (typeof shell === "string" && shell.startsWith(`${CACHE_SHELL}-`)
+                            && typeof datos === "string" && datos.startsWith(`${CACHE_DATOS}-`)) return { shell, datos };
+                        return { shell: CACHE_SHELL, datos: CACHE_DATOS };
+                    });
+            })
+            // Sin puntero legible se usan los de la instalación.
+            .catch(() => ({ shell: CACHE_SHELL, datos: CACHE_DATOS }));
     }
 
     /** Deja en el puntero (CACHE_VIGENTE) solo la entrada de esta versión, si existe el caché. */
-    async function limpiarPuntero(caches) {
-        if (!(await caches.keys()).includes(CACHE_VIGENTE)) return;
-        const puntero = await caches.open(CACHE_VIGENTE);
-        const viejas = (await puntero.keys()).filter(solicitud => solicitud.url !== CLAVE_VIGENTE);
-        await Promise.all(viejas.map(solicitud => puntero.delete(solicitud)));
+    function limpiarPuntero(caches) {
+        return new Promise(resolve => resolve(caches.keys())).then(claves => {
+            if (!claves.includes(CACHE_VIGENTE)) return undefined;
+            return Promise.resolve(caches.open(CACHE_VIGENTE)).then(puntero => Promise.resolve(puntero.keys())
+                .then(solicitudes => {
+                    const viejas = solicitudes.filter(solicitud => solicitud.url !== CLAVE_VIGENTE);
+                    return Promise.all(viejas.map(solicitud => puntero.delete(solicitud)));
+                }))
+                .then(() => undefined);
+        });
     }
 
-    async function desdePrecache(urlTexto, caches) {
-        const cache = await caches.open((await cachesVigentes(caches)).shell);
-        return cache.match(urlTexto);
+    function desdePrecache(urlTexto, caches) {
+        return new Promise(resolve => resolve(cachesVigentes(caches)))
+            .then(({ shell }) => caches.open(shell))
+            .then(cache => cache.match(urlTexto));
     }
 
     /** Navegación: siempre index.html; red primero para ver cambios, precache si no hay red. */
-    async function servirShell(base, { fetch, caches }) {
-        const indice = new URL("./index.html", base).href;
-        try {
-            const respuesta = await fetch(indice);
-            if (respuesta.ok) return respuesta;
-            return (await desdePrecache(indice, caches)) ?? respuesta;
-        } catch {
-            return (await desdePrecache(indice, caches)) ?? respuestaSinRed("texto");
-        }
+    function servirShell(base, entorno) {
+        return new Promise(resolve => {
+            const { fetch, caches } = entorno;
+            const indice = new URL("./index.html", base).href;
+            // .catch después del .then: el try también envolvía la lectura del precache.
+            resolve(new Promise(pedir => pedir(fetch(indice)))
+                .then(respuesta => (respuesta.ok ? respuesta : desdePrecache(indice, caches).then(copia => copia ?? respuesta)))
+                .catch(() => desdePrecache(indice, caches).then(copia => copia ?? respuestaSinRed("texto"))));
+        });
     }
 
-    async function servirRedPrimeroShell(solicitud, { fetch, caches }) {
-        try {
-            const respuesta = await fetch(solicitud);
-            if (respuesta.ok) return respuesta;
-            return (await desdePrecache(solicitud.url, caches)) ?? respuesta;
-        } catch {
-            return (await desdePrecache(solicitud.url, caches)) ?? respuestaSinRed("texto");
-        }
+    function servirRedPrimeroShell(solicitud, entorno) {
+        return new Promise(resolve => {
+            const { fetch, caches } = entorno;
+            resolve(new Promise(pedir => pedir(fetch(solicitud)))
+                .then(respuesta => (respuesta.ok ? respuesta : desdePrecache(solicitud.url, caches).then(copia => copia ?? respuesta)))
+                .catch(() => desdePrecache(solicitud.url, caches).then(copia => copia ?? respuestaSinRed("texto"))));
+        });
     }
 
     /** La misma respuesta con la cabecera CABECERA_COPIA (las de Cache Storage no se pueden modificar). */
@@ -216,31 +227,34 @@
     }
 
     /** La copia guardada del catálogo, marcada como copia, o null si no es cacheable o no hay. */
-    async function copiaPublica(solicitud, cacheable, caches) {
-        if (!cacheable) return null;
-        const cache = await caches.open((await cachesVigentes(caches)).datos);
-        const guardada = await cache.match(solicitud.url);
-        return guardada ? marcarCopia(guardada) : null;
+    function copiaPublica(solicitud, cacheable, caches) {
+        if (!cacheable) return Promise.resolve(null);
+        return new Promise(resolve => resolve(cachesVigentes(caches)))
+            .then(({ datos }) => caches.open(datos))
+            .then(cache => cache.match(solicitud.url))
+            .then(guardada => (guardada ? marcarCopia(guardada) : null));
     }
 
-    async function servirPublico(solicitud, { fetch, caches }) {
-        const cacheable = esCatalogoCacheable(solicitud.url);
-        let respuesta;
-        try {
-            respuesta = await fetch(solicitud);
-        } catch {
-            return (await copiaPublica(solicitud, cacheable, caches)) ?? respuestaSinRed("json");
-        }
-        // 502, 503 y 504: el backend no responde (p. ej. el proxy sin backend); igual que sin red.
-        if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
-            return (await copiaPublica(solicitud, cacheable, caches)) ?? respuesta;
-        }
-        const esJson = respuesta.headers.get("Content-Type")?.includes("application/json");
-        if (cacheable && respuesta.status === 200 && esJson) {
-            const cache = await caches.open((await cachesVigentes(caches)).datos);
-            await cache.put(solicitud.url, respuesta.clone());
-        }
-        return respuesta;
+    function servirPublico(solicitud, entorno) {
+        return new Promise(resolve => {
+            const { fetch, caches } = entorno;
+            const cacheable = esCatalogoCacheable(solicitud.url);
+            // Dos argumentos: el try solo envolvía el fetch; lo que sigue propaga sus errores.
+            resolve(new Promise(pedir => pedir(fetch(solicitud))).then(respuesta => {
+                // 502, 503 y 504: el backend no responde (p. ej. el proxy sin backend); igual que sin red.
+                if (STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
+                    return copiaPublica(solicitud, cacheable, caches).then(copia => copia ?? respuesta);
+                }
+                const esJson = respuesta.headers.get("Content-Type")?.includes("application/json");
+                if (cacheable && respuesta.status === 200 && esJson) {
+                    return cachesVigentes(caches)
+                        .then(({ datos }) => caches.open(datos))
+                        .then(cache => cache.put(solicitud.url, respuesta.clone()))
+                        .then(() => respuesta);
+                }
+                return respuesta;
+            }, () => copiaPublica(solicitud, cacheable, caches).then(copia => copia ?? respuestaSinRed("json"))));
+        });
     }
 
     /** Devuelve una promesa de Response, o null si el navegador debe manejar la petición solo. */
@@ -254,9 +268,13 @@
     }
 
     /** Descarga la lista completa; si un archivo falla, falla la instalación (addAll es atómico). */
-    async function precachear({ caches, base, crearSolicitud = url => new Request(url, { cache: "reload" }) }) {
-        const cache = await caches.open(CACHE_SHELL);
-        await cache.addAll(PRECACHE.map(ruta => crearSolicitud(new URL(ruta, base).href)));
+    function precachear(opciones) {
+        return new Promise(resolve => {
+            const { caches, base, crearSolicitud = url => new Request(url, { cache: "reload" }) } = opciones;
+            resolve(Promise.resolve(caches.open(CACHE_SHELL))
+                .then(cache => cache.addAll(PRECACHE.map(ruta => crearSolicitud(new URL(ruta, base).href))))
+                .then(() => undefined));
+        });
     }
 
     let generaciones = 0;
@@ -278,54 +296,77 @@
         return renovacionEnCurso;
     }
 
-    async function ejecutarRenovacion({ caches, fetch, base, esActiva = () => true, crearSolicitud = url => new Request(url, { cache: "reload" }) }) {
-        const generacion = `${Date.now()}-${++generaciones}`;
-        const nuevos = { shell: `${CACHE_SHELL}-${generacion}`, datos: `${CACHE_DATOS}-${generacion}` };
-        const descargar = async (url, valida) => {
-            const respuesta = await fetch(crearSolicitud(url));
-            if (!valida(respuesta)) throw new Error(`Descarga incompleta: ${url}`);
-            return [url, respuesta];
-        };
-        try {
-            const archivos = await Promise.all(PRECACHE.map(ruta => descargar(new URL(ruta, base).href, r => r.ok)));
-            const catalogos = await Promise.all(CATALOGOS_PUBLICOS.map(nombre => descargar(
-                new URL(`${RUTA_API}publico/${nombre}`, base).href,
-                r => r.status === 200 && Boolean(r.headers.get("Content-Type")?.includes("application/json")))));
-            const shell = await caches.open(nuevos.shell);
-            for (const [url, respuesta] of archivos) await shell.put(url, respuesta);
-            const datos = await caches.open(nuevos.datos);
-            for (const [url, respuesta] of catalogos) await datos.put(url, respuesta);
-            // Otra versión se activó mientras se descargaba: el puntero y sus cachés son suyos.
-            if (!esActiva()) throw new Error("Ya hay otra versión activa.");
-            await (await caches.open(CACHE_VIGENTE)).put(CLAVE_VIGENTE, new Response(JSON.stringify(nuevos), {
-                headers: { "Content-Type": "application/json" },
-            }));
-        } catch {
-            await Promise.all([caches.delete(nuevos.shell), caches.delete(nuevos.datos)]);
-            return false;
-        }
-        const conservar = new Set([nuevos.shell, nuevos.datos]);
-        const anteriores = (await caches.keys()).filter(nombre => esDeEstaVersion(nombre) && !conservar.has(nombre));
-        await Promise.all(anteriores.map(nombre => caches.delete(nombre)));
-        await limpiarPuntero(caches);
-        return true;
+    /** Guarda los pares [url, respuesta] desde el índice `i`, uno tras otro (en serie, como el for…of original). */
+    function guardarEnSerie(cache, pares, i) {
+        if (i >= pares.length) return Promise.resolve();
+        const [url, respuesta] = pares[i];
+        return Promise.resolve(cache.put(url, respuesta)).then(() => guardarEnSerie(cache, pares, i + 1));
+    }
+
+    function ejecutarRenovacion(opciones) {
+        return new Promise(resolve => {
+            const { caches, fetch, base, esActiva = () => true, crearSolicitud = url => new Request(url, { cache: "reload" }) } = opciones;
+            const generacion = `${Date.now()}-${++generaciones}`;
+            const nuevos = { shell: `${CACHE_SHELL}-${generacion}`, datos: `${CACHE_DATOS}-${generacion}` };
+            const descargar = (url, valida) => new Promise(pedir => pedir(fetch(crearSolicitud(url)))).then(respuesta => {
+                if (!valida(respuesta)) throw new Error(`Descarga incompleta: ${url}`);
+                return [url, respuesta];
+            });
+            // Lo que envolvía el try: descargar todo, guardarlo en serie y mover el puntero.
+            const copiaNueva = new Promise(descargarTodo => descargarTodo(Promise.all(PRECACHE.map(ruta => descargar(new URL(ruta, base).href, r => r.ok)))))
+                .then(archivos => Promise.all(CATALOGOS_PUBLICOS.map(nombre => descargar(
+                    new URL(`${RUTA_API}publico/${nombre}`, base).href,
+                    r => r.status === 200 && Boolean(r.headers.get("Content-Type")?.includes("application/json")))))
+                    .then(catalogos => Promise.resolve(caches.open(nuevos.shell))
+                        .then(shell => guardarEnSerie(shell, archivos, 0))
+                        .then(() => caches.open(nuevos.datos))
+                        .then(datos => guardarEnSerie(datos, catalogos, 0))))
+                .then(() => {
+                    // Otra versión se activó mientras se descargaba: el puntero y sus cachés son suyos.
+                    if (!esActiva()) throw new Error("Ya hay otra versión activa.");
+                    return caches.open(CACHE_VIGENTE);
+                })
+                .then(puntero => puntero.put(CLAVE_VIGENTE, new Response(JSON.stringify(nuevos), {
+                    headers: { "Content-Type": "application/json" },
+                })));
+            // Dos argumentos: el try terminaba antes de borrar los anteriores; esos errores se propagan.
+            resolve(copiaNueva.then(() => {
+                const conservar = new Set([nuevos.shell, nuevos.datos]);
+                return Promise.resolve(caches.keys())
+                    .then(claves => {
+                        const anteriores = claves.filter(nombre => esDeEstaVersion(nombre) && !conservar.has(nombre));
+                        return Promise.all(anteriores.map(nombre => caches.delete(nombre)));
+                    })
+                    .then(() => limpiarPuntero(caches))
+                    .then(() => true);
+            }, () => Promise.all([caches.delete(nuevos.shell), caches.delete(nuevos.datos)]).then(() => false)));
+        });
     }
 
     /** Borra los cachés de ChivoMed de otras versiones (conserva la copia vigente). Devuelve los borrados. */
-    async function limpiarVersionesViejas(caches) {
-        const { shell, datos } = await cachesVigentes(caches);
-        const vigentes = new Set([CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, shell, datos]);
-        const viejos = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO) && !vigentes.has(nombre));
-        await Promise.all(viejos.map(nombre => caches.delete(nombre)));
-        await limpiarPuntero(caches);
-        return viejos;
+    function limpiarVersionesViejas(caches) {
+        let viejos;
+        return new Promise(resolve => resolve(cachesVigentes(caches)))
+            .then(({ shell, datos }) => {
+                const vigentes = new Set([CACHE_SHELL, CACHE_DATOS, CACHE_VIGENTE, shell, datos]);
+                return Promise.resolve(caches.keys()).then(claves => {
+                    viejos = claves.filter(nombre => nombre.startsWith(PREFIJO) && !vigentes.has(nombre));
+                    return Promise.all(viejos.map(nombre => caches.delete(nombre)));
+                });
+            })
+            .then(() => limpiarPuntero(caches))
+            .then(() => viejos);
     }
 
     /** Borra todos los cachés de datos (de cualquier versión). Se usa al cerrar sesión. */
-    async function limpiarDatos(caches) {
-        const datos = (await caches.keys()).filter(nombre => nombre.startsWith(PREFIJO_DATOS));
-        await Promise.all(datos.map(nombre => caches.delete(nombre)));
-        return datos;
+    function limpiarDatos(caches) {
+        let datos;
+        return new Promise(resolve => resolve(caches.keys()))
+            .then(claves => {
+                datos = claves.filter(nombre => nombre.startsWith(PREFIJO_DATOS));
+                return Promise.all(datos.map(nombre => caches.delete(nombre)));
+            })
+            .then(() => datos);
     }
 
     /**

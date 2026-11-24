@@ -178,17 +178,25 @@ export class MemoriaVistas {
         return Promise.race([tarea, limite]).finally(() => clearTimeout(temporizador));
     }
 
-    async #hidratar() {
-        const registros = await this.#persistencia.leer([RANURA_SESION, ...RANURAS_DATOS, RANURA_PUBLICO]);
-        await this.#hidratarPublico(registros?.[RANURA_PUBLICO]);
+    #hidratar() {
+        let registros;
+        return new Promise(resolve => resolve(this.#persistencia.leer([RANURA_SESION, ...RANURAS_DATOS, RANURA_PUBLICO])))
+            .then(leidos => {
+                registros = leidos;
+                return this.#hidratarPublico(registros?.[RANURA_PUBLICO]);
+            })
+            .then(() => this.#hidratarEmpleado(registros));
+    }
+
+    /** Restaura la sesión y los datos del empleado; si la sesión no es válida, borra lo suyo. Resuelve true si restauró. */
+    #hidratarEmpleado(registros) {
         const { sesion, verificadaEn } = registros?.[RANURA_SESION] ?? {};
         const id = sesion?.usuario?.idUsuario;
         const edad = verificadaEn instanceof Date ? this.#reloj().getTime() - verificadaEn.getTime() : Number.NaN;
         if (typeof id !== "string" || !id || !(edad >= 0 && edad <= VIGENCIA_MS)) {
             // Sin sesión válida se borra solo lo del empleado; la búsqueda pública tiene su regla.
             const deEmpleado = [RANURA_SESION, ...RANURAS_DATOS].filter(r => registros?.[r] !== undefined);
-            await Promise.all(deEmpleado.map(r => this.#persistencia.guardar(r, null)));
-            return false;
+            return Promise.all(deEmpleado.map(r => this.#persistencia.guardar(r, null))).then(() => false);
         }
         // Una sesión verificada mientras se leía el disco manda: no se pisa con la copia.
         if (this.#estado.sesion) return false;
@@ -208,25 +216,34 @@ export class MemoriaVistas {
      * Restaura la búsqueda pública si tiene 8 horas o menos (si caducó o no es válida, la borra), y
      * la borra cuando el backend responde por primera vez: con el backend disponible no se usa.
      */
-    async #hidratarPublico(registro) {
-        if (registro === undefined) return;
-        const en = registro?.valor?.en;
-        const edad = Number.isFinite(en) ? this.#reloj().getTime() - en : Number.NaN;
-        if (registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
-            await this.#persistencia.guardar(RANURA_PUBLICO, null);
-            return;
-        }
-        // Una sesión ya presente (o datos cargados mientras se leía el disco) mandan.
-        if (this.#estado.sesion || Object.hasOwn(this.#estado.datos, CLAVE_PUBLICA_CITAS)) return;
-        const valor = congelarProfundo(registro.valor);
-        this.#estado.datos = Object.freeze(Object.assign(Object.create(null), this.#estado.datos,
-            { [CLAVE_PUBLICA_CITAS]: valor }));
-        this.#publicaDeDisco = valor;
-        this.#documento?.addEventListener(EVENTO_SERVIDOR_RESPONDIO, () => {
-            // Solo si sigue siendo la copia del disco (no una búsqueda nueva de esta sesión).
-            if (this.esCopiaDeDisco(CLAVE_PUBLICA_CITAS)) this.guardar(CLAVE_PUBLICA_CITAS, null);
-            this.#publicaDeDisco = null;
-        }, { once: true });
+    #hidratarPublico(registro) {
+        return new Promise(resolve => {
+            if (registro === undefined) {
+                resolve();
+                return;
+            }
+            const en = registro?.valor?.en;
+            const edad = Number.isFinite(en) ? this.#reloj().getTime() - en : Number.NaN;
+            if (registro?.clave !== CLAVE_PUBLICA_CITAS || !(edad >= 0 && edad <= VIGENCIA_MS)) {
+                resolve(Promise.resolve(this.#persistencia.guardar(RANURA_PUBLICO, null)).then(() => undefined));
+                return;
+            }
+            // Una sesión ya presente (o datos cargados mientras se leía el disco) mandan.
+            if (this.#estado.sesion || Object.hasOwn(this.#estado.datos, CLAVE_PUBLICA_CITAS)) {
+                resolve();
+                return;
+            }
+            const valor = congelarProfundo(registro.valor);
+            this.#estado.datos = Object.freeze(Object.assign(Object.create(null), this.#estado.datos,
+                { [CLAVE_PUBLICA_CITAS]: valor }));
+            this.#publicaDeDisco = valor;
+            this.#documento?.addEventListener(EVENTO_SERVIDOR_RESPONDIO, () => {
+                // Solo si sigue siendo la copia del disco (no una búsqueda nueva de esta sesión).
+                if (this.esCopiaDeDisco(CLAVE_PUBLICA_CITAS)) this.guardar(CLAVE_PUBLICA_CITAS, null);
+                this.#publicaDeDisco = null;
+            }, { once: true });
+            resolve();
+        });
     }
 }
 

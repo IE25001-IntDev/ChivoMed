@@ -90,26 +90,26 @@ export class ControladorConexion {
     /** Programa la próxima verificación si no hay una pendiente; varios fallos seguidos no reinician el plazo. */
     #programar() {
         if (this.#servidor || this.#temporizador !== null) return;
-        this.#temporizador = setTimeout(async () => {
+        this.#temporizador = setTimeout(() => {
             this.#temporizador = null;
-            await this.#revisar();
-            this.#programar();
+            // #programar solo corre al terminar la revisión.
+            this.#revisar().then(() => this.#programar());
         }, INTERVALO_VERIFICACION_MS);
     }
 
     /** Verifica el backend si está marcado caído y hay red. Una sola verificación a la vez. */
-    async #revisar() {
-        if (this.#servidor || !this.#red || !this.#verificar || this.#verificando) return;
+    #revisar() {
+        if (this.#servidor || !this.#red || !this.#verificar || this.#verificando) return Promise.resolve();
         this.#verificando = true;
-        let respondio = false;
-        try {
-            respondio = await this.#verificar();
-        } catch {
-            respondio = false;
-        } finally {
-            this.#verificando = false;
-        }
-        if (respondio) this.#disponible();
+        return new Promise(resolve => resolve(this.#verificar()))
+            .catch(() => false)
+            .finally(() => {
+                this.#verificando = false;
+            })
+            // Primero se libera `verificando` y después se avisa, como antes.
+            .then(respondio => {
+                if (respondio) this.#disponible();
+            });
     }
 
     #actualizar() {
