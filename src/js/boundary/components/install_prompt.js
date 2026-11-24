@@ -17,8 +17,8 @@
  * vuelve al elemento de la otra ventana que lo tenía.
  */
 import { ControladorInstalacion, EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
-import { Estilos } from "../estilos.js";
 import { Plantilla } from "../plantilla.js";
+import { ComponenteChivoMed } from "./componente_chivomed.js";
 
 const TEXTO_INVITACION = "¿Quieres instalar ChivoMed en este dispositivo? Podrás abrirla como una aplicación y consultar tus datos guardados sin conexión.";
 const TEXTO_INSTRUCCIONES = "Para instalar ChivoMed, abre el menú del navegador y elige Instalar ChivoMed o Agregar a la pantalla de inicio.";
@@ -41,7 +41,7 @@ const PLANTILLA = new Plantilla(`
   </div>
 </dialog>`);
 
-class InstallPrompt extends HTMLElement {
+class InstallPrompt extends ComponenteChivoMed {
     #controlador = null;
     #inyectado = null;
     #cancelar = null;
@@ -53,7 +53,7 @@ class InstallPrompt extends HTMLElement {
     /** Esc (o cualquier cierre que no pasó por el controlador) la cierra esa vez. */
     #alCerrarDialogo = () => { if (this.#controlador.estado.invitacion) this.#controlador.cerrarInvitacion(); };
     /** El cuerpo llena la ventana: un clic cuyo destino es el <dialog> mismo cayó en el fondo. */
-    #alClicDialogo = event => { if (event.target === this.shadowRoot.getElementById("invitacion")) this.#controlador.cerrarInvitacion(); };
+    #alClicDialogo = event => { if (event.target === this.$("invitacion")) this.#controlador.cerrarInvitacion(); };
     /** Elemento con el foco antes de abrir la ventana, para devolvérselo al cerrarla. */
     #focoPrevio = null;
 
@@ -65,18 +65,11 @@ class InstallPrompt extends HTMLElement {
 
     get controlador() { return this.#controlador ?? this.#inyectado; }
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        if (!this.shadowRoot.childElementCount) {
-            this.shadowRoot.append(Estilos.hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
-        }
+        this.montar(PLANTILLA, "pwa.css");
         this.#controlador = this.#inyectado ?? new ControladorInstalacion({ ventana: window });
         this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
-        this.shadowRoot.getElementById("instalar").addEventListener("click", this.#alPulsar);
+        this.$("instalar").addEventListener("click", this.#alPulsar);
         this.#escucharDialogo("addEventListener");
         document.addEventListener(EVENTO_OFRECER, this.#alOfrecer);
         document.addEventListener(EVENTO_INSTALAR, this.#alInstalarAlDescargar);
@@ -85,7 +78,7 @@ class InstallPrompt extends HTMLElement {
     }
 
     disconnectedCallback() {
-        this.shadowRoot.getElementById("instalar").removeEventListener("click", this.#alPulsar);
+        this.$("instalar").removeEventListener("click", this.#alPulsar);
         this.#escucharDialogo("removeEventListener");
         document.removeEventListener(EVENTO_OFRECER, this.#alOfrecer);
         document.removeEventListener(EVENTO_INSTALAR, this.#alInstalarAlDescargar);
@@ -95,33 +88,31 @@ class InstallPrompt extends HTMLElement {
     }
 
     #escucharDialogo(metodo) {
-        const $ = id => this.shadowRoot.getElementById(id);
-        $("invitacion-instalar")[metodo]("click", this.#alAceptar);
-        $("invitacion-no")[metodo]("click", this.#alRechazar);
-        $("invitacion-entendido")[metodo]("click", this.#alRechazar);
-        $("invitacion")[metodo]("close", this.#alCerrarDialogo);
-        $("invitacion")[metodo]("click", this.#alClicDialogo);
+        this.$("invitacion-instalar")[metodo]("click", this.#alAceptar);
+        this.$("invitacion-no")[metodo]("click", this.#alRechazar);
+        this.$("invitacion-entendido")[metodo]("click", this.#alRechazar);
+        this.$("invitacion")[metodo]("close", this.#alCerrarDialogo);
+        this.$("invitacion")[metodo]("click", this.#alClicDialogo);
     }
 
     #pintar(estado) {
-        const boton = this.shadowRoot.getElementById("instalar");
+        const boton = this.$("instalar");
         boton.hidden = estado.modo !== ControladorInstalacion.MODOS.DISPONIBLE && estado.modo !== ControladorInstalacion.MODOS.INSTALANDO;
         boton.disabled = estado.modo === ControladorInstalacion.MODOS.INSTALANDO;
-        this.shadowRoot.getElementById("estado").textContent = estado.mensaje ?? "";
+        this.$("estado").textContent = estado.mensaje ?? "";
         this.#pintarInvitacion(estado.invitacion, estado.instrucciones);
     }
 
     #pintarInvitacion(abierta, instrucciones) {
-        const $ = id => this.shadowRoot.getElementById(id);
-        const dialogo = $("invitacion");
+        const dialogo = this.$("invitacion");
         if (abierta && !dialogo.open) {
-            $("invitacion-texto").textContent = instrucciones ? TEXTO_INSTRUCCIONES : TEXTO_INVITACION;
-            $("invitacion-instalar").hidden = instrucciones;
-            $("invitacion-no").hidden = instrucciones;
-            $("invitacion-entendido").hidden = !instrucciones;
+            this.$("invitacion-texto").textContent = instrucciones ? TEXTO_INSTRUCCIONES : TEXTO_INVITACION;
+            this.$("invitacion-instalar").hidden = instrucciones;
+            this.$("invitacion-no").hidden = instrucciones;
+            this.$("invitacion-entendido").hidden = !instrucciones;
             this.#focoPrevio = InstallPrompt.#focoProfundo();
             dialogo.showModal();
-            $(instrucciones ? "invitacion-entendido" : "invitacion-instalar").focus();
+            this.$(instrucciones ? "invitacion-entendido" : "invitacion-instalar").focus();
         } else if (!abierta) {
             if (dialogo.open) dialogo.close();
             const previo = this.#focoPrevio;

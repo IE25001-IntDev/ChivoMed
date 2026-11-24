@@ -17,13 +17,13 @@
  */
 import { ControladorConsulta, MENSAJES } from "../../control/controladores/controlador_consulta.js";
 import { ControladorConsultas } from "../../control/controladores/controlador_consultas.js";
-import { Estilos } from "../estilos.js";
 import { Plantilla } from "../plantilla.js";
 import { FechasSV } from "../../control/fechas_sv.js";
 import { Validaciones } from "../../control/validaciones.js";
 import "../components/consulta/panel_paso_actual.js";
 import "../components/consulta/panel_examenes_paso.js";
 import "../components/consulta/panel_cierre_consulta.js";
+import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
 /** F8: textos fijos de los botones para salir de una consulta. */
 const TEXTOS = Object.freeze({
@@ -80,7 +80,7 @@ const PLANTILLA = new Plantilla(`
   </div>
 </div>`);
 
-class VistaConsulta extends HTMLElement {
+class VistaConsulta extends ComponenteChivoMed {
     #controlador = null;
     #cancelar = null;
     #paneles = null;
@@ -102,15 +102,8 @@ class VistaConsulta extends HTMLElement {
     /** Paneles hijos (para pruebas): { paso, examenes, cierre }. */
     get paneles() { return this.#paneles; }
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "consulta.css");
         if (!this.#paneles) this.#crearPaneles();
         const c = () => this.#controlador;
         this.#escuchar(this.$("reintentar"), "click", () => c().reintentar());
@@ -183,7 +176,7 @@ class VistaConsulta extends HTMLElement {
         const cambio = (...claves) => !cambios || claves.some(c => cambios.has(c));
         const ctrl = this.#controlador;
         if (cambios?.has("navegarA") && estado.navegarA) {
-            this.dispatchEvent(new CustomEvent("navegar", { bubbles: true, composed: true, detail: { ruta: estado.navegarA.ruta } }));
+            this.emitir("navegar", { ruta: estado.navegarA.ruta });
         }
         this.#pintarCabecera(estado, ctrl, cambio);
         if (cambio("consulta", "idElegido", "sesion")) this.#pintarRecorrido(estado, ctrl);

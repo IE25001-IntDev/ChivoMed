@@ -26,6 +26,10 @@ function referencias(archivo) {
         agregar(/new URL\(\s*["'`]([^"'`$]+\.(?:js|css))["'`]\s*,\s*import\.meta\.url\)/g);
         // hojaDeEstilos("x.css") resuelve dentro de resources/.
         agregar(/hojaDeEstilos\(\s*["']([^"']+)["']\s*\)/g, nombre => `resources/${nombre}`);
+        // this.montar(PLANTILLA, "x.css", …) (ComponenteChivoMed) también resuelve dentro de resources/.
+        for (const llamada of texto.matchAll(/\bmontar\(\s*\w+((?:\s*,\s*["'][^"']+\.css["'])+)\s*\)/g)) {
+            for (const hoja of llamada[1].matchAll(/["']([^"']+\.css)["']/g)) encontradas.push(`resources/${hoja[1]}`);
+        }
     } else if (archivo.endsWith('.css')) {
         agregar(/@import\s+url\(\s*["']?([^"')]+)["']?\s*\)/g);
     } else if (archivo.endsWith('.html')) {

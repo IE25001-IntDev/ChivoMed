@@ -26,6 +26,7 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend. Destino final de la
   - `router.js`, `rutas.js`, `plantilla.js`, `estilos.js` y `theme_init.js` (script clásico que corre antes de los módulos para evitar el destello de tema).
   - `vistas/`: solo las vistas (`vista_*.js`, Web Components de ruta).
   - `components/`: Web Components reutilizables, con `citas/`, `dashboard/` y `consulta/`.
+  - Todo Web Component (vistas incluidas) hereda de `ComponenteChivoMed` (`components/componente_chivomed.js`): Shadow DOM, `montar(plantilla, ...hojas)`, `$(id)`, `emitir(tipo, detalle)` y `modelo` con `pintar()`.
   - `pwa/`: solo lo que sirve o registra el navegador: `sw_logica.js` (script clásico para `importScripts` que también es un módulo válido para las pruebas) y `registro_sw.js`.
 - `src/js/control/`: todo lo que no toca el DOM.
   - Servicios HTTP que extienden `DefaultService` (se conserva su CRUD genérico), `auth_service.js`, `api_config.js`, `estado_reactivo.js` y `formato_documento.js`.

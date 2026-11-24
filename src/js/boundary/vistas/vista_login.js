@@ -7,12 +7,12 @@
  * Emite 'navegar' { ruta } (bubbles, composed) cuando el personal puede entrar.
  */
 import { ControladorLogin, MENSAJES } from "../../control/controladores/controlador_login.js";
-import { Estilos } from "../estilos.js";
 import { conexion } from "../../control/conexion.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import { Plantilla } from "../plantilla.js";
 import { EVENTO_OFRECER } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
+import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
@@ -44,7 +44,7 @@ const PLANTILLA = new Plantilla(`
   <p class="pie-tarjeta">¿Eres paciente? <a href="#/citas">Busca tus citas</a></p>
 </section>`);
 
-class VistaLogin extends HTMLElement {
+class VistaLogin extends ComponenteChivoMed {
     #controlador = null;
     #cancelar = null;
     #alEnviar = event => this.#enviar(event);
@@ -67,17 +67,8 @@ class VistaLogin extends HTMLElement {
 
     get controlador() { return this.#controlador; }
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) {
-            raiz.append(Estilos.hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
-        }
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css");
         this.$("formulario").addEventListener("submit", this.#alEnviar);
         this.$("tipo").addEventListener("change", this.#alCambiarTipo);
         this.$("numero").addEventListener("input", this.#alEscribirNumero);
@@ -183,9 +174,7 @@ class VistaLogin extends HTMLElement {
             resolve(this.#controlador.enviar(datos).then(sesion => {
                 if (!this.isConnected) return;
                 if (sesion) {
-                    this.dispatchEvent(new CustomEvent("navegar", {
-                        bubbles: true, composed: true, detail: { ruta: ControladorLogin.destinoTrasLogin(this.contexto?.query, sesion) },
-                    }));
+                    this.emitir("navegar", { ruta: ControladorLogin.destinoTrasLogin(this.contexto?.query, sesion) });
                     return;
                 }
                 const { errores, mensaje } = this.#controlador.estado;

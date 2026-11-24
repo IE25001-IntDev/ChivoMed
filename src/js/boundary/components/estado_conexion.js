@@ -8,8 +8,8 @@
  * Las vistas deshabilitan sus acciones de red suscribiéndose a `conexion` (control/conexion.js).
  */
 import { conexion } from "../../control/conexion.js";
-import { Estilos } from "../estilos.js";
 import { Plantilla } from "../plantilla.js";
+import { ComponenteChivoMed } from "./componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <div class="estado-red" id="estado" role="status" aria-live="polite" aria-atomic="true" data-aviso="oculto">
@@ -18,19 +18,12 @@ const PLANTILLA = new Plantilla(`
 
 const AVISO_RESTABLECIDA_MS = 4000;
 
-class EstadoConexion extends HTMLElement {
+class EstadoConexion extends ComponenteChivoMed {
     #cancelar = null;
     #temporizador = null;
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        if (!this.shadowRoot.childElementCount) {
-            this.shadowRoot.append(Estilos.hojaDeEstilos("pwa.css"), PLANTILLA.clonar());
-        }
+        this.montar(PLANTILLA, "pwa.css");
         this.#cancelar = conexion.suscribir(enLinea => this.#pintar(enLinea, true));
         this.#pintar(conexion.enLinea, false);
     }
@@ -41,7 +34,7 @@ class EstadoConexion extends HTMLElement {
     }
 
     #pintar(enLinea, cambio) {
-        const estado = this.shadowRoot.getElementById("estado");
+        const estado = this.$("estado");
         clearTimeout(this.#temporizador);
         const sinServidor = !enLinea && conexion.motivo === "servidor";
         estado.dataset.estado = enLinea ? "en-linea" : sinServidor ? "sin-servidor" : "sin-red";
@@ -59,8 +52,8 @@ class EstadoConexion extends HTMLElement {
 
     /** Cambia solo el texto de la región; vacía, se oculta a la vista pero sigue en el árbol de accesibilidad. */
     #avisar(mensaje) {
-        this.shadowRoot.getElementById("texto").textContent = mensaje;
-        this.shadowRoot.getElementById("estado").dataset.aviso = mensaje ? "visible" : "oculto";
+        this.$("texto").textContent = mensaje;
+        this.$("estado").dataset.aviso = mensaje ? "visible" : "oculto";
     }
 }
 

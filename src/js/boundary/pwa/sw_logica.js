@@ -29,7 +29,7 @@
      */
     class LogicaServiceWorker {
         // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-        static VERSION = "2026-11-24.4";
+        static VERSION = "2026-11-24.5";
         static PREFIJO = "chivomed-";
         static CACHE_SHELL = `${LogicaServiceWorker.PREFIJO}shell-${LogicaServiceWorker.VERSION}`;
         static PREFIJO_DATOS = `${LogicaServiceWorker.PREFIJO}datos-`;
@@ -67,6 +67,7 @@
             "./js/boundary/rutas.js",
             "./js/boundary/plantilla.js",
             "./js/boundary/estilos.js",
+            "./js/boundary/components/componente_chivomed.js",
             "./js/boundary/components/app_shell.js",
             "./js/boundary/components/session_bar.js",
             "./js/boundary/components/theme_toggle.js",

@@ -19,7 +19,6 @@
 import { Router } from "../router.js";
 import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION, RUTA_POR_DEFECTO, RUTA_LOGIN, TablaRutas } from "../rutas.js";
 import { AuthService, auth, CODIGO_SIN_RED } from "../../control/auth_service.js";
-import { Estilos } from "../estilos.js";
 import { RegistroServiceWorker } from "../pwa/registro_sw.js";
 import { CachesCliente } from "../../control/caches_cliente.js";
 import { memoria } from "../../control/memoria_vistas.js";
@@ -30,6 +29,7 @@ import "./install_prompt.js";
 import "./estado_conexion.js";
 import "../vistas/vista_aviso.js";
 import { Plantilla } from "../plantilla.js";
+import { ComponenteChivoMed } from "./componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <a class="saltar" href="#contenido">Saltar al contenido</a>
@@ -48,7 +48,7 @@ const PLANTILLA = new Plantilla(`
 <p class="solo-lectores" id="anuncio" aria-live="polite"></p>
 <footer class="pie"><p>ChivoMed · GalenoSV</p></footer>`);
 
-class AppShell extends HTMLElement {
+class AppShell extends ComponenteChivoMed {
     #router = null;
     #rutaActual = null;
     #primerMontaje = true;
@@ -72,19 +72,12 @@ class AppShell extends HTMLElement {
         else CachesCliente.limpiarCachesDeDatos();
     }, 0);
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) {
-            raiz.append(Estilos.hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
+        if (this.montar(PLANTILLA, "app_shell.css")) {
             // El enlace de salto no debe cambiar el hash: el router lo interpretaría como ruta.
-            raiz.querySelector(".saltar").addEventListener("click", event => {
+            this.shadowRoot.querySelector(".saltar").addEventListener("click", event => {
                 event.preventDefault();
-                raiz.getElementById("contenido").focus();
+                this.$("contenido").focus();
             });
         }
         this.#router = new Router({
@@ -135,7 +128,6 @@ class AppShell extends HTMLElement {
     }
 
     #montar(tag, contexto) {
-        const raiz = this.shadowRoot;
         const vista = document.createElement(tag);
         vista.contexto = contexto;
         this.#rutaActual = contexto.ruta;
@@ -144,7 +136,7 @@ class AppShell extends HTMLElement {
         if (contexto.ruta.empleado && contexto.sesion && !contexto.soloLectura) memoria.recordarSesion(contexto.sesion);
 
         this.#mostrarSesion(contexto);
-        raiz.getElementById("contenido").replaceChildren(vista);
+        this.$("contenido").replaceChildren(vista);
         this.#anunciar(contexto.ruta.titulo, vista);
     }
 
@@ -176,17 +168,17 @@ class AppShell extends HTMLElement {
             event.stopPropagation();
             this.#router.pendiente = this.#router.procesar();
         });
-        this.shadowRoot.getElementById("contenido").replaceChildren(aviso);
+        this.$("contenido").replaceChildren(aviso);
         this.#anunciar("Error", aviso);
     }
 
     #anunciar(titulo, contenedor) {
         document.title = `${titulo} | ChivoMed`;
-        this.shadowRoot.getElementById("anuncio").textContent = titulo;
+        this.$("anuncio").textContent = titulo;
         // En la primera carga se respeta el foco del navegador; al navegar se lleva al título de la vista.
         if (this.#primerMontaje) { this.#primerMontaje = false; return; }
         const h1 = (contenedor.shadowRoot ?? contenedor).querySelector("h1");
-        (h1 ?? this.shadowRoot.getElementById("contenido")).focus();
+        (h1 ?? this.$("contenido")).focus();
     }
 }
 

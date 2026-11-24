@@ -9,9 +9,9 @@
  * El texto que se escribe no se pisa: el campo solo se actualiza si el borrador del modelo cambió
  * por otra razón (precarga de un paso reabierto, cambio de paso).
  */
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <section class="panel" aria-labelledby="titulo">
@@ -49,39 +49,23 @@ const PLANTILLA = new Plantilla(`
   </div>
 </section>`);
 
-class PanelPasoActual extends HTMLElement {
-    #modelo = null;
+class PanelPasoActual extends ComponenteChivoMed {
     #pintado = null;
-    #emitir = (tipo, detail) => this.dispatchEvent(new CustomEvent(tipo, { bubbles: true, composed: true, detail }));
-    #alEscribir = () => this.#emitir("cambiar-borrador", { valor: this.$("valor").value });
-    #alAvanzar = () => this.#emitir("avanzar");
-    #alRetroceder = () => this.#emitir("retroceder");
-    #alConfirmar = () => this.#emitir("confirmar");
-    #alCancelar = () => this.#emitir("cancelar");
-
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
-    set modelo(valor) {
-        this.#modelo = valor ?? null;
-        if (this.isConnected) this.#pintar();
-    }
-
-    get modelo() { return this.#modelo; }
+    #alEscribir = () => this.emitir("cambiar-borrador", { valor: this.$("valor").value });
+    #alAvanzar = () => this.emitir("avanzar");
+    #alRetroceder = () => this.emitir("retroceder");
+    #alConfirmar = () => this.emitir("confirmar");
+    #alCancelar = () => this.emitir("cancelar");
 
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "consulta.css");
         this.$("valor").addEventListener("input", this.#alEscribir);
         this.$("avanzar").addEventListener("click", this.#alAvanzar);
         this.$("retroceder").addEventListener("click", this.#alRetroceder);
         this.$("confirmar").addEventListener("click", this.#alConfirmar);
         this.$("cancelar").addEventListener("click", this.#alCancelar);
         this.#pintado = null;
-        this.#pintar();
+        this.pintar();
     }
 
     disconnectedCallback() {
@@ -97,8 +81,8 @@ class PanelPasoActual extends HTMLElement {
         this.$?.(destino === "confirmacion" ? "confirmar" : "titulo")?.focus();
     }
 
-    #pintar() {
-        const m = this.#modelo;
+    pintar() {
+        const m = this.modelo;
         const antes = this.#pintado;
         this.#pintado = m;
         if (!m) return;
@@ -152,7 +136,7 @@ class PanelPasoActual extends HTMLElement {
             radio.type = "radio";
             radio.name = "paso";
             radio.value = paso.idConsultaProcedimientoPaso;
-            radio.addEventListener("change", () => { if (radio.checked) this.#emitir("elegir-paso", { idPaso: radio.value }); });
+            radio.addEventListener("change", () => { if (radio.checked) this.emitir("elegir-paso", { idPaso: radio.value }); });
             const texto = document.createElement("span");
             texto.textContent = `${paso.nombre} · ${procedimiento}`;
             etiqueta.append(radio, texto);

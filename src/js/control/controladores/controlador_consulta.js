@@ -936,6 +936,11 @@ export class ControladorConsulta {
         return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(Validaciones.esTexto))]);
     }
 
+    /** Contador de caracteres de un campo de texto libre (indicaciones, observaciones). */
+    static textoContador(valor) {
+        return `${valor.length}/${MAX_TEXTO} caracteres`;
+    }
+
     /** F9: texto de cuántos exámenes hay seleccionados. */
     static textoSeleccion(n) {
         if (!n) return "Ningún examen seleccionado";

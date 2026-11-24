@@ -11,10 +11,10 @@
  * 'asignar-examenes' { indicaciones }.
  * `limpiar()` vacía las indicaciones sin mover el foco; `enfocarError()` y `enfocarResultados()` lo mueven.
  */
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
 import { ControladorConsulta, MAX_TEXTO } from "../../../control/controladores/controlador_consulta.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <section class="panel" aria-labelledby="titulo">
@@ -51,46 +51,30 @@ const PLANTILLA = new Plantilla(`
   <p class="vacio" id="sin-ordenes" hidden>Todavía no hay órdenes en este paso.</p>
 </section>`);
 
-class PanelExamenesPaso extends HTMLElement {
-    #modelo = null;
+class PanelExamenesPaso extends ComponenteChivoMed {
     #pintado = null;
     /** Clave de las casillas pintadas (visibles + ordenados): solo se reconstruyen si cambia. */
     #claveCasillas = null;
-    #emitir = (tipo, detail) => this.dispatchEvent(new CustomEvent(tipo, { bubbles: true, composed: true, detail }));
     #alEnviar = event => {
         event.preventDefault();
-        this.#emitir("asignar-examenes", { indicaciones: this.$("indicaciones").value });
+        this.emitir("asignar-examenes", { indicaciones: this.$("indicaciones").value });
     };
-    #alEscribir = () => { this.$("contador-indicaciones").textContent = PanelExamenesPaso.#contador(this.$("indicaciones").value); };
-    #alCambiarCategoria = () => { this.#emitir("cambiar-categoria", { idTipoExamen: this.$("categoria").value }); };
+    #alEscribir = () => { this.$("contador-indicaciones").textContent = ControladorConsulta.textoContador(this.$("indicaciones").value); };
+    #alCambiarCategoria = () => { this.emitir("cambiar-categoria", { idTipoExamen: this.$("categoria").value }); };
     #alMarcar = event => {
         const casilla = event.currentTarget ?? event.target;
-        this.#emitir("alternar-examen", { idExamen: casilla.value, marcado: casilla.checked });
+        this.emitir("alternar-examen", { idExamen: casilla.value, marcado: casilla.checked });
     };
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
-    set modelo(valor) {
-        this.#modelo = valor ?? null;
-        if (this.isConnected) this.#pintar();
-    }
-
-    get modelo() { return this.#modelo; }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "consulta.css");
         this.$("formulario").addEventListener("submit", this.#alEnviar);
         this.$("indicaciones").addEventListener("input", this.#alEscribir);
         this.$("categoria").addEventListener("change", this.#alCambiarCategoria);
         this.#alEscribir();
         this.#pintado = null;
         this.#claveCasillas = null;
-        this.#pintar();
+        this.pintar();
     }
 
     disconnectedCallback() {
@@ -119,8 +103,8 @@ class PanelExamenesPaso extends HTMLElement {
         return this.$("casillas").querySelectorAll('input[type="checkbox"]');
     }
 
-    #pintar() {
-        const m = this.#modelo;
+    pintar() {
+        const m = this.modelo;
         const antes = this.#pintado;
         this.#pintado = m;
         if (!m) return;
@@ -248,10 +232,6 @@ class PanelExamenesPaso extends HTMLElement {
             }
             return li;
         }));
-    }
-
-    static #contador(valor) {
-        return `${valor.length}/${MAX_TEXTO} caracteres`;
     }
 }
 

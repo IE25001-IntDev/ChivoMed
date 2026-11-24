@@ -5,9 +5,9 @@
  * Propiedad `modelo` (congelado, lo arma <vista-consulta>): { motivo, confirmando, accion }.
  * Emite (bubbles, composed): 'cerrar' { observaciones }, 'confirmar', 'cancelar'.
  */
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
-import { MAX_TEXTO } from "../../../control/controladores/controlador_consulta.js";
+import { ControladorConsulta } from "../../../control/controladores/controlador_consulta.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <section class="panel panel-cierre" aria-labelledby="titulo">
@@ -29,36 +29,20 @@ const PLANTILLA = new Plantilla(`
   </div>
 </section>`);
 
-class PanelCierreConsulta extends HTMLElement {
-    #modelo = null;
-    #emitir = (tipo, detail) => this.dispatchEvent(new CustomEvent(tipo, { bubbles: true, composed: true, detail }));
-    #alCerrar = () => this.#emitir("cerrar", { observaciones: this.$("observaciones").value });
-    #alConfirmar = () => this.#emitir("confirmar");
-    #alCancelar = () => this.#emitir("cancelar");
-    #alEscribir = () => { this.$("contador-observaciones").textContent = PanelCierreConsulta.#contador(this.$("observaciones").value); };
-
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
-    set modelo(valor) {
-        this.#modelo = valor ?? null;
-        if (this.isConnected) this.#pintar();
-    }
-
-    get modelo() { return this.#modelo; }
+class PanelCierreConsulta extends ComponenteChivoMed {
+    #alCerrar = () => this.emitir("cerrar", { observaciones: this.$("observaciones").value });
+    #alConfirmar = () => this.emitir("confirmar");
+    #alCancelar = () => this.emitir("cancelar");
+    #alEscribir = () => { this.$("contador-observaciones").textContent = ControladorConsulta.textoContador(this.$("observaciones").value); };
 
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consulta.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "consulta.css");
         this.$("cerrar").addEventListener("click", this.#alCerrar);
         this.$("confirmar").addEventListener("click", this.#alConfirmar);
         this.$("cancelar").addEventListener("click", this.#alCancelar);
         this.$("observaciones").addEventListener("input", this.#alEscribir);
         this.#alEscribir();
-        this.#pintar();
+        this.pintar();
     }
 
     disconnectedCallback() {
@@ -73,8 +57,8 @@ class PanelCierreConsulta extends HTMLElement {
         this.$?.(destino === "confirmacion" ? "confirmar" : "cerrar")?.focus();
     }
 
-    #pintar() {
-        const m = this.#modelo;
+    pintar() {
+        const m = this.modelo;
         if (!m) return;
         const cerrando = m.accion === "cierre";
         this.$("cerrar").disabled = Boolean(m.motivo) || Boolean(m.confirmando);
@@ -85,10 +69,6 @@ class PanelCierreConsulta extends HTMLElement {
         if (m.motivo) this.$("observaciones").setAttribute("readonly", "");
         else this.$("observaciones").removeAttribute("readonly");
         this.setAttribute("aria-busy", String(cerrando));
-    }
-
-    static #contador(valor) {
-        return `${valor.length}/${MAX_TEXTO} caracteres`;
     }
 }
 

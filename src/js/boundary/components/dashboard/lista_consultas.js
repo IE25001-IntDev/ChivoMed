@@ -11,11 +11,11 @@
  * la sección de <vista-dashboard>. "Buscar paciente" filtra lo cargado sin pedir nada al backend.
  */
 import { ControladorConsultas } from "../../../control/controladores/controlador_consultas.js";
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
 import { ControladorConexion } from "../../../control/controlador_conexion.js";
 import "./tarjeta_consulta_dashboard.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <form class="filtro-fechas" id="filtro" novalidate aria-label="Filtrar consultas por fecha">
@@ -46,7 +46,7 @@ const PLANTILLA = new Plantilla(`
 <p class="resumen" id="resumen" aria-live="polite"></p>
 <div class="cuadricula-consultas" id="cuadricula"></div>`);
 
-class ListaConsultas extends HTMLElement {
+class ListaConsultas extends ComponenteChivoMed {
     #controlador = null;
     #cancelar = null;
     /** idConsulta → <tarjeta-consulta-dashboard> pintadas. */
@@ -63,11 +63,6 @@ class ListaConsultas extends HTMLElement {
     #alReintentar = () => this.#controlador.buscar();
     #alBuscarPaciente = () => this.#controlador.buscarPaciente(this.$("busqueda").value);
     contexto = null;
-
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
 
     set controlador(valor) {
         if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la lista.");
@@ -91,9 +86,7 @@ class ListaConsultas extends HTMLElement {
     }
 
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "consultas.css");
         this.$("filtro").addEventListener("submit", this.#alBuscar);
         this.$("desde").addEventListener("change", this.#alCambiarFecha);
         this.$("hasta").addEventListener("change", this.#alCambiarFecha);
@@ -124,7 +117,7 @@ class ListaConsultas extends HTMLElement {
     #pintar(estado, cambios) {
         const cambio = clave => !cambios || cambios.has(clave);
         if (cambios?.has("navegarA") && estado.navegarA) {
-            this.dispatchEvent(new CustomEvent("navegar", { bubbles: true, composed: true, detail: { ruta: estado.navegarA.ruta } }));
+            this.emitir("navegar", { ruta: estado.navegarA.ruta });
         }
         // Las fechas solo se escriben cuando cambian en el estado, para no pisar lo que el usuario escribe.
         if (cambio("desde")) this.$("desde").value = estado.desde;

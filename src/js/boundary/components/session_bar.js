@@ -4,10 +4,10 @@
  * Emite 'sesion-cerrada' (bubbles, composed) al cerrar sesión o si el servidor ya la había cerrado.
  */
 import { AuthService, auth } from "../../control/auth_service.js";
-import { Estilos } from "../estilos.js";
 import { conexion } from "../../control/conexion.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import { Plantilla } from "../plantilla.js";
+import { ComponenteChivoMed } from "./componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <nav class="barra-sesion" aria-label="Tu sesión">
@@ -18,16 +18,11 @@ const PLANTILLA = new Plantilla(`
   <p class="error-campo" id="error" role="alert" hidden></p>
 </nav>`);
 
-class SessionBar extends HTMLElement {
+class SessionBar extends ComponenteChivoMed {
     #sesion = null;
     #alSalir = () => this.#salir();
     #cancelarConexion = null;
     #saliendo = false;
-
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
 
     set sesion(valor) {
         this.#sesion = valor ?? null;
@@ -37,42 +32,38 @@ class SessionBar extends HTMLElement {
     get sesion() { return this.#sesion; }
 
     connectedCallback() {
-        if (!this.shadowRoot.childElementCount) {
-            this.shadowRoot.append(Estilos.hojaDeEstilos("app_shell.css"), PLANTILLA.clonar());
-        }
-        this.shadowRoot.getElementById("salir").addEventListener("click", this.#alSalir);
+        this.montar(PLANTILLA, "app_shell.css");
+        this.$("salir").addEventListener("click", this.#alSalir);
         this.#cancelarConexion = conexion.suscribir(() => this.#pintarRed());
         this.#pintar();
     }
 
     disconnectedCallback() {
-        this.shadowRoot.getElementById("salir").removeEventListener("click", this.#alSalir);
+        this.$("salir").removeEventListener("click", this.#alSalir);
         this.#cancelarConexion?.();
     }
 
     #pintar() {
-        const raiz = this.shadowRoot;
         const { usuario, rolActivo } = this.#sesion ?? {};
-        raiz.getElementById("nombre").textContent = usuario ? `${usuario.nombres} ${usuario.apellidos}`.trim() : "";
-        raiz.getElementById("rol").textContent = rolActivo ? AuthService.nombreDeRol(rolActivo) : "";
-        raiz.getElementById("clinica").textContent = rolActivo?.nombreClinica ?? "";
-        raiz.getElementById("error").hidden = true;
+        this.$("nombre").textContent = usuario ? `${usuario.nombres} ${usuario.apellidos}`.trim() : "";
+        this.$("rol").textContent = rolActivo ? AuthService.nombreDeRol(rolActivo) : "";
+        this.$("clinica").textContent = rolActivo?.nombreClinica ?? "";
+        this.$("error").hidden = true;
         this.#pintarRed();
     }
 
     /** Cerrar sesión requiere red: sin conexión se deshabilita y se explica por qué. */
     #pintarRed() {
-        const raiz = this.shadowRoot;
         const sinRed = !conexion.enLinea;
-        raiz.getElementById("sin-red").hidden = !sinRed;
-        raiz.getElementById("sin-red").textContent = sinRed ? MENSAJE_SIN_RED : "";
-        raiz.getElementById("salir").disabled = !this.#sesion || sinRed || this.#saliendo;
+        this.$("sin-red").hidden = !sinRed;
+        this.$("sin-red").textContent = sinRed ? MENSAJE_SIN_RED : "";
+        this.$("salir").disabled = !this.#sesion || sinRed || this.#saliendo;
     }
 
     #salir() {
         return new Promise(resolve => {
-            const boton = this.shadowRoot.getElementById("salir");
-            const error = this.shadowRoot.getElementById("error");
+            const boton = this.$("salir");
+            const error = this.$("error");
             this.#saliendo = true;
             boton.disabled = true;
             boton.textContent = "Cerrando sesión…";
@@ -92,7 +83,7 @@ class SessionBar extends HTMLElement {
     }
 
     #avisarCierre() {
-        this.dispatchEvent(new CustomEvent("sesion-cerrada", { bubbles: true, composed: true }));
+        this.emitir("sesion-cerrada");
     }
 }
 

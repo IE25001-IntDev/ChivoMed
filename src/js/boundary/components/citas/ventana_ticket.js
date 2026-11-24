@@ -21,9 +21,9 @@
  * El foco inicial va a la X; devolverlo al botón "Ver ticket" al cerrar le toca a la vista.
  * Los datos van con textContent.
  */
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 export const TEXTOS = Object.freeze({
     cargando: "Cargando el ticket…",
@@ -59,14 +59,13 @@ const PLANTILLA = new Plantilla(`
   </div>
 </dialog>`);
 
-class VentanaTicket extends HTMLElement {
-    #modelo = Object.freeze({ abierto: false });
+class VentanaTicket extends ComponenteChivoMed {
     /** URL blob: del PDF que muestra el iframe, y el Blob del que salió. */
     #url = null;
     #blob = null;
     #alCerrar = () => this.#emitir("cerrar-ticket");
     #alDescargar = () => {
-        if (this.shadowRoot.getElementById("descargar").disabled) return;
+        if (this.$("descargar").disabled) return;
         this.#emitir("descargar-pdf");
     };
     /**
@@ -74,34 +73,22 @@ class VentanaTicket extends HTMLElement {
      * otra tarea: si para entonces la ventana ya se abrió de nuevo, es de un cierre anterior y se ignora.
      */
     #alCerrarDialogo = () => {
-        if (this.#modelo.abierto && !this.shadowRoot.getElementById("ventana").open) this.#emitir("cerrar-ticket");
+        if (this.modelo.abierto && !this.$("ventana").open) this.#emitir("cerrar-ticket");
     };
     /** El cuerpo llena la ventana: un clic cuyo destino es el <dialog> mismo cayó en el fondo. */
-    #alClicDialogo = event => { if (event.target === this.shadowRoot.getElementById("ventana")) this.#emitir("cerrar-ticket"); };
+    #alClicDialogo = event => { if (event.target === this.$("ventana")) this.#emitir("cerrar-ticket"); };
 
     /** Si el navegador puede mostrar un PDF en la página; por defecto, navigator.pdfViewerEnabled. */
     visorPdf = VentanaTicket.detectarVisorPdf();
 
     constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
+        super(Object.freeze({ abierto: false }));
     }
-
-    set modelo(valor) {
-        this.#modelo = valor ?? Object.freeze({ abierto: false });
-        if (this.isConnected) this.#pintar();
-    }
-
-    get modelo() { return this.#modelo; }
 
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) {
-            raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("pwa.css"), Estilos.hojaDeEstilos("citas.css"), PLANTILLA.clonar());
-        }
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "pwa.css", "citas.css");
         this.#escuchar("addEventListener");
-        this.#pintar();
+        this.pintar();
     }
 
     disconnectedCallback() {
@@ -118,13 +105,13 @@ class VentanaTicket extends HTMLElement {
     }
 
     #emitir(tipo) {
-        const idConsulta = this.#modelo.cita?.idConsulta;
-        if (!this.#modelo.abierto || !idConsulta) return;
-        this.dispatchEvent(new CustomEvent(tipo, { bubbles: true, composed: true, detail: { idConsulta } }));
+        const idConsulta = this.modelo.cita?.idConsulta;
+        if (!this.modelo.abierto || !idConsulta) return;
+        this.emitir(tipo, { idConsulta });
     }
 
-    #pintar() {
-        const { abierto, cita = null, ticket = null, motivo = null } = this.#modelo;
+    pintar() {
+        const { abierto, cita = null, ticket = null, motivo = null } = this.modelo;
         const dialogo = this.$("ventana");
         if (!abierto || !cita) {
             this.#soltarPdf();
@@ -169,7 +156,7 @@ class VentanaTicket extends HTMLElement {
 
     /** Quita el PDF del iframe y libera su URL blob:. */
     #soltarPdf() {
-        const iframe = this.shadowRoot.getElementById("pdf");
+        const iframe = this.$("pdf");
         if (iframe) {
             iframe.hidden = true;
             iframe.removeAttribute("src");

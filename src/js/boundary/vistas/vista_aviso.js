@@ -18,9 +18,9 @@
  *    Los dos eventos tienen bubbles y composed.
  *  - `alerta: true`: la tarjeta lleva role="alert".
  */
-import { Estilos } from "../estilos.js";
 import { RUTA_PEDIDA } from "../rutas.js";
 import { Plantilla } from "../plantilla.js";
+import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
@@ -30,18 +30,13 @@ const PLANTILLA = new Plantilla(`
 
 const ETIQUETA_REINTENTAR = "Volver a intentar";
 
-class VistaAviso extends HTMLElement {
+class VistaAviso extends ComponenteChivoMed {
     /** Botón de "reintentar" pintado, para dejar de escucharlo al desconectarse. */
     #boton = null;
     #aviso = null;
     #alReintentar = () => this.#reintentar();
     /** Contexto del router: { ruta, path, query, rutaPedida, ... }. */
     contexto = null;
-
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
 
     /** Configuración directa (caja de error del shell); si es null, se usa `contexto.ruta.aviso`. */
     get aviso() {
@@ -62,13 +57,10 @@ class VistaAviso extends HTMLElement {
     }
 
     #pintar({ titulo = "", texto = "", accion = null, destino = "", etiqueta = null, alerta = false }) {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) {
-            raiz.append(Estilos.hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
-        }
-        const seccion = raiz.querySelector("section");
-        const h1 = raiz.getElementById("titulo");
-        const detalle = raiz.getElementById("detalle");
+        this.montar(PLANTILLA, "vistas.css");
+        const seccion = this.shadowRoot.querySelector("section");
+        const h1 = this.$("titulo");
+        const detalle = this.$("detalle");
         if (alerta) seccion.setAttribute("role", "alert");
         else seccion.removeAttribute("role");
         h1.textContent = titulo;
@@ -115,12 +107,12 @@ class VistaAviso extends HTMLElement {
 
     #reintentar() {
         if (!this.contexto) {
-            this.dispatchEvent(new CustomEvent("reintentar", { bubbles: true, composed: true }));
+            this.emitir("reintentar");
             return;
         }
         const { path = "/", query } = this.contexto;
         const ruta = query?.size ? `${path}?${query}` : path;
-        this.dispatchEvent(new CustomEvent("navegar", { bubbles: true, composed: true, detail: { ruta } }));
+        this.emitir("navegar", { ruta });
     }
 }
 

@@ -14,12 +14,12 @@
  */
 import { ControladorCitas, MENSAJES } from "../../control/controladores/controlador_citas.js";
 import { FechasSV } from "../../control/fechas_sv.js";
-import { Estilos } from "../estilos.js";
 import { Plantilla } from "../plantilla.js";
 import { EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
 import "../components/citas/tarjeta_cita.js";
 import "../components/citas/ventana_ticket.js";
+import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
@@ -83,7 +83,7 @@ const CAMPOS_CON_ERROR = Object.freeze([
     ["tipo", ["tipo"]], ["numero", ["numero"]], ["clinica", ["clinica"]], ["rango", ["desde", "hasta"]],
 ]);
 
-class VistaCitas extends HTMLElement {
+class VistaCitas extends ComponenteChivoMed {
     #controlador = null;
     #cancelar = null;
     /** idConsulta → <tarjeta-cita> de los resultados pintados. */
@@ -103,15 +103,8 @@ class VistaCitas extends HTMLElement {
 
     get controlador() { return this.#controlador; }
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("citas.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "citas.css");
         this.#controlador ??= new ControladorCitas();
         const c = this.#controlador;
         if (!this.#ventana) {

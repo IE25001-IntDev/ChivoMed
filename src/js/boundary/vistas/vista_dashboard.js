@@ -14,10 +14,10 @@
  */
 import { ControladorDashboard, MENSAJES } from "../../control/controladores/controlador_dashboard.js";
 import { AuthService } from "../../control/auth_service.js";
-import { Estilos } from "../estilos.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import "../components/dashboard/lista_consultas.js";
 import { Plantilla } from "../plantilla.js";
+import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
 /** F8: textos fijos del aviso de consulta en curso. */
 const TEXTOS = Object.freeze({
@@ -61,7 +61,7 @@ const PLANTILLA = new Plantilla(`
   </slot>
 </section>`);
 
-class VistaDashboard extends HTMLElement {
+class VistaDashboard extends ComponenteChivoMed {
     #controlador = null;
     #cancelar = null;
     #lista = null;
@@ -85,17 +85,8 @@ class VistaDashboard extends HTMLElement {
 
     get controlador() { return this.#controlador; }
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) {
-            raiz.append(Estilos.hojaDeEstilos("vistas.css"), PLANTILLA.clonar());
-        }
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css");
         this.$("selector").addEventListener("submit", this.#alEnviar);
         this.$("selector").addEventListener("change", this.#alElegir);
         this.$("reintentar").addEventListener("click", this.#alReintentar);
@@ -131,9 +122,7 @@ class VistaDashboard extends HTMLElement {
         const cambio = clave => !cambios || cambios.has(clave);
         if (cambios?.has("sesionCambiada") && estado.sesionCambiada) {
             if (this.#lista) this.#lista.sesion = estado.sesionCambiada;
-            this.dispatchEvent(new CustomEvent("sesion-actualizada", {
-                bubbles: true, composed: true, detail: { sesion: estado.sesionCambiada },
-            }));
+            this.emitir("sesion-actualizada", { sesion: estado.sesionCambiada });
         }
 
         const rol = estado.activa

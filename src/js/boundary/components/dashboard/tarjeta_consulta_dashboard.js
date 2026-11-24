@@ -12,10 +12,10 @@
  * 'atender' { idConsulta }. El botón dice "Cerrar consulta" si al rol activo solo le falta cerrarla.
  * Todos los datos se pintan con textContent; la plantilla es fija.
  */
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
 import { ControladorConsultas } from "../../../control/controladores/controlador_consultas.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <article class="tarjeta-consulta" id="tarjeta" aria-labelledby="paciente">
@@ -41,7 +41,7 @@ const PLANTILLA = new Plantilla(`
   </footer>
 </article>`);
 
-class TarjetaConsultaDashboard extends HTMLElement {
+class TarjetaConsultaDashboard extends ComponenteChivoMed {
     #consulta = null;
     #valores = {};
     #motivo = null;
@@ -49,12 +49,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
     #verSinConexion = false;
     /** idPaso → { boton, panel, pintado } de los pasos con registro. */
     #registros = new Map();
-    #alAtender = () => this.#emitir("atender", { idConsulta: this.#consulta?.idConsulta });
-
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
+    #alAtender = () => this.emitir("atender", { idConsulta: this.#consulta?.idConsulta });
 
     set consulta(valor) {
         this.#consulta = valor ?? null;
@@ -93,19 +88,13 @@ class TarjetaConsultaDashboard extends HTMLElement {
     get enCurso() { return this.#enCurso; }
 
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("consultas.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "consultas.css");
         this.$("atender").addEventListener("click", this.#alAtender);
         this.#pintarTodo();
     }
 
     disconnectedCallback() {
         this.$("atender").removeEventListener("click", this.#alAtender);
-    }
-
-    #emitir(tipo, detail) {
-        this.dispatchEvent(new CustomEvent(tipo, { bubbles: true, composed: true, detail }));
     }
 
     #pintarTodo() {
@@ -183,7 +172,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
             boton.type = "button";
             boton.setAttribute("aria-expanded", "false");
             boton.setAttribute("aria-controls", id);
-            boton.addEventListener("click", () => this.#emitir("ver-registro", { idPaso: paso.idConsultaProcedimientoPaso }));
+            boton.addEventListener("click", () => this.emitir("ver-registro", { idPaso: paso.idConsultaProcedimientoPaso }));
             const panel = document.createElement("div");
             panel.className = "registro";
             panel.id = id;
@@ -212,7 +201,7 @@ class TarjetaConsultaDashboard extends HTMLElement {
                 error.setAttribute("role", "alert");
                 const reintentar = this.#texto("button", "Reintentar", "boton boton-secundario boton-pequeno");
                 reintentar.type = "button";
-                reintentar.addEventListener("click", () => this.#emitir("reintentar-registro", { idPaso }));
+                reintentar.addEventListener("click", () => this.emitir("reintentar-registro", { idPaso }));
                 registro.panel.replaceChildren(error, reintentar);
             } else {
                 const contenido = v.valor === null || v.valor === undefined || v.valor === ""

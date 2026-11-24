@@ -6,9 +6,9 @@
  * `enfocarTicket()` devuelve el foco al botón "Ver ticket" (al cerrar esa ventana).
  * Los datos van con textContent; sin nombrePaciente no se muestra la línea "Paciente:".
  */
-import { Estilos } from "../../estilos.js";
 import { Plantilla } from "../../plantilla.js";
 import { FechasSV } from "../../../control/fechas_sv.js";
+import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
 <article class="tarjeta-cita" aria-labelledby="fecha">
@@ -26,32 +26,17 @@ const PLANTILLA = new Plantilla(`
   </div>
 </article>`);
 
-class TarjetaCita extends HTMLElement {
-    #modelo = null;
+class TarjetaCita extends ComponenteChivoMed {
     #alVer = () => {
-        const id = this.#modelo?.cita?.idConsulta;
-        if (!id || this.shadowRoot.getElementById("ver").disabled) return;
-        this.dispatchEvent(new CustomEvent("ver-ticket", { bubbles: true, composed: true, detail: { idConsulta: id } }));
+        const id = this.modelo?.cita?.idConsulta;
+        if (!id || this.$("ver").disabled) return;
+        this.emitir("ver-ticket", { idConsulta: id });
     };
 
-    constructor() {
-        super();
-        this.attachShadow({ mode: "open" });
-    }
-
-    set modelo(valor) {
-        this.#modelo = valor ?? null;
-        if (this.isConnected) this.#pintar();
-    }
-
-    get modelo() { return this.#modelo; }
-
     connectedCallback() {
-        const raiz = this.shadowRoot;
-        if (!raiz.childElementCount) raiz.append(Estilos.hojaDeEstilos("vistas.css"), Estilos.hojaDeEstilos("citas.css"), PLANTILLA.clonar());
-        this.$ = id => raiz.getElementById(id);
+        this.montar(PLANTILLA, "vistas.css", "citas.css");
         this.$("ver").addEventListener("click", this.#alVer);
-        this.#pintar();
+        this.pintar();
     }
 
     disconnectedCallback() {
@@ -60,11 +45,11 @@ class TarjetaCita extends HTMLElement {
 
     /** Devuelve el foco al botón "Ver ticket". */
     enfocarTicket() {
-        this.shadowRoot.getElementById("ver")?.focus();
+        this.$("ver")?.focus();
     }
 
-    #pintar() {
-        const { cita, motivoTicket = null } = this.#modelo ?? {};
+    pintar() {
+        const { cita, motivoTicket = null } = this.modelo ?? {};
         if (!cita) return;
         const fecha = FechasSV.formatearFechaHora(cita.fechaInicio);
         this.$("fecha").textContent = fecha;
