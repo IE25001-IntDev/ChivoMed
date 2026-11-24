@@ -97,7 +97,7 @@ beforeEach(() => {
         ['POST auth/login', () => vacio],
         ['POST publico/clinicas', () => json([{ idClinica: CLINICA, nombre: 'Clínica Sintética' }])],
         ['POST publico/citas', () => json([{ idConsulta: ID_CONSULTA, fechaInicio: '2026-11-13T09:00:00-06:00',
-            nombreClinica: 'Clínica Sintética', procedimientos: ['Consulta general'] }])],
+            nombreClinica: 'Clínica Sintética', nombrePaciente: 'Paciente Sintético', procedimientos: ['Consulta general'] }])],
     ]);
 });
 
@@ -138,13 +138,18 @@ test('HU1: filtros → clínicas → citas → PDF, con datos privados solo en e
     await c.buscar();
     assert.equal(c.estado.citas[0].idConsulta, ID_CONSULTA);
     assert.equal(c.estado.citas[0].procedimientos[0], 'Consulta general');
-    await c.descargarTicket(ID_CONSULTA);
+    assert.equal(c.estado.citas[0].nombrePaciente, 'Paciente Sintético');
+    await c.verTicket(ID_CONSULTA);
     const ticket = c.estado.tickets[ID_CONSULTA];
     assert.equal(ticket.estado, 'listo');
     assert.equal(ticket.archivo.nombre, 'ticket.pdf');
     assert.equal(await ticket.archivo.blob.text(), contenido);
+    // "Descargar PDF" reutiliza el PDF de la ventana abierta: no hay otra petición.
+    await c.cargarTicket(ID_CONSULTA);
     c.ticketEntregado(ID_CONSULTA);
-    assert.equal(c.estado.tickets[ID_CONSULTA].archivo, undefined);
+    assert.equal(c.estado.tickets[ID_CONSULTA].descargado, true);
+    c.cerrarTicket();
+    assert.equal(c.estado.tickets[ID_CONSULTA], undefined, 'al cerrar la ventana se suelta el PDF');
     assert.deepEqual(escrituras().map(p => p.ruta), ['publico/clinicas', 'publico/citas', `publico/citas/${ID_CONSULTA}/ticket`]);
     for (const p of escrituras()) {
         assert.equal(p.datos.numeroDocumento, NUMERO);

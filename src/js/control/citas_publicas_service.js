@@ -3,9 +3,10 @@
  * exige un Origin permitido, por eso todo pasa por el proxy del puerto 3000.
  *
  *  - POST publico/clinicas            { idTipoDocumento, numeroDocumento }              → [{ idClinica, nombre }]
- *  - POST publico/citas               { …documento, idClinica, desde, hasta }           → [{ idConsulta, fechaInicio, nombreClinica, procedimientos }]
+ *  - POST publico/citas               { …documento, idClinica, desde, hasta }           → [{ idConsulta, fechaInicio, nombreClinica, nombrePaciente, procedimientos }]
  *  - POST publico/citas/{id}/ticket   { idTipoDocumento, numeroDocumento }              → application/pdf
  *
+ * `nombrePaciente` es el nombre completo del dueño del documento, o null si la persona no tiene ninguno.
  * El número de documento solo viaja recortado en el cuerpo: nunca en la URL ni en un mensaje.
  * Las tres rutas comparten el límite de 60 solicitudes por IP cada 5 minutos (429 + Retry-After).
  */
@@ -45,6 +46,7 @@ function normalizarCitas(datos) {
             idConsulta: c.idConsulta,
             fechaInicio: c.fechaInicio,
             nombreClinica: texto(c.nombreClinica) ? c.nombreClinica.trim() : "",
+            nombrePaciente: texto(c.nombrePaciente) ? c.nombrePaciente.trim() : null,
             procedimientos: Object.freeze(Array.isArray(c.procedimientos) ? c.procedimientos.filter(texto) : []),
         })));
 }

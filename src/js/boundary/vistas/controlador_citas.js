@@ -2,6 +2,11 @@
  * Lógica del asistente público de búsqueda de citas (HU1) sin DOM.
  * Pasos: 1 tipo de documento, 2 número, 3 clínica, 4 fechas, 5 resultados con el ticket PDF.
  *
+ * Ticket (2026-11-24): "Ver ticket" abre la ventana (`ticketAbierto`) y pide el PDF una vez con las
+ * mismas reglas de siempre (errores, sin red y límite de solicitudes). "Descargar PDF" reutiliza ese
+ * PDF mientras la ventana siga abierta, sin otra petición; si no se pudo cargar, lo vuelve a pedir.
+ * Al cerrar la ventana se suelta el PDF: si se vuelve a abrir, se pide de nuevo.
+ *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * Reglas (docs/reportes/hu1-plan.md, cambiadas el 2026-11-17):
  *  - Los campos se desbloquean en orden (`habilitado`): número tras elegir el tipo; clínica cuando
@@ -61,7 +66,7 @@ export const MENSAJES = Object.freeze({
     ticketFallido: "No pudimos descargar el ticket. Inténtalo de nuevo.",
     tiposSinRed: motivoSinConexion("cargar los tipos de documento"),
     sinRedBuscar: motivoSinConexion("buscar"),
-    sinRedTicket: motivoSinConexion("descargar el ticket"),
+    sinRedTicket: motivoSinConexion("ver el ticket"),
     faltaTipo: "Falta elegir el tipo de documento.",
     faltaNumero: "Falta completar el número de documento.",
     faltaClinica: "Falta elegir la clínica.",
@@ -280,8 +285,10 @@ export class ControladorCitas {
             enLinea: conexion.enLinea,
             desdeMemoria: false,
             actualizadoEn: null,
-            /** idConsulta → { estado: "descargando"|"listo"|"entregado"|"error", archivo?, error? } */
+            /** idConsulta → { estado: "descargando"|"listo"|"error", archivo?, error?, descargado? } */
             tickets: VACIO,
+            /** idConsulta de la cita cuyo ticket se muestra en la ventana; null si está cerrada. */
+            ticketAbierto: null,
             /** Qué campos se pueden usar ahora (congelado): se desbloquean en orden. */
             habilitado: NADA_HABILITADO,
             /** Qué falta para poder buscar; null si no falta nada (los motivos de red van aparte). */
@@ -407,7 +414,7 @@ export class ControladorCitas {
         this.#secuencia++;
         this.#parCargado = null;
         this.#criteriosCargados = null;
-        this.#actualizar({ clinicas: null, idClinica: null, citas: null, tickets: VACIO, cargando: null,
+        this.#actualizar({ clinicas: null, idClinica: null, citas: null, tickets: VACIO, ticketAbierto: null, cargando: null,
             ...rangoPorDefecto(this.#reloj), alcanzado: Math.min(this.estado.alcanzado, 2), desdeMemoria: false });
     }
 
@@ -417,7 +424,7 @@ export class ControladorCitas {
         // Las fechas no invalidan una carga de clínicas, que depende solo del documento.
         if (this.estado.cargando !== "clinicas") this.#secuencia++;
         this.#criteriosCargados = null;
-        this.#actualizar({ citas: null, tickets: VACIO, cargando: this.estado.cargando === "clinicas" ? "clinicas" : null,
+        this.#actualizar({ citas: null, tickets: VACIO, ticketAbierto: null, cargando: this.estado.cargando === "clinicas" ? "clinicas" : null,
             alcanzado: Math.min(this.estado.alcanzado, 4), desdeMemoria: false });
     }
 
@@ -602,7 +609,7 @@ export class ControladorCitas {
             this.#memoria.guardar(CLAVE_MEMORIA, Object.freeze({
                 criterios: Object.freeze({ ...documento, ...criterios }), clinicas: this.estado.clinicas, citas, en,
             }));
-            this.#actualizar({ cargando: null, citas, tickets: VACIO, desdeMemoria: false, actualizadoEn: en });
+            this.#actualizar({ cargando: null, citas, tickets: VACIO, ticketAbierto: null, desdeMemoria: false, actualizadoEn: en });
             this.#avanzar(5);
         } catch (error) {
             if (id !== this.#secuencia) return;
@@ -629,15 +636,33 @@ export class ControladorCitas {
         this.estado.tickets = Object.freeze({ ...this.estado.tickets, [idConsulta]: Object.freeze(valor) });
     }
 
-    async descargarTicket(idConsulta) {
-        if (!this.estado.citas?.some(c => c.idConsulta === idConsulta)) return;
-        if (this.estado.tickets[idConsulta]?.estado === "descargando" || this.#motivo()) return;
+    /** "Ver ticket": abre la ventana de esa cita y pide su PDF (cierra antes la de otra cita, si la hay). */
+    verTicket(idConsulta) {
+        if (!this.estado.citas?.some(c => c.idConsulta === idConsulta)) return Promise.resolve();
+        if (this.estado.ticketAbierto !== idConsulta) {
+            this.cerrarTicket();
+            this.#actualizar({ ticketAbierto: idConsulta });
+        }
+        return this.cargarTicket(idConsulta);
+    }
+
+    /**
+     * Pide el PDF de la cita de la ventana abierta, salvo que ya esté cargado o en camino. Sin red o
+     * bloqueado por el límite no se pide: la ventana muestra el motivo. Errores como siempre: 404
+     * cita.noExiste, sin conexión, 429 (bloquea los POST hasta Retry-After) y cualquier otro.
+     */
+    async cargarTicket(idConsulta) {
+        if (this.estado.ticketAbierto !== idConsulta) return;
+        const actual = this.estado.tickets[idConsulta]?.estado;
+        if (actual === "descargando" || actual === "listo") return;
+        const motivo = this.estado.enLinea ? this.#motivo() : MENSAJES.sinRedTicket;
+        if (motivo) { this.#ticket(idConsulta, { estado: "error", error: motivo }); return; }
         this.#ticket(idConsulta, { estado: "descargando" });
         const pendiente = this.estado.tickets[idConsulta];
         try {
             const archivo = await this.#servicio.ticket(idConsulta, this.#documento());
             if (this.estado.tickets[idConsulta] !== pendiente) return;
-            this.#ticket(idConsulta, { estado: "listo", archivo });
+            this.#ticket(idConsulta, { estado: "listo", archivo, descargado: false });
         } catch (error) {
             if (this.estado.tickets[idConsulta] !== pendiente) return;
             if (error?.status === 429) {
@@ -651,9 +676,18 @@ export class ControladorCitas {
         }
     }
 
-    /** La vista ya entregó el archivo al navegador: se suelta el Blob. */
+    /** La vista ya entregó el PDF al navegador; se conserva mientras la ventana siga abierta. */
     ticketEntregado(idConsulta) {
-        if (this.estado.tickets[idConsulta]?.estado === "listo") this.#ticket(idConsulta, { estado: "entregado" });
+        const ticket = this.estado.tickets[idConsulta];
+        if (ticket?.estado === "listo") this.#ticket(idConsulta, { ...ticket, descargado: true });
+    }
+
+    /** Cierra la ventana y suelta el PDF (y descarta una respuesta que llegue después). */
+    cerrarTicket() {
+        const id = this.estado.ticketAbierto;
+        if (!id) return;
+        const { [id]: _soltado, ...resto } = this.estado.tickets;
+        this.#actualizar({ ticketAbierto: null, tickets: Object.keys(resto).length ? Object.freeze(resto) : VACIO });
     }
 
     /** Borra todo lo escrito (número incluido) y lo guardado; conserva el catálogo de tipos. */
@@ -666,6 +700,6 @@ export class ControladorCitas {
         this.#actualizar({ paso: 1, alcanzado: 1, idTipoDocumento: "", numeroDocumento: "", idClinica: null,
             ...rangoPorDefecto(this.#reloj), clinicas: null, citas: null, cargando: null, errores: SIN_ERRORES,
             mensaje: this.estado.bloqueadoHasta ? this.estado.mensaje : null,
-            desdeMemoria: false, actualizadoEn: null, tickets: VACIO });
+            desdeMemoria: false, actualizadoEn: null, tickets: VACIO, ticketAbierto: null });
     }
 }

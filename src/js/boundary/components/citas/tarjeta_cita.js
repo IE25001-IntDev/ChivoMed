@@ -1,9 +1,10 @@
 /**
  * <tarjeta-cita> (HU1): una cita de la búsqueda pública. Solo presentación.
- * Propiedad `modelo` = { cita: { idConsulta, fechaInicio, nombreClinica, procedimientos },
- *   ticket: null | { estado: "descargando"|"listo"|"entregado"|"error", error? },
- *   motivoTicket: null | texto que explica por qué no se puede descargar ahora }.
- * Emite 'descargar-ticket' { idConsulta } (bubbles, composed). Los datos van con textContent.
+ * Propiedad `modelo` = { cita: { idConsulta, fechaInicio, nombreClinica, nombrePaciente, procedimientos },
+ *   motivoTicket: null | texto que explica por qué no se puede ver el ticket ahora }.
+ * Emite 'ver-ticket' { idConsulta } (bubbles, composed); el ticket se muestra en <ventana-ticket>.
+ * `enfocarTicket()` devuelve el foco al botón "Ver ticket" (al cerrar esa ventana).
+ * Los datos van con textContent; sin nombrePaciente no se muestra la línea "Paciente:".
  */
 import { hojaDeEstilos } from "../../vistas/estilos.js";
 import { plantilla } from "../../plantilla.js";
@@ -19,17 +20,18 @@ const PLANTILLA = plantilla(`
   <ul class="procedimientos-cita" id="procedimientos" aria-labelledby="titulo-procedimientos"></ul>
   <p class="meta" id="sin-procedimientos" hidden>Sin procedimientos registrados.</p>
   <div class="pie-cita">
-    <button class="boton boton-secundario" id="descargar" type="button" aria-describedby="estado-ticket">Descargar ticket</button>
+    <p class="paciente-cita" id="paciente" hidden><span class="etiqueta-paciente">Paciente:</span><span id="nombre-paciente"></span></p>
+    <button class="boton boton-secundario" id="ver" type="button" aria-haspopup="dialog" aria-describedby="estado-ticket">Ver ticket</button>
     <p class="estado-ticket" id="estado-ticket" role="status"></p>
   </div>
 </article>`);
 
 class TarjetaCita extends HTMLElement {
     #modelo = null;
-    #alDescargar = () => {
+    #alVer = () => {
         const id = this.#modelo?.cita?.idConsulta;
-        if (!id || this.shadowRoot.getElementById("descargar").disabled) return;
-        this.dispatchEvent(new CustomEvent("descargar-ticket", { bubbles: true, composed: true, detail: { idConsulta: id } }));
+        if (!id || this.shadowRoot.getElementById("ver").disabled) return;
+        this.dispatchEvent(new CustomEvent("ver-ticket", { bubbles: true, composed: true, detail: { idConsulta: id } }));
     };
 
     constructor() {
@@ -48,16 +50,21 @@ class TarjetaCita extends HTMLElement {
         const raiz = this.shadowRoot;
         if (!raiz.childElementCount) raiz.append(hojaDeEstilos("vistas.css"), hojaDeEstilos("citas.css"), PLANTILLA.clonar());
         this.$ = id => raiz.getElementById(id);
-        this.$("descargar").addEventListener("click", this.#alDescargar);
+        this.$("ver").addEventListener("click", this.#alVer);
         this.#pintar();
     }
 
     disconnectedCallback() {
-        this.$("descargar").removeEventListener("click", this.#alDescargar);
+        this.$("ver").removeEventListener("click", this.#alVer);
+    }
+
+    /** Devuelve el foco al botón "Ver ticket". */
+    enfocarTicket() {
+        this.shadowRoot.getElementById("ver")?.focus();
     }
 
     #pintar() {
-        const { cita, ticket = null, motivoTicket = null } = this.#modelo ?? {};
+        const { cita, motivoTicket = null } = this.#modelo ?? {};
         if (!cita) return;
         const fecha = formatearFechaHora(cita.fechaInicio);
         this.$("fecha").textContent = fecha;
@@ -71,16 +78,16 @@ class TarjetaCita extends HTMLElement {
         this.$("procedimientos").hidden = !procedimientos.length;
         this.$("sin-procedimientos").hidden = procedimientos.length > 0;
 
-        const boton = this.$("descargar");
-        const descargando = ticket?.estado === "descargando";
-        boton.disabled = descargando || Boolean(motivoTicket);
-        boton.textContent = descargando ? "Descargando…" : "Descargar ticket";
-        boton.setAttribute("aria-label", `Descargar ticket de la cita del ${fecha}`);
+        const nombre = typeof cita.nombrePaciente === "string" ? cita.nombrePaciente : "";
+        this.$("paciente").hidden = !nombre;
+        this.$("nombre-paciente").textContent = nombre;
+
+        const boton = this.$("ver");
+        boton.disabled = Boolean(motivoTicket);
+        boton.setAttribute("aria-label", `Ver ticket de la cita del ${fecha}`);
         const estado = this.$("estado-ticket");
-        const error = ticket?.estado === "error";
-        estado.className = error || motivoTicket ? "estado-ticket error-campo" : "estado-ticket";
-        estado.textContent = motivoTicket ?? (error ? ticket.error
-            : ticket?.estado === "listo" || ticket?.estado === "entregado" ? "Ticket descargado." : "");
+        estado.className = motivoTicket ? "estado-ticket error-campo" : "estado-ticket";
+        estado.textContent = motivoTicket ?? "";
     }
 }
 

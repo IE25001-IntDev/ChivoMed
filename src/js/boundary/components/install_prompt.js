@@ -10,8 +10,12 @@
  * "Instalar" (llama a prompt() en ese clic, foco inicial) y "Ahora no"; con `instrucciones`, el texto
  * para instalar desde el menú del navegador y un solo botón "Entendido" (foco inicial). "Ahora no",
  * "Entendido", Esc o clic fuera la cierran solo esa vez. El botón "Instalar app" no cambia.
+ * Escucha también EVENTO_INSTALAR (lo emite la búsqueda de citas al descargar un ticket, después de
+ * entregar el PDF) y llama a ofrecerAlDescargar() dentro de ese mismo toque.
+ * Si su ventana se abre encima de otra (la del ticket), Esc cierra solo esta, y al cerrarla el foco
+ * vuelve al elemento de la otra ventana que lo tenía.
  */
-import { ControladorInstalacion, MODOS, EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
+import { ControladorInstalacion, MODOS, EVENTO_OFRECER, EVENTO_INSTALAR } from "../pwa/controlador_instalacion.js";
 import { hojaDeEstilos } from "../vistas/estilos.js";
 import { plantilla } from "../plantilla.js";
 
@@ -42,6 +46,7 @@ class InstallPrompt extends HTMLElement {
     #cancelar = null;
     #alPulsar = () => this.#controlador.instalar();
     #alOfrecer = () => this.#controlador.invitar();
+    #alInstalarAlDescargar = () => this.#controlador.ofrecerAlDescargar();
     #alAceptar = () => this.#controlador.aceptarInvitacion();
     #alRechazar = () => this.#controlador.cerrarInvitacion();
     /** Esc (o cualquier cierre que no pasó por el controlador) la cierra esa vez. */
@@ -73,6 +78,7 @@ class InstallPrompt extends HTMLElement {
         this.shadowRoot.getElementById("instalar").addEventListener("click", this.#alPulsar);
         this.#escucharDialogo("addEventListener");
         document.addEventListener(EVENTO_OFRECER, this.#alOfrecer);
+        document.addEventListener(EVENTO_INSTALAR, this.#alInstalarAlDescargar);
         this.#controlador.iniciar();
         this.#pintar(this.#controlador.estado);
     }
@@ -81,6 +87,7 @@ class InstallPrompt extends HTMLElement {
         this.shadowRoot.getElementById("instalar").removeEventListener("click", this.#alPulsar);
         this.#escucharDialogo("removeEventListener");
         document.removeEventListener(EVENTO_OFRECER, this.#alOfrecer);
+        document.removeEventListener(EVENTO_INSTALAR, this.#alInstalarAlDescargar);
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();

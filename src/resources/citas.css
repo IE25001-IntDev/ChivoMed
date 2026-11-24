@@ -39,6 +39,29 @@
 .pie-cita { display: grid; gap: var(--espacio-2); align-self: end; }
 .estado-ticket { margin: 0; font-size: .9rem; }
 .estado-ticket:empty { display: none; }
+/* Nombre del paciente junto a "Ver ticket". */
+.paciente-cita { display: flex; flex-wrap: wrap; gap: var(--espacio-1); margin: 0; font-size: .95rem; overflow-wrap: anywhere; }
+.etiqueta-paciente { color: var(--muted); font-weight: 600; }
+
+/* <ventana-ticket>: el <dialog> de pwa.css (.invitacion), más ancho, con el PDF dentro. */
+.ventana-ticket { width: min(48rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); }
+.ticket-cuerpo { gap: var(--espacio-3); }
+.ticket-encabezado { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-3); }
+.cerrar-ventana {
+  display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: transparent; color: var(--text); cursor: pointer;
+}
+.cerrar-ventana:hover { background: var(--mint-soft); }
+.cerrar-ventana svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ticket-visor {
+  display: grid; place-items: center; min-height: 10rem;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: var(--mint-soft); overflow: hidden;
+}
+.ticket-visor:has(.ticket-pdf:not([hidden])) { place-items: stretch; }
+.ticket-pdf { display: block; width: 100%; height: min(65dvh, 40rem); border: 0; background: #fff; }
+.ticket-pdf[hidden], .ticket-aviso[hidden] { display: none; }
+.ticket-aviso { display: grid; gap: var(--espacio-1); margin: 0; padding: var(--espacio-4); text-align: center; }
+.ticket-aviso-titulo { margin: 0; font-weight: 700; }
 
 /* Los cinco campos caben en una línea desde 1053 px (medido, con barra de scroll); con unos 40 px
    de margen por el ancho del campo de fecha según el idioma, por debajo de 1093 px van en tres columnas. */
@@ -52,6 +75,7 @@
 /* Lado a lado, cada fecha mide unos 160 px y necesitan 332 px de interior: solo caben desde 460 px
    de ventana. En una columna, "Desde" va arriba y "Hasta" abajo, cada una a todo el ancho. */
 @media (max-width: 460px) {
+  .ticket-pdf { height: 55dvh; }
   .barra-busqueda { grid-template-columns: minmax(0, 1fr); }
   .rango-fechas { display: grid; grid-template-columns: 1fr; gap: var(--espacio-3); }
 }

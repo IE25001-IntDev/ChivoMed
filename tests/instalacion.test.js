@@ -1,6 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorInstalacion, MODOS } from '../src/js/boundary/pwa/controlador_instalacion.js';
+import { ControladorInstalacion, MODOS, EVENTO_INSTALAR } from '../src/js/boundary/pwa/controlador_instalacion.js';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 
 /** Deja correr los microtasks: la notificación del estado reactivo llega después del cambio. */
@@ -389,5 +389,113 @@ describe('<install-prompt>: escucha la invitación de las vistas', () => {
         desconectar(el);
         document.dispatchEvent(new CustomEvent('ofrecer-instalacion'));
         assert.equal(controlador.estado.invitacion, false);
+    });
+});
+
+describe('ControladorInstalacion: ofrecer al descargar un ticket', () => {
+    test('con beforeinstallprompt sin usar llama a prompt() en ese toque, sin abrir la invitación', async () => {
+        const { ventana, controlador } = preparar();
+        const aviso = crearAviso('dismissed');
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        const promesa = controlador.ofrecerAlDescargar();
+        assert.equal(aviso.llamadasPrompt, 1, 'sin esperar: dentro del gesto del usuario');
+        assert.equal(controlador.estado.invitacion, false);
+        assert.equal(await promesa, 'dismissed');
+    });
+
+    test('si el evento ya se usó (rechazado o con "Instalar" de la invitación) no hace nada', async () => {
+        const { ventana, controlador } = preparar();
+        const aviso = crearAviso('dismissed');
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        controlador.invitar();
+        await controlador.aceptarInvitacion();
+        assert.equal(controlador.ofrecerAlDescargar(), null);
+        assert.equal(aviso.llamadasPrompt, 1);
+        assert.equal(controlador.estado.invitacion, false, 'tampoco abre la invitación');
+    });
+
+    test('un beforeinstallprompt nuevo después de usar el anterior se puede ofrecer otra vez', async () => {
+        const { ventana, controlador } = preparar();
+        const primero = crearAviso('dismissed');
+        ventana.dispatchEvent(primero);
+        await asentar();
+        await controlador.ofrecerAlDescargar();
+        const segundo = crearAviso('dismissed');
+        ventana.dispatchEvent(segundo);
+        await asentar();
+        controlador.ofrecerAlDescargar();
+        assert.equal(segundo.llamadasPrompt, 1);
+    });
+
+    test('sin beforeinstallprompt (Safari de iPhone) hace lo mismo que invitar(): instrucciones', () => {
+        const { controlador } = preparar();
+        assert.equal(controlador.ofrecerAlDescargar(), null);
+        assert.equal(controlador.estado.invitacion, true);
+        assert.equal(controlador.estado.instrucciones, true);
+    });
+
+    test('con la invitación ya abierta no hace nada más', async () => {
+        const { ventana, controlador } = preparar();
+        const aviso = crearAviso();
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        controlador.invitar();
+        assert.equal(controlador.ofrecerAlDescargar(), null);
+        assert.equal(aviso.llamadasPrompt, 0);
+    });
+
+    for (const caso of ['standalone', 'iOS']) {
+        test(`ya instalada (${caso}): no ofrece nada`, async () => {
+            const { ventana, controlador } = preparar(caso === 'iOS' ? { iosStandalone: true } : { standalone: true });
+            const aviso = crearAviso();
+            ventana.dispatchEvent(aviso);
+            await asentar();
+            assert.equal(controlador.ofrecerAlDescargar(), null);
+            assert.equal(aviso.llamadasPrompt, 0);
+            assert.equal(controlador.estado.invitacion, false);
+        });
+    }
+
+    test('instalada en este navegador (appinstalled) o instalándose: no ofrece nada', async () => {
+        const { ventana, controlador } = preparar();
+        ventana.dispatchEvent(new Event('appinstalled'));
+        assert.equal(controlador.ofrecerAlDescargar(), null);
+        assert.equal(controlador.estado.invitacion, false);
+    });
+
+    test('invitar() (búsqueda e inicio de sesión) no cambia: sigue abriendo la invitación con el evento sin usar', async () => {
+        const { ventana, controlador } = preparar();
+        const aviso = crearAviso();
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        assert.equal(controlador.invitar(), true);
+        assert.equal(controlador.estado.instrucciones, false);
+        assert.equal(aviso.llamadasPrompt, 0);
+    });
+});
+
+describe('<install-prompt>: escucha la descarga del ticket', () => {
+    test(`"${EVENTO_INSTALAR}" llama a ofrecerAlDescargar() y deja de escucharse al desconectarse`, async () => {
+        instalarDom();
+        const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
+        const ventana = crearVentana();
+        const controlador = new ControladorInstalacion({ ventana });
+        const el = new InstallPrompt();
+        el.controlador = controlador;
+        conectar(el);
+        const aviso = crearAviso('dismissed');
+        ventana.dispatchEvent(aviso);
+        await asentar();
+        document.dispatchEvent(new CustomEvent(EVENTO_INSTALAR));
+        assert.equal(aviso.llamadasPrompt, 1);
+        assert.equal(el.shadowRoot.getElementById('invitacion').open, false, 'no abre la invitación propia');
+        await asentar();
+        desconectar(el);
+        const otro = crearAviso();
+        ventana.dispatchEvent(otro);
+        document.dispatchEvent(new CustomEvent(EVENTO_INSTALAR));
+        assert.equal(otro.llamadasPrompt, 0);
     });
 });

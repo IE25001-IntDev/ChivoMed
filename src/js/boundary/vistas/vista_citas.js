@@ -3,16 +3,22 @@
  * La lógica vive en ControladorCitas; aquí solo se pinta. La vista se suscribe al estado reactivo
  * al conectarse, cancela al desconectarse y repinta según las claves que cambiaron.
  *
- * Slot: una <tarjeta-cita slot="resultados"> por cita, como hijo de la vista. El número de documento
- * nunca sale del estado del controlador.
+ * Slots: una <tarjeta-cita slot="resultados"> por cita y una <ventana-ticket slot="ticket">, como
+ * hijos de la vista. El número de documento nunca sale del estado del controlador.
+ *
+ * Ticket: "Ver ticket" (evento ver-ticket de la tarjeta) abre <ventana-ticket> con el PDF; ya
+ * abierta, se emite EVENTO_OFRECER para que <install-prompt> invite a instalar encima (solo si la app
+ * no está instalada). "Descargar PDF" entrega primero el PDF ya cargado con un <a download> y después,
+ * en el mismo toque, emite EVENTO_INSTALAR. Al cerrar la ventana, el foco vuelve a "Ver ticket".
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  */
 import { ControladorCitas, MENSAJES, MAX_NUMERO_DOCUMENTO, motivoNoBuscar, formatearHoraSV } from "./controlador_citas.js";
 import { formatearFecha } from "../fechas_sv.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { plantilla } from "../plantilla.js";
-import { EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
+import { EVENTO_OFRECER, EVENTO_INSTALAR } from "../pwa/controlador_instalacion.js";
 import "../components/citas/tarjeta_cita.js";
+import "../components/citas/ventana_ticket.js";
 
 const PLANTILLA = plantilla(`
 <section class="tarjeta" aria-labelledby="titulo">
@@ -66,7 +72,10 @@ const PLANTILLA = plantilla(`
   </section>
 
   <p class="pie-tarjeta">¿Trabajas en una clínica? <a href="#/login">Acceso del personal</a></p>
+  <slot name="ticket"></slot>
 </section>`);
+
+const VENTANA_CERRADA = Object.freeze({ abierto: false });
 
 /** Clave de `errores` → campos que marca, en el orden en que reciben el foco. */
 const CAMPOS_CON_ERROR = Object.freeze([
@@ -79,7 +88,11 @@ class VistaCitas extends HTMLElement {
     /** idConsulta → <tarjeta-cita> de los resultados pintados. */
     #tarjetas = new Map();
     #escuchas = [];
-    #alDescargar = e => this.#controlador.descargarTicket(e.detail?.idConsulta);
+    /** <ventana-ticket slot="ticket">, creada una vez. */
+    #ventana = null;
+    /** idConsulta del ticket que muestra la ventana; null si está cerrada. */
+    #abierto = null;
+    #alVer = e => this.#controlador.verTicket(e.detail?.idConsulta);
     contexto = null;
 
     set controlador(valor) {
@@ -100,6 +113,13 @@ class VistaCitas extends HTMLElement {
         this.$ = id => raiz.getElementById(id);
         this.#controlador ??= new ControladorCitas();
         const c = this.#controlador;
+        if (!this.#ventana) {
+            this.#ventana = document.createElement("ventana-ticket");
+            this.#ventana.slot = "ticket";
+            this.append(this.#ventana);
+        }
+        this.#escuchar(this.#ventana, "cerrar-ticket", () => c.cerrarTicket());
+        this.#escuchar(this.#ventana, "descargar-pdf", e => this.#descargarPdf(e.detail?.idConsulta));
         this.#escuchar(this.$("form-busqueda"), "submit", e => this.#buscar(e));
         this.#escuchar(this.$("tipo"), "change", () => {
             c.elegirTipo(this.$("tipo").value);
@@ -129,6 +149,10 @@ class VistaCitas extends HTMLElement {
     }
 
     disconnectedCallback() {
+        // Salir de la vista (p. ej. con Atrás) cierra la ventana del ticket y suelta el PDF.
+        this.#controlador?.cerrarTicket();
+        this.#abierto = null;
+        if (this.#ventana) this.#ventana.modelo = VENTANA_CERRADA;
         for (const [objetivo, tipo, fn] of this.#escuchas) objetivo.removeEventListener(tipo, fn);
         this.#escuchas = [];
         this.#cancelar?.();
@@ -172,8 +196,8 @@ class VistaCitas extends HTMLElement {
         }
         if (cambio("errores", "mensaje")) this.#pintarErrores(estado);
         if (cambio("citas")) this.#pintarResultados(estado);
-        if (cambio("tickets")) this.#entregarTickets(estado);
-        if (cambio("citas", "tickets", "enLinea", "bloqueadoHasta")) this.#pintarTarjetas(estado);
+        if (cambio("citas", "enLinea", "bloqueadoHasta")) this.#pintarTarjetas(estado);
+        if (cambio("citas", "tickets", "ticketAbierto", "enLinea", "bloqueadoHasta")) this.#pintarVentana(estado);
         this.#pintarAcciones(estado);
         const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn))
             : !estado.enLinea && !estado.citas ? MENSAJES.sinDatos : null;
@@ -263,13 +287,13 @@ class VistaCitas extends HTMLElement {
     #pintarResultados(estado) {
         const citas = estado.citas ?? [];
         for (const tarjeta of this.#tarjetas.values()) {
-            tarjeta.removeEventListener("descargar-ticket", this.#alDescargar);
+            tarjeta.removeEventListener("ver-ticket", this.#alVer);
             tarjeta.remove();
         }
         this.#tarjetas = new Map(citas.map(cita => {
             const tarjeta = document.createElement("tarjeta-cita");
             tarjeta.slot = "resultados";
-            tarjeta.addEventListener("descargar-ticket", this.#alDescargar);
+            tarjeta.addEventListener("ver-ticket", this.#alVer);
             return [cita.idConsulta, tarjeta];
         }));
         this.append(...this.#tarjetas.values());
@@ -284,30 +308,66 @@ class VistaCitas extends HTMLElement {
             : estado.citas ? `${clinica}, ${rango}.` : "";
     }
 
+    /** Por qué no se puede pedir un ticket ahora (sin red o límite); null si se puede. */
+    #motivoTicket(estado) {
+        return !estado.enLinea ? MENSAJES.sinRedTicket : motivoNoBuscar(estado, Date.now());
+    }
+
     #pintarTarjetas(estado) {
-        const motivo = !estado.enLinea ? MENSAJES.sinRedTicket : motivoNoBuscar(estado, Date.now());
+        const motivo = this.#motivoTicket(estado);
         for (const cita of estado.citas ?? []) {
             const tarjeta = this.#tarjetas.get(cita.idConsulta);
-            if (tarjeta) tarjeta.modelo = Object.freeze({ cita, ticket: estado.tickets[cita.idConsulta] ?? null, motivoTicket: motivo });
+            if (tarjeta) tarjeta.modelo = Object.freeze({ cita, motivoTicket: motivo });
         }
     }
 
-    /** Un ticket "listo" se entrega al navegador con un <a download> temporal y se suelta. */
-    #entregarTickets(estado) {
-        for (const [idConsulta, ticket] of Object.entries(estado.tickets)) {
-            if (ticket.estado !== "listo") continue;
-            const url = URL.createObjectURL(ticket.archivo.blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = ticket.archivo.nombre;
-            a.hidden = true;
-            this.shadowRoot.append(a);
-            a.click();
-            a.remove();
-            // Se revoca en el siguiente turno: el navegador ya tomó la descarga del clic.
-            setTimeout(() => URL.revokeObjectURL(url), 0);
-            this.#controlador.ticketEntregado(idConsulta);
+    /**
+     * Abre, actualiza o cierra <ventana-ticket>. Al abrirse invita a instalar (encima de la ventana);
+     * al cerrarse devuelve el foco al botón "Ver ticket" de su tarjeta.
+     */
+    #pintarVentana(estado) {
+        const id = estado.ticketAbierto;
+        const cita = id ? estado.citas?.find(c => c.idConsulta === id) ?? null : null;
+        const anterior = this.#abierto;
+        this.#abierto = cita ? id : null;
+        this.#ventana.modelo = cita
+            ? Object.freeze({ abierto: true, cita, ticket: estado.tickets[id] ?? null, motivo: this.#motivoTicket(estado) })
+            : VENTANA_CERRADA;
+        if (anterior && anterior !== this.#abierto) this.#tarjetas.get(anterior)?.enfocarTicket();
+        if (this.#abierto && anterior !== this.#abierto) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
+    }
+
+    /**
+     * "Descargar PDF": entrega el PDF ya cargado (sin otra petición) y después, en el mismo toque,
+     * pide ofrecer la instalación. Si el PDF no se pudo cargar, lo vuelve a pedir antes.
+     */
+    async #descargarPdf(idConsulta) {
+        const c = this.#controlador;
+        if (!idConsulta || c.estado.ticketAbierto !== idConsulta) return;
+        if (c.estado.tickets[idConsulta]?.estado !== "listo") {
+            await c.cargarTicket(idConsulta);
+            if (!this.isConnected) return;
         }
+        const ticket = c.estado.tickets[idConsulta];
+        if (c.estado.ticketAbierto !== idConsulta || ticket?.estado !== "listo") return;
+        this.#entregar(ticket.archivo);
+        c.ticketEntregado(idConsulta);
+        // La instalación va después: si se cancela o falla, el PDF ya quedó descargado.
+        document.dispatchEvent(new CustomEvent(EVENTO_INSTALAR));
+    }
+
+    /** Entrega el PDF al navegador con un <a download> temporal (mismo nombre de archivo de siempre). */
+    #entregar(archivo) {
+        const url = URL.createObjectURL(archivo.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = archivo.nombre;
+        a.hidden = true;
+        this.shadowRoot.append(a);
+        a.click();
+        a.remove();
+        // Se revoca en el siguiente turno: el navegador ya tomó la descarga del clic.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
     #pintarAcciones(estado) {

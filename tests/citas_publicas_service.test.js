@@ -33,7 +33,7 @@ describe('CitasPublicasService: rutas y cuerpos', () => {
     });
 
     test('citas: POST publico/citas con clínica y rango; normaliza y congela', async () => {
-        const cita = { idConsulta: UUID(20), fechaInicio: '2026-11-12T08:00:00-06:00', nombreClinica: 'Clínica Prueba', procedimientos: ['Consulta general'] };
+        const cita = { idConsulta: UUID(20), fechaInicio: '2026-11-12T08:00:00-06:00', nombreClinica: 'Clínica Prueba', nombrePaciente: 'Paciente Prueba', procedimientos: ['Consulta general'] };
         const { servicio, llamadas } = preparar(() => json([cita, { idConsulta: 'no-uuid' }, null]));
         const citas = await servicio.citas(DOC, { idClinica: UUID(10), desde: '2026-11-01', hasta: '2026-11-30' });
         assert.deepEqual(citas, [cita], 'se descartan las entradas incompletas');
@@ -42,6 +42,19 @@ describe('CitasPublicasService: rutas y cuerpos', () => {
         assert.deepEqual(llamadas[0].cuerpo, { idTipoDocumento: UUID(1), numeroDocumento: NUMERO,
             idClinica: UUID(10), desde: '2026-11-01', hasta: '2026-11-30' });
         assert.ok(!llamadas[0].url.includes(NUMERO));
+    });
+
+    test('citas: nombrePaciente se recorta; null, vacío o ausente quedan en null', async () => {
+        const base = { fechaInicio: '2026-11-12T08:00:00-06:00', nombreClinica: 'Clínica Prueba', procedimientos: [] };
+        const { servicio } = preparar(() => json([
+            { ...base, idConsulta: UUID(21), nombrePaciente: '  Paciente Prueba ' },
+            { ...base, idConsulta: UUID(22), nombrePaciente: null },
+            { ...base, idConsulta: UUID(23), nombrePaciente: '   ' },
+            { ...base, idConsulta: UUID(24) },
+            { ...base, idConsulta: UUID(25), nombrePaciente: 42 },
+        ]));
+        const citas = await servicio.citas(DOC, { idClinica: UUID(10), desde: '2026-11-01', hasta: '2026-11-30' });
+        assert.deepEqual(citas.map(c => c.nombrePaciente), ['Paciente Prueba', null, null, null, null]);
     });
 
     test('no envía CSRF ni consulta auth/me (ruta pública)', async () => {

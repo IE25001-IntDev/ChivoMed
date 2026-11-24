@@ -24,7 +24,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-22.2";
+    const VERSION = "2026-11-24.1";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -72,6 +72,7 @@
         "./js/boundary/components/consulta/panel_examenes_paso.js",
         "./js/boundary/components/consulta/panel_paso_actual.js",
         "./js/boundary/components/citas/tarjeta_cita.js",
+        "./js/boundary/components/citas/ventana_ticket.js",
         "./js/boundary/components/dashboard/lista_consultas.js",
         "./js/boundary/components/dashboard/tarjeta_consulta_dashboard.js",
         "./js/boundary/vistas/estilos.js",

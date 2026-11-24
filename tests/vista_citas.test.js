@@ -178,7 +178,7 @@ describe('<vista-citas>: barra y resultados', () => {
         assert.equal(ctx.$('numero').getAttribute('aria-invalid'), 'true');
     });
 
-    test('mantiene el documento fuera de la URL y descarga el ticket PDF de una tarjeta', async () => {
+    test('mantiene el documento fuera de la URL; "Ver ticket" abre la ventana y "Descargar PDF" lo descarga', async () => {
         const urlOriginal = { crear: URL.createObjectURL, revocar: URL.revokeObjectURL };
         const creadas = [];
         const revocadas = [];
@@ -197,16 +197,29 @@ describe('<vista-citas>: barra y resultados', () => {
             assert.equal(ubicacion.hash, '#/citas');
             assert.ok(!ubicacion.hash.includes(NUMERO));
             const tarjeta = ctx.vista.children.find(h => h.localName === 'tarjeta-cita');
-            tarjeta.dispatchEvent(new CustomEvent('descargar-ticket', { detail: { idConsulta: UUID(31) } }));
+            const ventana = ctx.vista.children.find(h => h.localName === 'ventana-ticket');
+            assert.equal(ventana.slot, 'ticket');
+            tarjeta.dispatchEvent(new CustomEvent('ver-ticket', { detail: { idConsulta: UUID(31) } }));
             await asentar();
             await asentar();
             assert.equal(ctx.llamadas.ticket, 1);
+            assert.equal(ctx.estado.ticketAbierto, UUID(31));
+            assert.equal(ventana.modelo.abierto, true);
+            assert.equal(ventana.modelo.ticket.estado, 'listo');
+            assert.equal(anclas.length, 0, 'abrir la ventana no descarga');
+            ventana.dispatchEvent(new CustomEvent('descargar-pdf', { detail: { idConsulta: UUID(31) } }));
+            await asentar();
+            assert.equal(ctx.llamadas.ticket, 1, 'reutiliza el PDF cargado');
             assert.ok(creadas[0] instanceof Blob);
             assert.equal(anclas[0].href, 'blob:prueba/1');
             assert.equal(anclas[0].download, 'ticket-cita-60000000.pdf');
             assert.equal(anclas[0].pulsadoConectado, true);
             assert.deepEqual(revocadas, ['blob:prueba/1']);
-            assert.equal(ctx.estado.tickets[UUID(31)].estado, 'entregado');
+            assert.equal(ctx.estado.tickets[UUID(31)].descargado, true);
+            ventana.dispatchEvent(new CustomEvent('cerrar-ticket', { detail: { idConsulta: UUID(31) } }));
+            await asentar();
+            assert.equal(ctx.estado.ticketAbierto, null);
+            assert.equal(ventana.modelo.abierto, false);
         } finally {
             URL.createObjectURL = urlOriginal.crear;
             URL.revokeObjectURL = urlOriginal.revocar;
@@ -214,17 +227,18 @@ describe('<vista-citas>: barra y resultados', () => {
         }
     });
 
-    test('muestra error de ticket y conserva las tarjetas en la búsqueda sin conexión', async () => {
+    test('muestra el error del ticket en la ventana y conserva las tarjetas en la búsqueda sin conexión', async () => {
         const memoria = new MemoriaVistas();
         const primera = montar({ memoria });
         await llenarFiltros(primera);
-        primera.controlador.descargarTicket = async id => {
+        primera.controlador.cargarTicket = async id => {
             primera.estado.tickets = Object.freeze({ [id]: Object.freeze({ estado: 'error', error: 'No pudimos generar el ticket de esta cita.' }) });
         };
         const tarjeta = primera.vista.children.find(h => h.localName === 'tarjeta-cita');
-        tarjeta.dispatchEvent(new CustomEvent('descargar-ticket', { detail: { idConsulta: UUID(31) } }));
+        tarjeta.dispatchEvent(new CustomEvent('ver-ticket', { detail: { idConsulta: UUID(31) } }));
         await asentar();
-        assert.equal(tarjeta.modelo.ticket.error, 'No pudimos generar el ticket de esta cita.');
+        const ventana = primera.vista.children.find(h => h.localName === 'ventana-ticket');
+        assert.equal(ventana.modelo.ticket.error, 'No pudimos generar el ticket de esta cita.');
         desconectar(primera.vista);
 
         const sinRed = montar({ memoria, enLinea: false });

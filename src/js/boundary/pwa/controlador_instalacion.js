@@ -11,6 +11,11 @@
  * ofrece), la ventana da instrucciones (`instrucciones: true`) con un solo botón "Entendido".
  * "Ahora no", "Entendido", Esc o clic fuera llaman a cerrarInvitacion(): la cierran solo esa vez.
  *
+ * Al descargar un ticket, la vista emite EVENTO_INSTALAR después de entregar el PDF y
+ * <install-prompt> llama a ofrecerAlDescargar(): con beforeinstallprompt sin usar abre el diálogo del
+ * navegador (prompt()) en ese mismo toque; si ese evento ya se usó, no hace nada; si el navegador
+ * nunca lo envió (Safari de iPhone, Firefox), hace lo mismo que invitar().
+ *
  * Instalada: en modo standalone nunca se invita. appinstalled guarda CLAVE_INSTALADA en localStorage
  * y desde ahí no se invita, ni en una pestaña normal; beforeinstallprompt significa que no está
  * instalada y borra la marca. navigator.getInstalledRelatedApps(), si existe, sirve de apoyo.
@@ -26,12 +31,16 @@ export const MODOS = Object.freeze({
 
 /** Evento que emiten las vistas (en document) para invitar a instalar dentro del clic. */
 export const EVENTO_OFRECER = "ofrecer-instalacion";
+/** Evento que emite la vista (en document) al descargar un ticket, después de entregar el PDF. */
+export const EVENTO_INSTALAR = "instalar-al-descargar";
 /** Marca en localStorage: ChivoMed se instaló desde este navegador. */
 export const CLAVE_INSTALADA = "chivomed:instalada";
 
 export class ControladorInstalacion {
     #ventana;
     #evento = null;
+    /** El beforeinstallprompt recibido ya se usó (prompt()) y no llegó otro. */
+    #usado = false;
     /** getInstalledRelatedApps() la encontró instalada (y no llegó beforeinstallprompt después). */
     #relacionada = false;
     #consulta = null;
@@ -113,6 +122,24 @@ export class ControladorInstalacion {
         return true;
     }
 
+    /** true si no hay que ofrecer la instalación: ya instalada o instalándose. */
+    #instaladaOInstalando() {
+        return this.yaInstalada() || this.#marcaInstalada() || this.#relacionada
+            || this.estado.modo === MODOS.INSTALADA || this.estado.modo === MODOS.INSTALANDO;
+    }
+
+    /**
+     * Al descargar un ticket (ya entregado el PDF), en el mismo toque: con beforeinstallprompt sin
+     * usar, prompt() directo; si ya se usó, nada; si el navegador nunca lo envió, invitar().
+     * Devuelve la promesa de instalar() o null si no abrió el diálogo del navegador.
+     */
+    ofrecerAlDescargar() {
+        if (this.#instaladaOInstalando() || this.estado.invitacion) return null;
+        if (this.#evento && this.estado.modo === MODOS.DISPONIBLE) return this.instalar();
+        if (!this.#usado) this.invitar();
+        return null;
+    }
+
     /** "Instalar" en la ventana: la cierra y llama a prompt() dentro de ese clic. */
     aceptarInvitacion() {
         if (!this.estado.invitacion || this.estado.instrucciones) return null;
@@ -130,6 +157,7 @@ export class ControladorInstalacion {
         if (!this.#evento || this.estado.modo !== MODOS.DISPONIBLE) return null;
         const evento = this.#evento;
         this.#evento = null; // El evento solo se puede usar una vez.
+        this.#usado = true;
         this.#actualizar({ modo: MODOS.INSTALANDO, mensaje: null });
         try {
             await evento.prompt();
@@ -153,6 +181,7 @@ export class ControladorInstalacion {
         evento.preventDefault?.(); // Se muestra nuestro botón en vez del aviso automático del navegador.
         // El navegador solo lo ofrece si no está instalada: se borra la marca.
         this.#relacionada = false;
+        this.#usado = false;
         this.#guardarMarca(false);
         if (this.estado.modo === MODOS.INSTALADA || this.yaInstalada()) return;
         this.#evento = evento;

@@ -106,7 +106,7 @@ describe('ControladorCitas: funciones puras', () => {
     test('motivoNoBuscar: sin red, bloqueo por límite o ninguno', () => {
         assert.equal(motivoNoBuscar({ enLinea: false, bloqueadoHasta: null }, AHORA), MENSAJES.sinRedBuscar);
         assert.equal(MENSAJES.sinRedBuscar, 'Sin conexión: necesitas conexión con el servidor para buscar.');
-        assert.equal(MENSAJES.sinRedTicket, 'Sin conexión: necesitas conexión con el servidor para descargar el ticket.');
+        assert.equal(MENSAJES.sinRedTicket, 'Sin conexión: necesitas conexión con el servidor para ver el ticket.');
         assert.equal(MENSAJES.tiposSinRed, 'Sin conexión: necesitas conexión con el servidor para cargar los tipos de documento.');
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA + 60000 }, AHORA), MENSAJES.limite(formatearHoraSV(AHORA + 60000)));
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA - 1 }, AHORA), null);
@@ -384,31 +384,108 @@ describe('ControladorCitas: ticket', () => {
         return ctx;
     }
 
-    test('descargando → listo con el archivo; ticketEntregado lo suelta', async () => {
+    test('verTicket abre la ventana y pide el PDF una vez: descargando → listo', async () => {
         const ctx = await enResultados();
-        const promesa = ctx.controlador.descargarTicket(CITA.idConsulta);
+        const promesa = ctx.controlador.verTicket(CITA.idConsulta);
+        assert.equal(ctx.estado.ticketAbierto, CITA.idConsulta);
         assert.equal(ctx.estado.tickets[CITA.idConsulta].estado, 'descargando');
         await promesa;
         const ticket = ctx.estado.tickets[CITA.idConsulta];
         assert.equal(ticket.estado, 'listo');
+        assert.equal(ticket.descargado, false);
         assert.equal(ticket.archivo.nombre, 'ticket-cita-40000000.pdf');
-        assert.deepEqual(ctx.llamadas.ticket[0], { id: CITA.idConsulta, doc: { idTipoDocumento: DUI.idTipoDocumento, numeroDocumento: NUMERO } });
-        ctx.controlador.ticketEntregado(CITA.idConsulta);
-        assert.equal(ctx.estado.tickets[CITA.idConsulta].estado, 'entregado');
-        assert.equal(ctx.estado.tickets[CITA.idConsulta].archivo, undefined);
+        assert.ok(Object.isFrozen(ticket));
+        assert.deepEqual(ctx.llamadas.ticket, [{ id: CITA.idConsulta, doc: { idTipoDocumento: DUI.idTipoDocumento, numeroDocumento: NUMERO } }]);
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        await ctx.controlador.cargarTicket(CITA.idConsulta);
+        assert.equal(ctx.llamadas.ticket.length, 1, 'con la ventana abierta y el PDF cargado no se vuelve a pedir');
     });
 
-    test('404 cita.noExiste: error en la card', async () => {
+    test('ticketEntregado marca descargado y conserva el PDF mientras la ventana siga abierta', async () => {
+        const ctx = await enResultados();
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        const archivo = ctx.estado.tickets[CITA.idConsulta].archivo;
+        ctx.controlador.ticketEntregado(CITA.idConsulta);
+        ctx.controlador.ticketEntregado(CITA.idConsulta);
+        assert.deepEqual({ ...ctx.estado.tickets[CITA.idConsulta] }, { estado: 'listo', archivo, descargado: true });
+        assert.equal(ctx.llamadas.ticket.length, 1);
+    });
+
+    test('cerrarTicket suelta el PDF; al volver a abrir se pide de nuevo', async () => {
+        const ctx = await enResultados();
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        ctx.controlador.cerrarTicket();
+        assert.equal(ctx.estado.ticketAbierto, null);
+        assert.deepEqual(ctx.estado.tickets, {});
+        ctx.controlador.cerrarTicket();
+        assert.equal(ctx.estado.ticketAbierto, null, 'cerrar dos veces no falla');
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        assert.equal(ctx.llamadas.ticket.length, 2);
+        assert.equal(ctx.estado.tickets[CITA.idConsulta].estado, 'listo');
+    });
+
+    test('una respuesta que llega después de cerrar la ventana se descarta', async () => {
+        const ctx = await enResultados();
+        const pendiente = Promise.withResolvers();
+        ctx.respuestas.ticket = () => pendiente.promise;
+        const cargando = ctx.controlador.verTicket(CITA.idConsulta);
+        ctx.controlador.cerrarTicket();
+        pendiente.resolve({ blob: new Blob(['%PDF']), nombre: 'ticket.pdf' });
+        await cargando;
+        assert.deepEqual(ctx.estado.tickets, {});
+        assert.equal(ctx.estado.ticketAbierto, null);
+    });
+
+    test('cargarTicket solo pide el de la ventana abierta', async () => {
+        const ctx = await enResultados();
+        await ctx.controlador.cargarTicket(CITA.idConsulta);
+        assert.equal(ctx.llamadas.ticket.length, 0);
+    });
+
+    test('404 cita.noExiste: error en la ventana; "Descargar PDF" lo vuelve a pedir', async () => {
         const ctx = await enResultados();
         ctx.respuestas.ticket = async () => { throw new DefaultError({ status: 404, code: 'cita.noExiste' }); };
-        await ctx.controlador.descargarTicket(CITA.idConsulta);
+        await ctx.controlador.verTicket(CITA.idConsulta);
         assert.deepEqual({ ...ctx.estado.tickets[CITA.idConsulta] }, { estado: 'error', error: MENSAJES.ticketNoExiste });
+        ctx.respuestas.ticket = async id => ({ blob: new Blob(['%PDF']), nombre: `ticket-cita-${id.slice(0, 8)}.pdf` });
+        await ctx.controlador.cargarTicket(CITA.idConsulta);
+        assert.equal(ctx.estado.tickets[CITA.idConsulta].estado, 'listo');
+        assert.equal(ctx.llamadas.ticket.length, 2);
     });
 
-    test('una cita que no está en los resultados no se pide', async () => {
+    test('otro error: mensaje genérico de ticket', async () => {
         const ctx = await enResultados();
-        await ctx.controlador.descargarTicket(UUID(99));
+        ctx.respuestas.ticket = async () => { throw new DefaultError({ status: 500, code: 'error.interno', message: 'detalle interno' }); };
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        assert.equal(ctx.estado.tickets[CITA.idConsulta].error, MENSAJES.ticketFallido);
+    });
+
+    test('429: bloquea los POST hasta Retry-After y la ventana lo dice; no se reintenta durante el bloqueo', async () => {
+        const ctx = await enResultados();
+        ctx.respuestas.ticket = async () => { throw new DefaultError({ status: 429, code: 'acceso.limite', headers: { 'retry-after': '120' } }); };
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        const mensaje = MENSAJES.limite(formatearHoraSV(AHORA + 120000));
+        assert.equal(ctx.estado.bloqueadoHasta, AHORA + 120000);
+        assert.deepEqual({ ...ctx.estado.tickets[CITA.idConsulta] }, { estado: 'error', error: mensaje });
+        await ctx.controlador.cargarTicket(CITA.idConsulta);
+        assert.equal(ctx.llamadas.ticket.length, 1, 'bloqueado: no se pide');
+        assert.equal(ctx.estado.tickets[CITA.idConsulta].error, mensaje);
+    });
+
+    test('una cita que no está en los resultados no se abre ni se pide', async () => {
+        const ctx = await enResultados();
+        await ctx.controlador.verTicket(UUID(99));
         assert.equal(ctx.llamadas.ticket.length, 0);
+        assert.equal(ctx.estado.ticketAbierto, null);
+    });
+
+    test('abrir el ticket de otra cita cierra el anterior y suelta su PDF', async () => {
+        const otra = Object.freeze({ ...CITA, idConsulta: UUID(31) });
+        const ctx = await enResultados({ citas: [CITA, otra] });
+        await ctx.controlador.verTicket(CITA.idConsulta);
+        await ctx.controlador.verTicket(otra.idConsulta);
+        assert.equal(ctx.estado.ticketAbierto, otra.idConsulta);
+        assert.deepEqual(Object.keys(ctx.estado.tickets), [otra.idConsulta]);
     });
 });
 
@@ -604,11 +681,12 @@ describe('ControladorCitas: barra de búsqueda y respuestas tardías', () => {
         await ctx.controlador.buscar();
         const pendiente = Promise.withResolvers();
         ctx.respuestas.ticket = () => pendiente.promise;
-        const descargando = ctx.controlador.descargarTicket(CITA.idConsulta);
+        const descargando = ctx.controlador.verTicket(CITA.idConsulta);
         ctx.controlador.nuevaBusqueda();
         pendiente.resolve({ blob: new Blob(['%PDF']), nombre: 'ticket.pdf' });
         await descargando;
         assert.deepEqual(ctx.estado.tickets, {});
+        assert.equal(ctx.estado.ticketAbierto, null, 'Nueva búsqueda cierra la ventana');
         assert.equal(ctx.estado.numeroDocumento, '');
     });
 });
@@ -896,7 +974,7 @@ describe('ControladorCitas: ninguna escritura sin servidor', () => {
         assert.equal(ctx.llamadas.citas.length, 1);
     });
 
-    test('descargar el ticket: con el servidor caído no se pide el PDF y la tarjeta dice el motivo', async () => {
+    test('ver el ticket: con el servidor caído no se pide el PDF y la ventana dice el motivo', async () => {
         const red = conexionConServidor();
         const ctx = preparar({ conexion: red.conexion });
         await hastaFechas(ctx);
@@ -904,18 +982,18 @@ describe('ControladorCitas: ninguna escritura sin servidor', () => {
         red.caer();
         // La vista muestra MENSAJES.sinRedTicket cuando estado.enLinea es false.
         assert.equal(ctx.estado.enLinea, false);
-        await ctx.controlador.descargarTicket(CITA.idConsulta);
+        await ctx.controlador.verTicket(CITA.idConsulta);
         assert.deepEqual(ctx.llamadas.ticket, []);
-        assert.equal(ctx.estado.tickets[CITA.idConsulta], undefined);
+        assert.deepEqual({ ...ctx.estado.tickets[CITA.idConsulta] }, { estado: 'error', error: MENSAJES.sinRedTicket });
     });
 
-    test('descargar el ticket: si el servidor cae al pedir el PDF, la tarjeta muestra el error y no reintenta', async () => {
+    test('ver el ticket: si el servidor cae al pedir el PDF, la ventana muestra el error y no reintenta', async () => {
         const red = conexionConServidor();
         const ctx = preparar({ conexion: red.conexion });
         ctx.respuestas.ticket = async () => { red.caer(); throw sinServidor(); };
         await hastaFechas(ctx);
         await ctx.controlador.buscar();
-        await ctx.controlador.descargarTicket(CITA.idConsulta);
+        await ctx.controlador.verTicket(CITA.idConsulta);
         assert.deepEqual(ctx.estado.tickets[CITA.idConsulta], { estado: 'error', error: MENSAJES.conexion });
         red.responder();
         await asentar();
