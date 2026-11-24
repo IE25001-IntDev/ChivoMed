@@ -11,7 +11,7 @@ import { EVENTO_SERVIDOR_CAIDO, EVENTO_SERVIDOR_RESPONDIO } from "../../control/
 
 /**
  * Motivo de una acción deshabilitada sin red o sin servidor: un solo texto para los dos casos.
- * @param {string} accion p. ej. "registrar la atención".
+ * @param accion texto de la acción, p. ej. "registrar la atención".
  */
 export const motivoSinConexion = accion => `Sin conexión: necesitas conexión con el servidor para ${accion}.`;
 export const MENSAJE_SIN_RED = "Sin conexión con el servidor. Esta acción estará disponible cuando vuelva la conexión.";
@@ -38,9 +38,11 @@ export class ControladorConexion {
     #alVolverFoco = () => { if (this.#documento?.visibilityState !== "hidden") this.#revisar(); };
 
     /**
-     * @param {{ ventana: (EventTarget & { navigator?: { onLine?: boolean } }) | null,
-     *   documento?: EventTarget | null, verificar?: (() => Promise<boolean>) | null }} opciones
-     *   `verificar` resuelve true si el backend respondió (auth_service.verificarServidor).
+     * @param opciones objeto con:
+     *   - `ventana`: un EventTarget que puede tener `navigator.onLine` (window en el navegador), o null.
+     *   - `documento` (opcional): un EventTarget, o null.
+     *   - `verificar` (opcional): función que devuelve una promesa que resuelve true si el backend
+     *     respondió (auth_service.verificarServidor), o null.
      */
     constructor({ ventana, documento = null, verificar = null }) {
         this.#ventana = ventana;

@@ -49,15 +49,15 @@ export class ControladorInstalacion {
     #alCambiarModo = consulta => { if (consulta.matches) this.#instalada(); };
 
     /**
-     * @param {object} opciones
-     * @param {EventTarget & { matchMedia?: Function, navigator?: object }} opciones.ventana
+     * @param opciones objeto con `ventana`: un EventTarget que puede tener `matchMedia` y `navigator`
+     *   (window en el navegador; un doble en las pruebas).
      */
     constructor({ ventana }) {
         this.#ventana = ventana;
         const { estado, suscribir } = crearEstado({ modo: MODOS.NO_DISPONIBLE, mensaje: null, invitacion: false, instrucciones: false });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
         this.estado = estado;
-        /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
+        /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
         this.suscribir = suscribir;
     }
 

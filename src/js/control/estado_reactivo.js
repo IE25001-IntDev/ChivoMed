@@ -24,9 +24,11 @@ class Cambios extends Set {
 }
 
 /**
- * @param {object} inicial claves y valores iniciales
- * @param {{ programar?: (fn: () => void) => void, alFallar?: (error: unknown) => void }} [opciones]
- * @returns {{ estado: object, suscribir: (fn: (cambios: Set<string>, estado: object) => void) => () => void }}
+ * @param inicial objeto con las claves y los valores iniciales.
+ * @param opciones opcional. `programar` recibe la función que notifica y la agenda (por defecto
+ *   queueMicrotask); `alFallar` recibe el error que lance un suscriptor (por defecto console.error).
+ * Devuelve { estado, suscribir }: `estado` se lee y se asigna como un objeto; `suscribir` recibe una
+ * función que se llama con el Set de claves que cambiaron y el estado, y devuelve la función que cancela.
  */
 export function crearEstado(inicial, { programar = queueMicrotask, alFallar = error => console.error(error) } = {}) {
     const datos = { ...inicial };

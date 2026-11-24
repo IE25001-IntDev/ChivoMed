@@ -61,7 +61,7 @@ export const EVENTO_SERVIDOR_RESPONDIO = "servidor-respondio";
  * Avisa en document si el backend respondió, para el estado de conexión (controlador_conexion.js).
  * Sin respuesta (fallo de red o tiempo agotado), un 502/503/504 o la copia del service worker
  * avisan "servidor-caido"; cualquier otra respuesta, aunque sea un error, "servidor-respondio".
- * @param {Response|null} respuesta null si no hubo respuesta
+ * @param respuesta la Response del backend, o null si no hubo respuesta.
  */
 export function avisarServidor(respuesta) {
     if (typeof document === "undefined") return;
@@ -128,9 +128,10 @@ async function codigoDeError(respuesta) {
 }
 
 /**
- * @param {string} ruta relativa a la API, p. ej. "auth/me" o "publico/tipos-documento"
- * @param {{ method?: string, datos?: unknown, csrfToken?: string, tipo?: "login"|"sesion"|"publico" }} opciones
- *   `tipo` elige los mensajes; solo las rutas de sesión avisan "sesion-expirada" ante un 401.
+ * @param ruta ruta relativa a la API, p. ej. "auth/me" o "publico/tipos-documento".
+ * @param opciones `method` (opcional), `datos` (cuerpo JSON, opcional), `csrfToken` (opcional) y
+ *   `tipo`, que puede ser "login", "sesion" o "publico" y elige los mensajes; solo las rutas de
+ *   sesión avisan "sesion-expirada" ante un 401.
  */
 async function solicitar(ruta, { method = "GET", datos, csrfToken, tipo = "sesion" } = {}) {
     const headers = { Accept: "application/json" };

@@ -2,9 +2,12 @@
  * <ventana-ticket> (HU1): ventana modal (<dialog> con showModal) que muestra el PDF del ticket de una
  * cita dentro de la página. Solo presentación: la abre y la cierra la propiedad `modelo`.
  *
- * `modelo` = { abierto: boolean, cita?: { idConsulta, fechaInicio, nombreClinica },
- *   ticket?: null | { estado: "descargando"|"listo"|"error", archivo?: { blob, nombre }, error?, descargado? },
- *   motivo?: null | texto que explica por qué no se puede pedir el PDF ahora (sin red, límite) }.
+ * `modelo` = { abierto, cita, ticket, motivo }:
+ *  - `abierto`: true o false; cerrada, el resto puede faltar.
+ *  - `cita`: { idConsulta, fechaInicio, nombreClinica }.
+ *  - `ticket`: null o { estado, archivo, error, descargado }; `estado` es "descargando", "listo" o
+ *    "error"; `archivo` es { blob, nombre } y solo está con "listo".
+ *  - `motivo`: null o el texto que explica por qué no se puede pedir el PDF ahora (sin red, límite).
  *
  * Con el PDF cargado ("listo"), lo muestra en un <iframe> con una URL blob: que se libera al cerrar
  * o al cambiar el archivo. Si el navegador no puede mostrar un PDF dentro de la página

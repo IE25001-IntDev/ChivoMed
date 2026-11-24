@@ -271,11 +271,11 @@ export class ControladorConsultas {
     #cancelarConexion = null;
 
     /**
-     * @param {object} [opciones]
-     * @param {{ dashboard: Function, valorPaso: Function }} [opciones.servicio] resuelven { data }
-     * @param {{ enLinea: boolean, suscribir: Function }} [opciones.conexion]
-     * @param {MemoriaVistas} [opciones.memoria]
-     * @param {() => Date} [opciones.reloj]
+     * @param opciones opcional, con:
+     *   - `servicio`: objeto con `dashboard` y `valorPaso`, que resuelven { data }.
+     *   - `conexion`: objeto con `enLinea` y `suscribir`.
+     *   - `memoria`: una MemoriaVistas (memoria_vistas.js).
+     *   - `reloj`: función que devuelve la fecha actual.
      */
     constructor({ servicio, conexion = conexionCompartida, memoria = memoriaCompartida, reloj = () => new Date() } = {}) {
         this.#servicio = servicio ?? new AtencionService();

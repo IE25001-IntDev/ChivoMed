@@ -79,10 +79,10 @@ export class MemoriaVistas {
     #publicaDeDisco = null;
 
     /**
-     * @param {object} [opciones]
-     * @param {{ leer: Function, guardar: Function, borrar: Function }|null} [opciones.persistencia] almacén en disco
-     * @param {() => Date} [opciones.reloj]
-     * @param {EventTarget|null} [opciones.documento] donde DefaultService y auth_service avisan "servidor-respondio"
+     * @param opciones opcional, con:
+     *   - `persistencia`: almacén en disco con `leer`, `guardar` y `borrar`, o null.
+     *   - `reloj`: función que devuelve la fecha actual.
+     *   - `documento`: donde DefaultService y auth_service avisan "servidor-respondio", o null.
      */
     constructor({ persistencia = null, reloj = () => new Date(), documento = globalThis.document ?? null } = {}) {
         ({ estado: this.#estado, suscribir: this.#suscribir } = crearEstado({ sesion: null, datos: VACIO }));

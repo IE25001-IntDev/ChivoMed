@@ -21,10 +21,18 @@ Frontend de GalenoSV, un sistema de gestión clínica. El backend vive en `../ga
 - Nunca poner datos reales de pacientes en código, mocks, pruebas ni commits.
 
 ## Arquitectura
-Patrón BCE (Boundary-Control-Entity), igual que el backend:
-- `src/js/boundary/`: router (`router.js`, `rutas.js`), vistas y sus controladores sin DOM (`vistas/`), Web Components (`components/`, con `citas/`, `dashboard/` y `consulta/`) y la PWA (`pwa/`).
-- `src/js/control/`: servicios HTTP que extienden `DefaultService`, más `auth_service.js` y `estado_reactivo.js`.
+Patrón BCE (Boundary-Control-Entity), igual que el backend. Destino final de las carpetas (norma desde 2026-11-24):
+- `src/js/boundary/`: solo lo que toca el DOM o lo sirve el navegador.
+  - `router.js`, `rutas.js`, `plantilla.js`, `estilos.js` y `theme_init.js` (script clásico que corre antes de los módulos para evitar el destello de tema).
+  - `vistas/`: solo las vistas (`vista_*.js`, Web Components de ruta).
+  - `components/`: Web Components reutilizables, con `citas/`, `dashboard/` y `consulta/`.
+  - `pwa/`: solo lo que sirve o registra el navegador: `sw_logica.js` (script clásico para `importScripts` que también es un módulo válido para las pruebas) y `registro_sw.js`.
+- `src/js/control/`: todo lo que no toca el DOM.
+  - Servicios HTTP que extienden `DefaultService` (se conserva su CRUD genérico), `auth_service.js`, `api_config.js`, `estado_reactivo.js` y `formato_documento.js`.
+  - `controladores/`: los controladores sin DOM de las vistas (`controlador_login.js`, `controlador_citas.js`, `controlador_dashboard.js`, `controlador_consultas.js` y `controlador_consulta.js`).
+  - `memoria_vistas.js`, `fechas_sv.js` y la lógica sin DOM de la PWA: `controlador_conexion.js` (conserva su notificación síncrona), `conexion.js`, `controlador_instalacion.js`, `almacen_offline.js` y `caches_cliente.js`.
 - `src/js/entities/`: modelos que extienden `DefaultEntity`.
+- Mientras no se complete la fase de movimientos del plan (`../revision-chivomed.md`, fuera del repositorio, fase 3), esos archivos siguen en su ubicación anterior (`boundary/vistas/`, `boundary/pwa/` y `boundary/fechas_sv.js`); al moverlos se actualizan los imports, la lista `PRECACHE` y su `VERSION`.
 - SPA con una sola entrada: `src/index.html` solo contiene `<app-shell>`, que monta la vista de cada ruta por hash (`#/citas`, `#/login`, `#/dashboard`, `#/consulta/:id`). `src/sw.js` es el service worker; la lista `PRECACHE` de `pwa/sw_logica.js` debe ser exactamente lo que la SPA carga (`tests/precache.test.js`).
 
 ## Contrato con el backend
@@ -39,11 +47,30 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend:
 ## Convenciones
 - Archivos JS en `snake_case` (`citas_publicas_service.js`). Web Components en kebab-case (`tarjeta-cita`).
 
+**Estilo de código** (norma desde 2026-11-24; el código existente se va adaptando por fases)
+- Todo el código asíncrono de `src/` usa promesas con `.then()`/`.catch()`/`.finally()`; no se usa `async`/`await`. Las pruebas por ahora se quedan como están.
+- JavaScript puro: nada de sintaxis ni convenciones de TypeScript (tampoco tipos entre llaves en JSDoc). Se permite JSDoc descriptivo: `@param nombre descripción`, sin `{tipo}`.
+- Un solo paradigma: orientado a objetos (clases). Las funciones sueltas exportadas, fábricas de closures, IIFE y estado de módulo pasan a clases. Usar `map`/`filter`/flechas dentro de métodos y flechas como campos de clase está permitido.
+- Se permiten clases con métodos `static` para utilidades.
+- `sw_logica.js` sigue siendo un script clásico (`importScripts`) que también es un módulo válido para las pruebas.
+- Se conserva el CRUD genérico de `DefaultService` (`crear`, `actualizar`, `modificar`, `eliminar`), aunque hoy no lo use ninguna vista.
+- `ControladorConexion` conserva su notificación síncrona (su propio conjunto de suscriptores, no el estado reactivo por microtarea).
+
+**Reglas de conversión a `.then()`** (sección A.0 de `../revision-chivomed.md`, copiadas tal cual; los números de línea son del commit `114d1bc`)
+1. **Una función que hoy es `async` debe seguir devolviendo una promesa en todos sus caminos.** Los `return` tempranos pasan a `return Promise.resolve(valor)`. Muchos ya lo hacen así, por ejemplo `elegirPaso` y `salirDeConsulta` de `controlador_consulta.js`.
+2. **La primera llamada se envuelve en `new Promise(resolve => resolve(llamada()))`, no en `Promise.resolve().then(() => llamada())`.** El ejecutor de `new Promise` corre de forma síncrona: la petición sale en el mismo instante que hoy y un `throw` síncrono se convierte en rechazo, igual que en una `async`. `Promise.resolve().then(...)` retrasa el fetch una microtarea, y eso puede cambiar el orden que verifican las pruebas.
+3. **`try { await x; resto } catch (e) { ... }` se traduce a `x.then(resto).catch(manejo)`**, porque el `catch` original también atrapa los errores de `resto`. En cambio, **`try { await x } catch { ... } resto`**, con `resto` fuera del try, se traduce a `x.then(resto, manejo)`: el segundo argumento no atrapa errores de `resto`. Confundir las dos formas cambia a dónde se propaga el error.
+4. **`finally` se traduce a `.finally()`.** `.finally()` no cambia el valor ni el error salvo que lance, igual que el bloque. Ojo: un `return` dentro de un `finally` (no hay ninguno hoy) no tiene equivalente directo.
+5. **`AbortSignal.timeout(10000)` no cambia** (`auth_service.js:81`, `auth_service.js:147`, `default_service.js:61`). Va dentro de las opciones de `fetch`, y el `.catch` sigue mirando `error.name === "TimeoutError" | "AbortError"`. La lectura del cuerpo (`respuesta.text()`/`blob()`) debe seguir dentro de la cadena que atrapa ese error, porque el timeout también puede cortar la lectura del cuerpo.
+6. **Un `await` sobre un valor que no es promesa agrega una microtarea; un `??` que corta antes no.** Ejemplo: `this.estado.enCurso ?? await this.#leerEnCurso()` (`controlador_dashboard.js:263`) es síncrono cuando `enCurso` ya existe. La conversión debe ramificar con `if` y no hacer siempre `Promise.resolve(...)`.
+7. **Los ciclos `for…of` con `await` dentro se ejecutan hoy en serie.** Se convierten con un **método privado recursivo** (`#ordenarDesde(i)`), no con `Promise.all`, que los volvería paralelos, ni con `reduce`, que es estilo funcional (decisión 3).
+8. **Para recordar el orden:** el código síncrono antes del primer `await` se ejecuta durante la llamada, y lo que viene después siempre en una microtarea posterior. Con `.then` pasa lo mismo, siempre que se respete la regla 2.
+
 **Estado reactivo y plantillas** (norma desde 2026-11-13)
-- Cada vista tiene un controlador sin DOM cuyo estado es un `crearEstado(...)` de `src/js/control/estado_reactivo.js`. El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
+- Cada vista tiene un controlador sin DOM cuyo estado es un estado reactivo de `src/js/control/estado_reactivo.js` (hoy la fábrica `crearEstado(...)`; pasa a clase según la norma de estilo de código). El controlador solo escribe en ese estado; nunca recibe callbacks de la vista ni la llama.
 - La vista se suscribe con `suscribir()` en `connectedCallback` y cancela en `disconnectedCallback`. Repinta a partir del `Set` de claves que cambiaron.
 - Los objetos y arreglos que se guardan en el estado van congelados; para cambiarlos se reemplazan, no se mutan.
-- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de `plantilla()` de `src/js/boundary/plantilla.js`, que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
+- `innerHTML` solo se usa con plantillas fijas (constantes del módulo sin datos del servidor, de la URL ni del usuario), a través de `src/js/boundary/plantilla.js` (hoy la función `plantilla()`; pasa a clase según la norma de estilo de código), que crea el `<template>` una vez y lo clona. Los datos se pintan con `textContent`, atributos o propiedades. Las listas se arman con `createElement` o clonando un `<template>`. `escapeHtml` no es una alternativa aceptada en código nuevo. `tests/plantilla.test.js` lo verifica sobre todo el JS del precache.
 - Un componente que muestra contenido de otro lo recibe por `<slot>` (p. ej. `<slot name="consultas">` en `<vista-dashboard>`).
 - Las vistas se prueban en Node con el DOM mínimo de `tests/dobles/dom_minimo.js`, que solo modela lo que usan las vistas; si una vista necesita algo nuevo del DOM, se agrega ahí.
 

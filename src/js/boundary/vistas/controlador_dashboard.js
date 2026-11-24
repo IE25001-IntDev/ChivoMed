@@ -120,12 +120,12 @@ export class ControladorDashboard {
     #hayDatos = false;
 
     /**
-     * @param {object} [opciones]
-     * @param {{ asignaciones: Function, cambiarRol: Function, contexto: Function, salirDeConsulta: Function }} [opciones.servicio] resuelven { data }
-     * @param {() => Promise<object>} [opciones.obtenerSesion] GET /auth/me
-     * @param {{ enLinea: boolean, suscribir: Function }} [opciones.conexion]
-     * @param {MemoriaVistas} [opciones.memoria]
-     * @param {() => Date} [opciones.reloj]
+     * @param opciones opcional, con:
+     *   - `servicio`: objeto con `asignaciones`, `cambiarRol`, `contexto` y `salirDeConsulta`, que resuelven { data }.
+     *   - `obtenerSesion`: función que pide GET /auth/me y devuelve una promesa con la sesión.
+     *   - `conexion`: objeto con `enLinea` y `suscribir`.
+     *   - `memoria`: una MemoriaVistas (memoria_vistas.js).
+     *   - `reloj`: función que devuelve la fecha actual.
      */
     constructor({ servicio, obtenerSesion = obtenerSesionHttp, conexion = conexionCompartida,
         memoria = memoriaCompartida, reloj = () => new Date() } = {}) {
@@ -158,7 +158,7 @@ export class ControladorDashboard {
         });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
         this.estado = estado;
-        /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
+        /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
         this.suscribir = suscribir;
     }
 

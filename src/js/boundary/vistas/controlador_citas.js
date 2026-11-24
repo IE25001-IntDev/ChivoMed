@@ -245,13 +245,13 @@ export class ControladorCitas {
     #criteriosCargados = null;
 
     /**
-     * @param {object} [opciones]
-     * @param {{ clinicas: Function, citas: Function, ticket: Function }} [opciones.servicio]
-     * @param {() => Promise<object[]>} [opciones.listarTiposDocumento]
-     * @param {{ enLinea: boolean, suscribir: Function }} [opciones.conexion]
-     * @param {import("./memoria_vistas.js").MemoriaVistas} [opciones.memoria]
-     * @param {() => Date} [opciones.reloj]
-     * @param {{ programar: (fn: Function, ms: number) => unknown, cancelar: (t: unknown) => void }} [opciones.temporizador]
+     * @param opciones opcional, con:
+     *   - `servicio`: objeto con `clinicas`, `citas` y `ticket` (por defecto, un CitasPublicasService).
+     *   - `listarTiposDocumento`: función que devuelve una promesa con el arreglo de tipos de documento.
+     *   - `conexion`: objeto con `enLinea` y `suscribir`.
+     *   - `memoria`: una MemoriaVistas (memoria_vistas.js).
+     *   - `reloj`: función que devuelve la fecha actual.
+     *   - `temporizador`: objeto con `programar(fn, ms)`, que devuelve un identificador, y `cancelar(identificador)`.
      */
     constructor({ servicio, listarTiposDocumento = listarTiposHttp, conexion = conexionCompartida,
         memoria = memoriaCompartida, reloj = () => new Date(),
@@ -285,7 +285,7 @@ export class ControladorCitas {
             enLinea: conexion.enLinea,
             desdeMemoria: false,
             actualizadoEn: null,
-            /** idConsulta → { estado: "descargando"|"listo"|"error", archivo?, error?, descargado? } */
+            /** idConsulta → { estado, archivo, error, descargado }; `estado` es "descargando", "listo" o "error" y los otros tres pueden faltar. */
             tickets: VACIO,
             /** idConsulta de la cita cuyo ticket se muestra en la ventana; null si está cerrada. */
             ticketAbierto: null,

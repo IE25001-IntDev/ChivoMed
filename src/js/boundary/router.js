@@ -59,20 +59,20 @@ export class Router {
     #manejador = () => { this.pendiente = this.procesar(); };
 
     /**
-     * @param {object} opciones
-     * @param {object[]} opciones.rutas
-     * @param {object} opciones.noEncontrada definición montada cuando ninguna ruta coincide
-     * @param {string} opciones.porDefecto ruta usada para '#', '#/' o hash vacío
-     * @param {string} opciones.login ruta del login
-     * @param {(sesion) => string|null} opciones.inicioPorRol
-     * @param {(sesion) => boolean} [opciones.esEmpleado] decide si una sesión entra a las rutas `empleado`
-     * @param {{ location: { hash: string, replace(url: string): void }, addEventListener: Function, removeEventListener: Function }} opciones.ventana
-     * @param {() => Promise<object>} opciones.autenticar resuelve la sesión o rechaza con { status }
-     * @param {(tag: string, contexto: object) => void} opciones.montar
-     * @param {(error: Error, contexto: object) => void} [opciones.mostrarError]
-     * @param {(error: Error) => boolean} [opciones.esErrorDeRed] true si `autenticar` falló por falta de red (no por 401)
-     * @param {() => object|null} [opciones.sesionSinRed] última sesión de empleado verificada que se guardó en memoria
-     * @param {object} [opciones.sinConexion] definición montada en una ruta protegida sin red y sin sesión en memoria
+     * @param opciones objeto con:
+     *   - `rutas`: arreglo con las definiciones de ruta.
+     *   - `noEncontrada`: definición montada cuando ninguna ruta coincide.
+     *   - `porDefecto`: ruta usada para '#', '#/' o hash vacío.
+     *   - `login`: ruta del login.
+     *   - `inicioPorRol`: función que recibe la sesión y devuelve la ruta de inicio, o null.
+     *   - `esEmpleado` (opcional): función que recibe la sesión y decide si entra a las rutas `empleado`.
+     *   - `ventana`: objeto con `location` (con `hash` y `replace(url)`), `addEventListener` y `removeEventListener`.
+     *   - `autenticar`: función que devuelve una promesa que resuelve la sesión o rechaza con { status }.
+     *   - `montar`: función que recibe el tag y el contexto y monta la vista.
+     *   - `mostrarError` (opcional): función que recibe el error y el contexto.
+     *   - `esErrorDeRed` (opcional): función que recibe el error y devuelve true si `autenticar` falló por falta de red (no por 401).
+     *   - `sesionSinRed` (opcional): función que devuelve la última sesión de empleado verificada que se guardó en memoria, o null.
+     *   - `sinConexion` (opcional): definición montada en una ruta protegida sin red y sin sesión en memoria.
      */
     constructor(opciones) {
         this.#opciones = { mostrarError: () => {}, esEmpleado: () => false, esErrorDeRed: () => false, sesionSinRed: () => null, sinConexion: null, ...opciones };

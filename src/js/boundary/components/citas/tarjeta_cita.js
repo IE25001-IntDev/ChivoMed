@@ -1,7 +1,7 @@
 /**
  * <tarjeta-cita> (HU1): una cita de la búsqueda pública. Solo presentación.
  * Propiedad `modelo` = { cita: { idConsulta, fechaInicio, nombreClinica, nombrePaciente, procedimientos },
- *   motivoTicket: null | texto que explica por qué no se puede ver el ticket ahora }.
+ *   motivoTicket: null o el texto que explica por qué no se puede ver el ticket ahora }.
  * Emite 'ver-ticket' { idConsulta } (bubbles, composed); el ticket se muestra en <ventana-ticket>.
  * `enfocarTicket()` devuelve el foco al botón "Ver ticket" (al cerrar esa ventana).
  * Los datos van con textContent; sin nombrePaciente no se muestra la línea "Paciente:".

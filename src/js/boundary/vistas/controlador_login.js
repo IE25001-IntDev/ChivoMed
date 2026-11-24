@@ -34,8 +34,8 @@ export class ControladorLogin {
     #servicio;
 
     /**
-     * @param {object} [opciones]
-     * @param {{ listarTiposDocumento: Function, iniciarSesion: Function }} [opciones.servicio]
+     * @param opciones opcional, con `servicio`: objeto con las funciones `listarTiposDocumento` e
+     *   `iniciarSesion` (por defecto, las de auth_service.js).
      */
     constructor({ servicio = { listarTiposDocumento, iniciarSesion } } = {}) {
         this.#servicio = servicio;
@@ -49,7 +49,7 @@ export class ControladorLogin {
         });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
         this.estado = estado;
-        /** (fn: (cambios: Set<string>, estado) => void) => cancelar */
+        /** Recibe una función que se llama con el Set de claves que cambiaron y el estado; devuelve la función que cancela. */
         this.suscribir = suscribir;
     }
 
