@@ -1,13 +1,13 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { crearAlmacenOffline, NOMBRE_BASE, ALMACEN } from '../src/js/boundary/pwa/almacen_offline.js';
-import { MemoriaVistas, VIGENCIA_MS, RANURA_SESION, ranuraDe } from '../src/js/boundary/vistas/memoria_vistas.js';
-import { ControladorConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
-import * as memoriaVistas from '../src/js/boundary/vistas/memoria_vistas.js';
-import { ControladorCitas, CLAVE_MEMORIA as CLAVE_CITAS, MENSAJES as MENSAJES_CITAS } from '../src/js/boundary/vistas/controlador_citas.js';
-import { FechasSV } from '../src/js/boundary/fechas_sv.js';
+import { crearAlmacenOffline, NOMBRE_BASE, ALMACEN } from '../src/js/control/almacen_offline.js';
+import { MemoriaVistas, VIGENCIA_MS, RANURA_SESION, ranuraDe } from '../src/js/control/memoria_vistas.js';
+import { ControladorConsultas } from '../src/js/control/controladores/controlador_consultas.js';
+import * as memoriaVistas from '../src/js/control/memoria_vistas.js';
+import { ControladorCitas, CLAVE_MEMORIA as CLAVE_CITAS, MENSAJES as MENSAJES_CITAS } from '../src/js/control/controladores/controlador_citas.js';
+import { FechasSV } from '../src/js/control/fechas_sv.js';
 import { crearIndexedDbDoble } from './dobles/indexeddb_doble.js';
-import { ControladorConexion } from '../src/js/boundary/pwa/controlador_conexion.js';
+import { ControladorConexion } from '../src/js/control/controlador_conexion.js';
 import { listarTiposDocumento, CABECERA_COPIA } from '../src/js/control/auth_service.js';
 
 // Datos inventados (demo del guion): Carlos Gómez, Doctor en Clínica Santa Ana; Lucía Pérez, Enfermera.

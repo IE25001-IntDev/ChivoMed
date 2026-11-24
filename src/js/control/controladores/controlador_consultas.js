@@ -12,13 +12,13 @@
  * Lo cargado queda en memoria_vistas para seguir mostrándolo sin red. La última búsqueda
  * (`dashboard.ultimo`, con su rango) también va a disco y es lo que se muestra al recargar sin red.
  */
-import AtencionService from "../../control/atencion_service.js";
-import { crearEstado } from "../../control/estado_reactivo.js";
-import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
-import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS, motivoSinConexion } from "../pwa/controlador_conexion.js";
+import AtencionService from "../atencion_service.js";
+import { crearEstado } from "../estado_reactivo.js";
+import { MemoriaVistas, memoria as memoriaCompartida } from "../memoria_vistas.js";
+import { conexion as conexionCompartida } from "../conexion.js";
+import { MENSAJE_SIN_DATOS, motivoSinConexion } from "../controlador_conexion.js";
 import { hoySV, esFechaISO, diasEntre, formatearFecha, FechasSV } from "../fechas_sv.js";
-import { Validaciones } from "../../control/validaciones.js";
+import { Validaciones } from "../validaciones.js";
 
 export const MAX_DIAS = 31;
 const VACIO = Object.freeze({});

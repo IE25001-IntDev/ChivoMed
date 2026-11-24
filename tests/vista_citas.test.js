@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `60000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -22,7 +22,7 @@ before(async () => {
     globalThis.history = { pushState() { throw new Error('la búsqueda no debe tocar el historial'); },
         replaceState() { throw new Error('la búsqueda no debe tocar el historial'); } };
     ({ default: VistaCitas } = await import('../src/js/boundary/vistas/vista_citas.js'));
-    ({ ControladorCitas } = await import('../src/js/boundary/vistas/controlador_citas.js'));
+    ({ ControladorCitas } = await import('../src/js/control/controladores/controlador_citas.js'));
 });
 after(() => { delete globalThis.location; delete globalThis.history; });
 
@@ -432,7 +432,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     let ControladorInstalacion;
     before(async () => {
         ({ default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js'));
-        ({ ControladorInstalacion } = await import('../src/js/boundary/pwa/controlador_instalacion.js'));
+        ({ ControladorInstalacion } = await import('../src/js/control/controlador_instalacion.js'));
     });
 
     /**
@@ -611,7 +611,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
 
     test('sale dos veces seguidas: al buscar y luego al ingresar', async () => {
         const { default: VistaLogin } = await import('../src/js/boundary/vistas/vista_login.js');
-        const { ControladorLogin } = await import('../src/js/boundary/vistas/controlador_login.js');
+        const { ControladorLogin } = await import('../src/js/control/controladores/controlador_login.js');
         const p = await buscarConAviso();
         const login = new VistaLogin();
         login.contexto = { query: new URLSearchParams() };

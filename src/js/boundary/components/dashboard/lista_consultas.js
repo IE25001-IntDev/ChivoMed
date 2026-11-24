@@ -10,11 +10,11 @@
  * 'titulo-consultas' { titulo } (bubbles) cuando cambia el rango mostrado, para el encabezado de
  * la sección de <vista-dashboard>. "Buscar paciente" filtra lo cargado sin pedir nada al backend.
  */
-import { ControladorConsultas, motivoNoAtender, resumenResultado } from "../../vistas/controlador_consultas.js";
-import { hojaDeEstilos } from "../../vistas/estilos.js";
+import { ControladorConsultas, motivoNoAtender, resumenResultado } from "../../../control/controladores/controlador_consultas.js";
+import { hojaDeEstilos } from "../../estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { FechasSV } from "../../fechas_sv.js";
-import { mensajeGuardado } from "../../pwa/controlador_conexion.js";
+import { FechasSV } from "../../../control/fechas_sv.js";
+import { mensajeGuardado } from "../../../control/controlador_conexion.js";
 import "./tarjeta_consulta_dashboard.js";
 
 const PLANTILLA = plantilla(`

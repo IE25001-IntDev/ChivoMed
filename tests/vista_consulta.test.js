@@ -1,8 +1,8 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { MENSAJES } from '../src/js/boundary/vistas/controlador_consulta.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { MENSAJES } from '../src/js/control/controladores/controlador_consulta.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import {
     UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, preparar,
 } from './dobles/consulta.js';

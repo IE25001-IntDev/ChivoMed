@@ -1,8 +1,8 @@
 import { test, describe, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
-import { ControladorInstalacion, EVENTO_OFRECER, EVENTO_INSTALAR } from '../src/js/boundary/pwa/controlador_instalacion.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
+import { ControladorInstalacion, EVENTO_OFRECER, EVENTO_INSTALAR } from '../src/js/control/controlador_instalacion.js';
 import DefaultError from '../src/js/entities/default_error.js';
 
 // Datos inventados; nunca datos reales de pacientes.
@@ -29,7 +29,7 @@ before(async () => {
     ({ default: VentanaTicket, TEXTOS, detectarVisorPdf } = await import('../src/js/boundary/components/citas/ventana_ticket.js'));
     ({ default: VistaCitas } = await import('../src/js/boundary/vistas/vista_citas.js'));
     ({ default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js'));
-    ({ ControladorCitas, MENSAJES } = await import('../src/js/boundary/vistas/controlador_citas.js'));
+    ({ ControladorCitas, MENSAJES } = await import('../src/js/control/controladores/controlador_citas.js'));
 });
 after(() => { delete globalThis.location; });
 

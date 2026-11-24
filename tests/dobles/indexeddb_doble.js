@@ -1,5 +1,5 @@
 /**
- * Doble mínimo de IndexedDB para node --test: solo lo que usa src/js/boundary/pwa/almacen_offline.js
+ * Doble mínimo de IndexedDB para node --test: solo lo que usa src/js/control/almacen_offline.js
  * (open con onupgradeneeded, objectStoreNames.contains, createObjectStore, transaction con
  * objectStore get/put/delete/clear y los eventos success, error y complete).
  *

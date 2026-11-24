@@ -24,7 +24,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-24.2";
+    const VERSION = "2026-11-24.3";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -61,7 +61,7 @@
         "./js/boundary/router.js",
         "./js/boundary/rutas.js",
         "./js/boundary/plantilla.js",
-        "./js/boundary/fechas_sv.js",
+        "./js/boundary/estilos.js",
         "./js/boundary/components/app_shell.js",
         "./js/boundary/components/session_bar.js",
         "./js/boundary/components/theme_toggle.js",
@@ -74,25 +74,13 @@
         "./js/boundary/components/citas/ventana_ticket.js",
         "./js/boundary/components/dashboard/lista_consultas.js",
         "./js/boundary/components/dashboard/tarjeta_consulta_dashboard.js",
-        "./js/boundary/vistas/estilos.js",
-        "./js/boundary/vistas/controlador_login.js",
-        "./js/boundary/vistas/controlador_citas.js",
-        "./js/boundary/vistas/controlador_consulta.js",
-        "./js/boundary/vistas/controlador_dashboard.js",
-        "./js/boundary/vistas/controlador_consultas.js",
-        "./js/boundary/vistas/memoria_vistas.js",
         "./js/boundary/vistas/vista_citas.js",
         "./js/boundary/vistas/vista_login.js",
         "./js/boundary/vistas/vista_dashboard.js",
         "./js/boundary/vistas/vista_consulta.js",
         "./js/boundary/vistas/vista_aviso.js",
         "./js/boundary/pwa/sw_logica.js",
-        "./js/boundary/pwa/almacen_offline.js",
-        "./js/boundary/pwa/caches_cliente.js",
         "./js/boundary/pwa/registro_sw.js",
-        "./js/boundary/pwa/controlador_instalacion.js",
-        "./js/boundary/pwa/controlador_conexion.js",
-        "./js/boundary/pwa/conexion.js",
         "./js/control/auth_service.js",
         "./js/control/api_config.js",
         "./js/control/atencion_service.js",
@@ -101,6 +89,18 @@
         "./js/control/estado_reactivo.js",
         "./js/control/formato_documento.js",
         "./js/control/validaciones.js",
+        "./js/control/memoria_vistas.js",
+        "./js/control/fechas_sv.js",
+        "./js/control/almacen_offline.js",
+        "./js/control/caches_cliente.js",
+        "./js/control/controlador_instalacion.js",
+        "./js/control/controlador_conexion.js",
+        "./js/control/conexion.js",
+        "./js/control/controladores/controlador_login.js",
+        "./js/control/controladores/controlador_citas.js",
+        "./js/control/controladores/controlador_consulta.js",
+        "./js/control/controladores/controlador_dashboard.js",
+        "./js/control/controladores/controlador_consultas.js",
         "./js/control/consulta_procedimiento_paso_service.js",
         "./js/control/consulta_service.js",
         "./js/control/orden_examen_service.js",

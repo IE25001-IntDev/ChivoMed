@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoriaVistas, memoria } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { MemoriaVistas, memoria } from '../src/js/control/memoria_vistas.js';
 
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sesion = n => ({ usuario: { idUsuario: UUID(n) }, rolActivo: { codigo: 'DOCTOR' }, csrfToken: 'csrf-prueba' });

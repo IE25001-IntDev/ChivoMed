@@ -1,7 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar } from './dobles/dom_minimo.js';
-import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
+import { normalizarConsultas } from '../src/js/control/controladores/controlador_consultas.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -171,9 +171,9 @@ describe('<tarjeta-consulta-dashboard>', () => {
 // ---------------------------------------------------------------------------------------------
 // <lista-consultas>
 // ---------------------------------------------------------------------------------------------
-import { ControladorConsultas, MENSAJES } from '../src/js/boundary/vistas/controlador_consultas.js';
+import { ControladorConsultas, MENSAJES } from '../src/js/control/controladores/controlador_consultas.js';
 import DefaultError from '../src/js/entities/default_error.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import { desconectar } from './dobles/dom_minimo.js';
 
 const sesionCon = (idPersonaRol = UUID(900)) => ({ usuario: { idUsuario: UUID(800) }, rolActivo: { idPersonaRol, codigo: 'DOCTOR' }, csrfToken: 'csrf-prueba' });

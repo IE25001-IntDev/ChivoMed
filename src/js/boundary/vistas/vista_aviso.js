@@ -18,7 +18,7 @@
  *    Los dos eventos tienen bubbles y composed.
  *  - `alerta: true`: la tarjeta lleva role="alert".
  */
-import { hojaDeEstilos } from "./estilos.js";
+import { hojaDeEstilos } from "../estilos.js";
 import { RUTA_PEDIDA } from "../rutas.js";
 import { plantilla } from "../plantilla.js";
 

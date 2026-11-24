@@ -20,7 +20,7 @@
  * y desde ahí no se invita, ni en una pestaña normal; beforeinstallprompt significa que no está
  * instalada y borra la marca. navigator.getInstalledRelatedApps(), si existe, sirve de apoyo.
  */
-import { crearEstado } from "../../control/estado_reactivo.js";
+import { crearEstado } from "./estado_reactivo.js";
 
 export const MODOS = Object.freeze({
     NO_DISPONIBLE: "no-disponible",

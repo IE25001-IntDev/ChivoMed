@@ -18,11 +18,11 @@
 import {
     ControladorConsulta, MENSAJES, motivoNoRetroceder, puedeOfrecerRetroceso, puedeCerrar,
     categoriasDe, examenesVisibles, textoSeleccion,
-} from "./controlador_consulta.js";
-import { arbolDePasos, etiquetaEstado } from "./controlador_consultas.js";
-import { hojaDeEstilos } from "./estilos.js";
+} from "../../control/controladores/controlador_consulta.js";
+import { arbolDePasos, etiquetaEstado } from "../../control/controladores/controlador_consultas.js";
+import { hojaDeEstilos } from "../estilos.js";
 import { plantilla } from "../plantilla.js";
-import { formatearFecha, formatearFechaHora, FechasSV } from "../fechas_sv.js";
+import { formatearFecha, formatearFechaHora, FechasSV } from "../../control/fechas_sv.js";
 import { Validaciones } from "../../control/validaciones.js";
 import "../components/consulta/panel_paso_actual.js";
 import "../components/consulta/panel_examenes_paso.js";

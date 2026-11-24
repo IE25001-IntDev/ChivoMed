@@ -23,15 +23,15 @@
  *    "Nueva búsqueda" la borra.
  * Todo llega por inyección para probarse con node --test.
  */
-import CitasPublicasService, { segundosDeEspera } from "../../control/citas_publicas_service.js";
-import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../../control/auth_service.js";
-import { crearValidadorFormato, sinRestriccion } from "../../control/formato_documento.js";
-import { crearEstado } from "../../control/estado_reactivo.js";
+import CitasPublicasService, { segundosDeEspera } from "../citas_publicas_service.js";
+import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../auth_service.js";
+import { crearValidadorFormato, sinRestriccion } from "../formato_documento.js";
+import { crearEstado } from "../estado_reactivo.js";
 import { hoySV, sumarDias, diasEntre, esFechaISO, FechasSV } from "../fechas_sv.js";
-import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "./memoria_vistas.js";
-import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
-import { Validaciones } from "../../control/validaciones.js";
+import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "../memoria_vistas.js";
+import { conexion as conexionCompartida } from "../conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../controlador_conexion.js";
+import { Validaciones } from "../validaciones.js";
 
 /** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
 export const CLAVE_MEMORIA = CLAVE_PUBLICA_CITAS;

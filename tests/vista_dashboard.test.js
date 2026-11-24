@@ -2,7 +2,7 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 import DefaultError from '../src/js/entities/default_error.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 
 // Datos inventados; nunca datos reales.
 const UUID = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -26,7 +26,7 @@ let ControladorDashboard;
 before(async () => {
     instalarDom();
     ({ default: VistaDashboard } = await import('../src/js/boundary/vistas/vista_dashboard.js'));
-    ({ ControladorDashboard } = await import('../src/js/boundary/vistas/controlador_dashboard.js'));
+    ({ ControladorDashboard } = await import('../src/js/control/controladores/controlador_dashboard.js'));
 });
 
 /**

@@ -1,8 +1,8 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
-import { pasosPendientes, MENSAJES } from '../src/js/boundary/vistas/controlador_consulta.js';
+import { normalizarConsultas } from '../src/js/control/controladores/controlador_consultas.js';
+import { pasosPendientes, MENSAJES } from '../src/js/control/controladores/controlador_consulta.js';
 import { UUID, paso, pendiente, procedimiento, consultaB6, examen } from './dobles/consulta.js';
 
 before(async () => {

@@ -9,9 +9,9 @@
  * El texto que se escribe no se pisa: el campo solo se actualiza si el borrador del modelo cambió
  * por otra razón (precarga de un paso reabierto, cambio de paso).
  */
-import { hojaDeEstilos } from "../../vistas/estilos.js";
+import { hojaDeEstilos } from "../../estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../fechas_sv.js";
+import { formatearFechaHora } from "../../../control/fechas_sv.js";
 
 const PLANTILLA = plantilla(`
 <section class="panel" aria-labelledby="titulo">

@@ -13,7 +13,7 @@ let ControladorLogin;
 before(async () => {
     instalarDom();
     ({ default: VistaLogin } = await import('../src/js/boundary/vistas/vista_login.js'));
-    ({ ControladorLogin } = await import('../src/js/boundary/vistas/controlador_login.js'));
+    ({ ControladorLogin } = await import('../src/js/control/controladores/controlador_login.js'));
 });
 
 function montar({ tipos = async () => [DUI], login = async () => sesion('DOCTOR'), query = new URLSearchParams() } = {}) {
@@ -210,7 +210,7 @@ describe('<vista-login>: invitación a instalar', () => {
 describe('<vista-login> + <install-prompt>: ventana para instalar', () => {
     test('"Ingresar" válido abre la ventana, el login continúa e "Instalar" llama a prompt()', async () => {
         const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
-        const { ControladorInstalacion } = await import('../src/js/boundary/pwa/controlador_instalacion.js');
+        const { ControladorInstalacion } = await import('../src/js/control/controlador_instalacion.js');
         const ventana = new EventTarget();
         ventana.matchMedia = () => ({ matches: false });
         ventana.navigator = {};
@@ -258,7 +258,7 @@ describe('<vista-login>: sin servidor', () => {
     let MENSAJE_SIN_RED;
     let AuthError;
     before(async () => {
-        ({ MENSAJE_SIN_RED } = await import('../src/js/boundary/pwa/controlador_conexion.js'));
+        ({ MENSAJE_SIN_RED } = await import('../src/js/control/controlador_conexion.js'));
         ({ AuthError } = await import('../src/js/control/auth_service.js'));
     });
     afterEach(() => document.dispatchEvent(new Event('servidor-respondio')));

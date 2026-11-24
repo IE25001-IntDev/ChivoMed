@@ -12,10 +12,10 @@
  * 'atender' { idConsulta }. El botón dice "Cerrar consulta" si al rol activo solo le falta cerrarla.
  * Todos los datos se pintan con textContent; la plantilla es fija.
  */
-import { hojaDeEstilos } from "../../vistas/estilos.js";
+import { hojaDeEstilos } from "../../estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { arbolDePasos, etiquetaEstado, accionAtender } from "../../vistas/controlador_consultas.js";
-import { formatearFecha, formatearFechaHora } from "../../fechas_sv.js";
+import { arbolDePasos, etiquetaEstado, accionAtender } from "../../../control/controladores/controlador_consultas.js";
+import { formatearFecha, formatearFechaHora } from "../../../control/fechas_sv.js";
 
 const PLANTILLA = plantilla(`
 <article class="tarjeta-consulta" id="tarjeta" aria-labelledby="paciente">

@@ -36,7 +36,7 @@ before(async () => {
         keys: async () => ['chivomed-shell-v', 'chivomed-datos-v'],
         delete: async nombre => { borrados.push(nombre); return true; },
     };
-    ({ memoria } = await import('../src/js/boundary/vistas/memoria_vistas.js'));
+    ({ memoria } = await import('../src/js/control/memoria_vistas.js'));
     await import('../src/js/boundary/components/app_shell.js');
 });
 

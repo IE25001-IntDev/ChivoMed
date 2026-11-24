@@ -32,7 +32,7 @@ Patrón BCE (Boundary-Control-Entity), igual que el backend. Destino final de la
   - `controladores/`: los controladores sin DOM de las vistas (`controlador_login.js`, `controlador_citas.js`, `controlador_dashboard.js`, `controlador_consultas.js` y `controlador_consulta.js`).
   - `memoria_vistas.js`, `fechas_sv.js` y la lógica sin DOM de la PWA: `controlador_conexion.js` (conserva su notificación síncrona), `conexion.js`, `controlador_instalacion.js`, `almacen_offline.js` y `caches_cliente.js`.
 - `src/js/entities/`: modelos que extienden `DefaultEntity`.
-- Mientras no se complete la fase de movimientos del plan (`../revision-chivomed.md`, fuera del repositorio, fase 3), esos archivos siguen en su ubicación anterior (`boundary/vistas/`, `boundary/pwa/` y `boundary/fechas_sv.js`); al moverlos se actualizan los imports, la lista `PRECACHE` y su `VERSION`.
+- Los archivos ya están en esta estructura (fase 3 del plan, `../revision-chivomed.md`, fuera del repositorio). Un archivo nuevo va a su carpeta; si se mueve uno, se actualizan los imports, la lista `PRECACHE` y su `VERSION`.
 - SPA con una sola entrada: `src/index.html` solo contiene `<app-shell>`, que monta la vista de cada ruta por hash (`#/citas`, `#/login`, `#/dashboard`, `#/consulta/:id`). `src/sw.js` es el service worker; la lista `PRECACHE` de `pwa/sw_logica.js` debe ser exactamente lo que la SPA carga (`tests/precache.test.js`).
 
 ## Contrato con el backend

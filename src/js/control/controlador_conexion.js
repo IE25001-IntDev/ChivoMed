@@ -7,7 +7,7 @@
  *    INTERVALO_VERIFICACION_MS, al volver la red y al volver el foco a la pestaña.
  * `motivo` dice por qué no está en línea: "sin-red", "servidor" o null.
  */
-import { EVENTO_SERVIDOR_CAIDO, EVENTO_SERVIDOR_RESPONDIO } from "../../control/auth_service.js";
+import { EVENTO_SERVIDOR_CAIDO, EVENTO_SERVIDOR_RESPONDIO } from "./auth_service.js";
 
 /**
  * Motivo de una acción deshabilitada sin red o sin servidor: un solo texto para los dos casos.

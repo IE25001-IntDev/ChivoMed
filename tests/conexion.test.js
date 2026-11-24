@@ -1,14 +1,14 @@
 import { test, describe, afterEach, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorConexion, MENSAJE_SIN_RED, INTERVALO_VERIFICACION_MS, motivoSinConexion } from '../src/js/boundary/pwa/controlador_conexion.js';
-import { MENSAJES as MENSAJES_CONSULTA } from '../src/js/boundary/vistas/controlador_consulta.js';
-import { MENSAJES as MENSAJES_CONSULTAS } from '../src/js/boundary/vistas/controlador_consultas.js';
-import { MENSAJES as MENSAJES_CITAS } from '../src/js/boundary/vistas/controlador_citas.js';
-import { MENSAJES as MENSAJES_DASHBOARD } from '../src/js/boundary/vistas/controlador_dashboard.js';
+import { ControladorConexion, MENSAJE_SIN_RED, INTERVALO_VERIFICACION_MS, motivoSinConexion } from '../src/js/control/controlador_conexion.js';
+import { MENSAJES as MENSAJES_CONSULTA } from '../src/js/control/controladores/controlador_consulta.js';
+import { MENSAJES as MENSAJES_CONSULTAS } from '../src/js/control/controladores/controlador_consultas.js';
+import { MENSAJES as MENSAJES_CITAS } from '../src/js/control/controladores/controlador_citas.js';
+import { MENSAJES as MENSAJES_DASHBOARD } from '../src/js/control/controladores/controlador_dashboard.js';
 import { verificarServidor, CABECERA_COPIA } from '../src/js/control/auth_service.js';
-import { conexion } from '../src/js/boundary/pwa/conexion.js';
+import { conexion } from '../src/js/control/conexion.js';
 import { registrarServiceWorker } from '../src/js/boundary/pwa/registro_sw.js';
-import { limpiarCachesDeDatos } from '../src/js/boundary/pwa/caches_cliente.js';
+import { limpiarCachesDeDatos } from '../src/js/control/caches_cliente.js';
 
 function crearVentana(onLine = true) {
     const ventana = new EventTarget();

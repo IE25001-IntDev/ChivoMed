@@ -1,7 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
-import { formatearFechaHora } from '../src/js/boundary/fechas_sv.js';
+import { formatearFechaHora } from '../src/js/control/fechas_sv.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const CITA = Object.freeze({ idConsulta: '50000000-0000-4000-8000-000000000001', fechaInicio: '2026-11-12T08:00:00-06:00',

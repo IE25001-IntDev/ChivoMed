@@ -21,9 +21,9 @@
  * El foco inicial va a la X; devolverlo al botón "Ver ticket" al cerrar le toca a la vista.
  * Los datos van con textContent.
  */
-import { hojaDeEstilos } from "../../vistas/estilos.js";
+import { hojaDeEstilos } from "../../estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../fechas_sv.js";
+import { formatearFechaHora } from "../../../control/fechas_sv.js";
 
 export const TEXTOS = Object.freeze({
     cargando: "Cargando el ticket…",

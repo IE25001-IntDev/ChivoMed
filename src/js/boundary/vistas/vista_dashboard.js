@@ -12,10 +12,10 @@
  * F8: con una consulta en curso (estado.enCurso) muestra "Tienes una consulta en curso", el enlace
  * "Ir a la consulta en curso" y "Salir de la consulta", y le pasa `enCurso` a <lista-consultas>.
  */
-import { ControladorDashboard, mensajeMemoria, MENSAJES } from "./controlador_dashboard.js";
+import { ControladorDashboard, mensajeMemoria, MENSAJES } from "../../control/controladores/controlador_dashboard.js";
 import { nombreDeRol } from "../../control/auth_service.js";
-import { hojaDeEstilos } from "./estilos.js";
-import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { hojaDeEstilos } from "../estilos.js";
+import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import "../components/dashboard/lista_consultas.js";
 import { plantilla } from "../plantilla.js";
 

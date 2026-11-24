@@ -8,7 +8,7 @@ const SIN_RED = 'Sin red. Puedes seguir navegando; las acciones que necesitan in
 const SIN_SERVIDOR = 'Sin conexión con el servidor. Puedes ver lo guardado; las acciones que lo necesitan están deshabilitadas.';
 const RESTABLECIDA = 'Conexión restablecida.';
 
-// `conexion` (pwa/conexion.js) se crea al importarse con la `window` que haya: la ventana falsa va antes.
+// `conexion` (control/conexion.js) se crea al importarse con la `window` que haya: la ventana falsa va antes.
 let ventana;
 let restaurar;
 before(async () => {

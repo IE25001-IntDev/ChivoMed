@@ -21,7 +21,7 @@ before(async () => {
     instalarDom();
     ventana = crearVentana();
     restaurar = instalarVentana(ventana);
-    ({ MENSAJE_SIN_RED } = await import('../src/js/boundary/pwa/controlador_conexion.js'));
+    ({ MENSAJE_SIN_RED } = await import('../src/js/control/controlador_conexion.js'));
     await import('../src/js/boundary/components/session_bar.js');
 });
 after(() => restaurar());

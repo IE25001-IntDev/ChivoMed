@@ -5,9 +5,9 @@ import DefaultError from '../src/js/entities/default_error.js';
 import {
     ControladorDashboard, MENSAJES, CODIGO_CERRAR_ANTES, normalizarAsignaciones, agruparPorClinica,
     mensajeDeError, mensajeMemoria,
-} from '../src/js/boundary/vistas/controlador_dashboard.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
-import { MENSAJE_SIN_RED } from '../src/js/boundary/pwa/controlador_conexion.js';
+} from '../src/js/control/controladores/controlador_dashboard.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
+import { MENSAJE_SIN_RED } from '../src/js/control/controlador_conexion.js';
 import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';
 
 // Sin red o sin servidor, en solo lectura o no, cambiar de rol muestra un solo motivo.

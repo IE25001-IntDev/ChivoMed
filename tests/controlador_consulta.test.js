@@ -4,9 +4,9 @@ import {
     MENSAJES, MAX_TEXTO, mensajeDeErrorConsulta, CODIGOS_POR_ROL, pasosPendientes, elegirPasoActual,
     motivoBloqueo, puedeOfrecerRetroceso, motivoNoRetroceder, puedeCerrar, nombreDeOrden, servicioConsulta,
     normalizarAsignables, categoriasDe, examenesVisibles, idsOrdenados, validarAsignacion,
-} from '../src/js/boundary/vistas/controlador_consulta.js';
-import { normalizarConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+} from '../src/js/control/controladores/controlador_consulta.js';
+import { normalizarConsultas } from '../src/js/control/controladores/controlador_consultas.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import AtencionService from '../src/js/control/atencion_service.js';
 import {
     UUID, ID_CONSULTA, ID_ROL_DOCTOR, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
@@ -635,7 +635,7 @@ describe('ControladorConsulta: salir de la consulta (F8)', () => {
 describe('ControladorConsulta: consulta pendiente guardada por el dashboard', () => {
     test('sin red la abre en solo lectura con lo que guardó el dashboard, sin pedir nada', async () => {
         const memoria = new MemoriaVistas();
-        const { ControladorConsultas } = await import('../src/js/boundary/vistas/controlador_consultas.js');
+        const { ControladorConsultas } = await import('../src/js/control/controladores/controlador_consultas.js');
         const dashboard = new ControladorConsultas({
             servicio: { dashboard: async () => ({ data: [consultaB6()] }), valorPaso: async () => ({ data: null }) },
             conexion: { enLinea: true, suscribir: () => () => {} }, memoria, reloj: () => new Date('2026-11-13T15:30:00Z'),

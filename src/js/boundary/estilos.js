@@ -2,6 +2,6 @@
 export function hojaDeEstilos(archivo) {
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = new URL(`../../../resources/${archivo}`, import.meta.url).href;
+    link.href = new URL(`../../resources/${archivo}`, import.meta.url).href;
     return link;
 }

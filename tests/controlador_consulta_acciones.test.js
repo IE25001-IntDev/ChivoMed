@@ -1,7 +1,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { MENSAJES, MAX_TEXTO, textoSeleccion } from '../src/js/boundary/vistas/controlador_consulta.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+import { MENSAJES, MAX_TEXTO, textoSeleccion } from '../src/js/control/controladores/controlador_consulta.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import {
     UUID, ID_CONSULTA, asentar, errorHttp, paso, pendiente, procedimiento, consultaB6, sesionCon, examen, preparar,
 } from './dobles/consulta.js';

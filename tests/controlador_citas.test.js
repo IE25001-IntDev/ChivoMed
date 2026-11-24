@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {
     ControladorCitas, MENSAJES, CLAVE_MEMORIA, PASOS, validarNumero, validarRango, pasoAlcanzable,
     motivoNoBuscar, mensajeDeErrorCitas, rangoPorDefecto,
-} from '../src/js/boundary/vistas/controlador_citas.js';
-import { FechasSV } from '../src/js/boundary/fechas_sv.js';
-import * as citas from '../src/js/boundary/vistas/controlador_citas.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+} from '../src/js/control/controladores/controlador_citas.js';
+import { FechasSV } from '../src/js/control/fechas_sv.js';
+import * as citas from '../src/js/control/controladores/controlador_citas.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
 import { AuthError, CODIGO_SIN_RED } from '../src/js/control/auth_service.js';
 import { conexionConServidor, detenerConexiones } from './dobles/conexion_servidor.js';

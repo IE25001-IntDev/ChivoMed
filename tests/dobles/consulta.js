@@ -2,8 +2,8 @@
  * Dobles compartidos por las pruebas de la HU4 (controlador, paneles y vista).
  * Datos inventados; nunca datos reales de pacientes ni de personal.
  */
-import { ControladorConsulta } from '../../src/js/boundary/vistas/controlador_consulta.js';
-import { MemoriaVistas } from '../../src/js/boundary/vistas/memoria_vistas.js';
+import { ControladorConsulta } from '../../src/js/control/controladores/controlador_consulta.js';
+import { MemoriaVistas } from '../../src/js/control/memoria_vistas.js';
 import DefaultError from '../../src/js/entities/default_error.js';
 
 export const UUID = n => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;

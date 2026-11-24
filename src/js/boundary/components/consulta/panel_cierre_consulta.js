@@ -5,9 +5,9 @@
  * Propiedad `modelo` (congelado, lo arma <vista-consulta>): { motivo, confirmando, accion }.
  * Emite (bubbles, composed): 'cerrar' { observaciones }, 'confirmar', 'cancelar'.
  */
-import { hojaDeEstilos } from "../../vistas/estilos.js";
+import { hojaDeEstilos } from "../../estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { MAX_TEXTO } from "../../vistas/controlador_consulta.js";
+import { MAX_TEXTO } from "../../../control/controladores/controlador_consulta.js";
 
 const PLANTILLA = plantilla(`
 <section class="panel panel-cierre" aria-labelledby="titulo">

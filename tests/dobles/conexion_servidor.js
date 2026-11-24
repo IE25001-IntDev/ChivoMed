@@ -4,7 +4,7 @@
  * DefaultService y auth_service ("servidor-caido" y "servidor-respondio"). La verificación
  * periódica nunca responde. Llamar a detenerConexiones() en afterEach para cancelar su temporizador.
  */
-import { ControladorConexion } from '../../src/js/boundary/pwa/controlador_conexion.js';
+import { ControladorConexion } from '../../src/js/control/controlador_conexion.js';
 
 const creadas = new Set();
 

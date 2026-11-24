@@ -6,9 +6,9 @@
  * `enfocarTicket()` devuelve el foco al botón "Ver ticket" (al cerrar esa ventana).
  * Los datos van con textContent; sin nombrePaciente no se muestra la línea "Paciente:".
  */
-import { hojaDeEstilos } from "../../vistas/estilos.js";
+import { hojaDeEstilos } from "../../estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { formatearFechaHora } from "../../fechas_sv.js";
+import { formatearFechaHora } from "../../../control/fechas_sv.js";
 
 const PLANTILLA = plantilla(`
 <article class="tarjeta-cita" aria-labelledby="fecha">

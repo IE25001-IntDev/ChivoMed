@@ -15,8 +15,8 @@
  * Si su ventana se abre encima de otra (la del ticket), Esc cierra solo esta, y al cerrarla el foco
  * vuelve al elemento de la otra ventana que lo tenía.
  */
-import { ControladorInstalacion, MODOS, EVENTO_OFRECER, EVENTO_INSTALAR } from "../pwa/controlador_instalacion.js";
-import { hojaDeEstilos } from "../vistas/estilos.js";
+import { ControladorInstalacion, MODOS, EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
+import { hojaDeEstilos } from "../estilos.js";
 import { plantilla } from "../plantilla.js";
 
 const TEXTO_INVITACION = "¿Quieres instalar ChivoMed en este dispositivo? Podrás abrirla como una aplicación y consultar tus datos guardados sin conexión.";

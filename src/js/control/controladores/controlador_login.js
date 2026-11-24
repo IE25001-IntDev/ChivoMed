@@ -4,12 +4,12 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  */
-import { listarTiposDocumento, iniciarSesion, esEmpleado } from "../../control/auth_service.js";
-import { RUTAS, RUTA_POR_DEFECTO, inicioPorRol } from "../rutas.js";
-import { rutaDeRetorno, resolverRuta } from "../router.js";
-import { autoformatear, crearValidadorFormato } from "../../control/formato_documento.js";
-import { crearEstado } from "../../control/estado_reactivo.js";
-import { Validaciones } from "../../control/validaciones.js";
+import { listarTiposDocumento, iniciarSesion, esEmpleado } from "../auth_service.js";
+import { RUTAS, RUTA_POR_DEFECTO, inicioPorRol } from "../../boundary/rutas.js";
+import { rutaDeRetorno, resolverRuta } from "../../boundary/router.js";
+import { autoformatear, crearValidadorFormato } from "../formato_documento.js";
+import { crearEstado } from "../estado_reactivo.js";
+import { Validaciones } from "../validaciones.js";
 
 export const MENSAJES = Object.freeze({
     tipoRequerido: "Selecciona el tipo de documento.",

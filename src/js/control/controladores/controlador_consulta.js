@@ -17,16 +17,16 @@
  * Lo cargado y el borrador quedan en memoria_vistas para seguir mostrándolos sin red; solo la
  * consulta (sin borrador ni valor guardado) va además a disco para verla tras recargar sin red.
  */
-import AtencionService from "../../control/atencion_service.js";
-import ConsultaService from "../../control/consulta_service.js";
-import ConsultaProcedimientoPasoService from "../../control/consulta_procedimiento_paso_service.js";
-import ProcedimientoPasoService from "../../control/procedimiento_paso_service.js";
-import { crearEstado } from "../../control/estado_reactivo.js";
-import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
-import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
+import AtencionService from "../atencion_service.js";
+import ConsultaService from "../consulta_service.js";
+import ConsultaProcedimientoPasoService from "../consulta_procedimiento_paso_service.js";
+import ProcedimientoPasoService from "../procedimiento_paso_service.js";
+import { crearEstado } from "../estado_reactivo.js";
+import { MemoriaVistas, memoria as memoriaCompartida } from "../memoria_vistas.js";
+import { conexion as conexionCompartida } from "../conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../controlador_conexion.js";
 import { normalizarConsultas, motivoNoAtender, esPasoDeMiRol, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
-import { Validaciones } from "../../control/validaciones.js";
+import { Validaciones } from "../validaciones.js";
 
 export const MAX_TEXTO = 255;
 const NINGUNA = Object.freeze([]);

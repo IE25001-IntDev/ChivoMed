@@ -28,9 +28,9 @@
  * El estado es reactivo ({ sesion, datos }): `suscribir()` avisa cuando se guarda, se cambia de
  * sesión o se limpia. `datos` es un objeto congelado que se reemplaza en cada escritura.
  */
-import { crearEstado } from "../../control/estado_reactivo.js";
-import { crearAlmacenOffline } from "../pwa/almacen_offline.js";
-import { EVENTO_SERVIDOR_RESPONDIO } from "../../control/auth_service.js";
+import { crearEstado } from "./estado_reactivo.js";
+import { crearAlmacenOffline } from "./almacen_offline.js";
+import { EVENTO_SERVIDOR_RESPONDIO } from "./auth_service.js";
 
 const VACIO = Object.freeze(Object.create(null));
 

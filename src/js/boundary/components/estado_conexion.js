@@ -1,14 +1,14 @@
 /**
  * <estado-conexion>: avisa si la app está en línea, sin red o sin conexión con el servidor
- * (el backend no responde: ver pwa/controlador_conexion.js).
+ * (el backend no responde: ver control/controlador_conexion.js).
  * La región aria-live (role="status") está siempre en el árbol de accesibilidad: nunca lleva `hidden`
  * ni display:none, porque muchos lectores no anuncian una región que aparece a la vez que su texto.
  * Solo cambia el texto; sin aviso, la franja se oculta a la vista (data-aviso="oculto", recortada como
  * .solo-lectores en pwa.css) y queda vacía.
- * Las vistas deshabilitan sus acciones de red suscribiéndose a `conexion` (pwa/conexion.js).
+ * Las vistas deshabilitan sus acciones de red suscribiéndose a `conexion` (control/conexion.js).
  */
-import { conexion } from "../pwa/conexion.js";
-import { hojaDeEstilos } from "../vistas/estilos.js";
+import { conexion } from "../../control/conexion.js";
+import { hojaDeEstilos } from "../estilos.js";
 import { plantilla } from "../plantilla.js";
 
 const PLANTILLA = plantilla(`

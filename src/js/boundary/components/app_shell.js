@@ -19,11 +19,11 @@
 import { Router, normalizarHash } from "../router.js";
 import { RUTAS, RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION, RUTA_POR_DEFECTO, RUTA_LOGIN, inicioPorRol } from "../rutas.js";
 import { obtenerSesion, fijarSesionVista, esEmpleado, CODIGO_SIN_RED } from "../../control/auth_service.js";
-import { hojaDeEstilos } from "../vistas/estilos.js";
+import { hojaDeEstilos } from "../estilos.js";
 import { registrarServiceWorker } from "../pwa/registro_sw.js";
-import { limpiarCachesDeDatos } from "../pwa/caches_cliente.js";
-import { memoria } from "../vistas/memoria_vistas.js";
-import { conexion } from "../pwa/conexion.js";
+import { limpiarCachesDeDatos } from "../../control/caches_cliente.js";
+import { memoria } from "../../control/memoria_vistas.js";
+import { conexion } from "../../control/conexion.js";
 import "./session_bar.js";
 import "./theme_toggle.js";
 import "./install_prompt.js";

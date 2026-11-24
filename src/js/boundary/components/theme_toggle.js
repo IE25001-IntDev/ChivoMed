@@ -1,4 +1,4 @@
-import { hojaDeEstilos } from '../vistas/estilos.js';
+import { hojaDeEstilos } from '../estilos.js';
 import { plantilla } from '../plantilla.js';
 
 const PLANTILLA = plantilla(`<button class="theme-button" type="button" aria-label="Modo oscuro" aria-pressed="false">

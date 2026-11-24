@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {
     ControladorConsultas, MENSAJES, MAX_DIAS, validarRango, normalizarConsultas, arbolDePasos, motivoNoAtender,
     etiquetaEstado, resumenResultado, mensajeDeError, accionAtender, esPasoDeMiRol, filtrarConsultas, tituloConsultas,
-} from '../src/js/boundary/vistas/controlador_consultas.js';
-import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
+} from '../src/js/control/controladores/controlador_consultas.js';
+import { MemoriaVistas } from '../src/js/control/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
-import { hoySV, sumarDias } from '../src/js/boundary/fechas_sv.js';
+import { hoySV, sumarDias } from '../src/js/control/fechas_sv.js';
 
 // Datos inventados; nunca datos reales de pacientes.
 const UUID = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;

@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { hoySV, sumarDias, diasEntre, esFechaISO, formatearFecha, formatearFechaHora } from '../src/js/boundary/fechas_sv.js';
+import { hoySV, sumarDias, diasEntre, esFechaISO, formatearFecha, formatearFechaHora } from '../src/js/control/fechas_sv.js';
 
 describe('fechas_sv', () => {
     test('hoySV usa el día de El Salvador aunque en UTC ya sea el día siguiente', () => {

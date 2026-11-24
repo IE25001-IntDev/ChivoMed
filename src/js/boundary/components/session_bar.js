@@ -4,9 +4,9 @@
  * Emite 'sesion-cerrada' (bubbles, composed) al cerrar sesión o si el servidor ya la había cerrado.
  */
 import { cerrarSesion, nombreDeRol } from "../../control/auth_service.js";
-import { hojaDeEstilos } from "../vistas/estilos.js";
-import { conexion } from "../pwa/conexion.js";
-import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { hojaDeEstilos } from "../estilos.js";
+import { conexion } from "../../control/conexion.js";
+import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import { plantilla } from "../plantilla.js";
 
 const PLANTILLA = plantilla(`

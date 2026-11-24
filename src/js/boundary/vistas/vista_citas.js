@@ -12,11 +12,11 @@
  * en el mismo toque, emite EVENTO_INSTALAR. Al cerrar la ventana, el foco vuelve a "Ver ticket".
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  */
-import { ControladorCitas, MENSAJES, motivoNoBuscar } from "./controlador_citas.js";
-import { formatearFecha, FechasSV } from "../fechas_sv.js";
-import { hojaDeEstilos } from "./estilos.js";
+import { ControladorCitas, MENSAJES, motivoNoBuscar } from "../../control/controladores/controlador_citas.js";
+import { formatearFecha, FechasSV } from "../../control/fechas_sv.js";
+import { hojaDeEstilos } from "../estilos.js";
 import { plantilla } from "../plantilla.js";
-import { EVENTO_OFRECER, EVENTO_INSTALAR } from "../pwa/controlador_instalacion.js";
+import { EVENTO_OFRECER, EVENTO_INSTALAR } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
 import "../components/citas/tarjeta_cita.js";
 import "../components/citas/ventana_ticket.js";

@@ -1,6 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControladorInstalacion, MODOS, EVENTO_INSTALAR } from '../src/js/boundary/pwa/controlador_instalacion.js';
+import { ControladorInstalacion, MODOS, EVENTO_INSTALAR } from '../src/js/control/controlador_instalacion.js';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 
 /** Deja correr los microtasks: la notificación del estado reactivo llega después del cambio. */

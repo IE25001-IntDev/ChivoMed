@@ -7,14 +7,14 @@
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * Un cambio de rol confirmado se publica en `estado.sesionCambiada`.
  */
-import AtencionService from "../../control/atencion_service.js";
-import { obtenerSesion as obtenerSesionHttp, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../../control/auth_service.js";
-import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
-import { conexion as conexionCompartida } from "../pwa/conexion.js";
-import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
-import { crearEstado } from "../../control/estado_reactivo.js";
+import AtencionService from "../atencion_service.js";
+import { obtenerSesion as obtenerSesionHttp, CODIGO_PACIENTE, ROL_SIN_NOMBRE } from "../auth_service.js";
+import { MemoriaVistas, memoria as memoriaCompartida } from "../memoria_vistas.js";
+import { conexion as conexionCompartida } from "../conexion.js";
+import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../controlador_conexion.js";
+import { crearEstado } from "../estado_reactivo.js";
 import { FechasSV } from "../fechas_sv.js";
-import { Validaciones } from "../../control/validaciones.js";
+import { Validaciones } from "../validaciones.js";
 
 export const CODIGO_CERRAR_ANTES = "rolCambio.cerrarAntesCambiar";
 const CLAVE_MEMORIA = "dashboard.asignaciones";

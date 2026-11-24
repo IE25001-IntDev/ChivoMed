@@ -6,12 +6,12 @@
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  * Emite 'navegar' { ruta } (bubbles, composed) cuando el personal puede entrar.
  */
-import { ControladorLogin, MENSAJES, destinoTrasLogin } from "./controlador_login.js";
-import { hojaDeEstilos } from "./estilos.js";
-import { conexion } from "../pwa/conexion.js";
-import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
+import { ControladorLogin, MENSAJES, destinoTrasLogin } from "../../control/controladores/controlador_login.js";
+import { hojaDeEstilos } from "../estilos.js";
+import { conexion } from "../../control/conexion.js";
+import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import { plantilla } from "../plantilla.js";
-import { EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
+import { EVENTO_OFRECER } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
 
 const PLANTILLA = plantilla(`
