@@ -17,10 +17,10 @@ import { crearEstado } from "../../control/estado_reactivo.js";
 import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 import { MENSAJE_SIN_DATOS, motivoSinConexion } from "../pwa/controlador_conexion.js";
-import { hoySV, esFechaISO, diasEntre, formatearFecha } from "../fechas_sv.js";
+import { hoySV, esFechaISO, diasEntre, formatearFecha, FechasSV } from "../fechas_sv.js";
+import { Validaciones } from "../../control/validaciones.js";
 
 export const MAX_DIAS = 31;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VACIO = Object.freeze({});
 const NINGUNA = Object.freeze([]);
 
@@ -47,17 +47,8 @@ export const MENSAJES = Object.freeze({
     sinConsultas: "No hay consultas en estas fechas.",
 });
 
-const texto = valor => typeof valor === "string" && valor.trim().length > 0;
-const textoONull = valor => (texto(valor) ? valor.trim() : null);
+const textoONull = valor => (Validaciones.esTexto(valor) ? valor.trim() : null);
 const congelar = Object.freeze;
-const formatoDiaSV = new Intl.DateTimeFormat("en-CA", { timeZone: "America/El_Salvador", year: "numeric", month: "2-digit", day: "2-digit" });
-
-function diaConsulta(fechaInicio) {
-    const instante = Date.parse(fechaInicio);
-    if (!Number.isFinite(instante)) return null;
-    const partes = Object.fromEntries(formatoDiaSV.formatToParts(instante).map(p => [p.type, p.value]));
-    return `${partes.year}-${partes.month}-${partes.day}`;
-}
 
 /** Valida el filtro igual que el backend. Devuelve el mensaje o null si es válido. */
 export function validarRango(desde, hasta) {
@@ -69,8 +60,8 @@ export function validarRango(desde, hasta) {
 }
 
 function normalizarPaso(p) {
-    if (!p || typeof p.idConsultaProcedimientoPaso !== "string" || !UUID.test(p.idConsultaProcedimientoPaso)) return null;
-    const responsable = p.responsable && (texto(p.responsable.nombre) || texto(p.responsable.rol))
+    if (!p || typeof p.idConsultaProcedimientoPaso !== "string" || !Validaciones.UUID.test(p.idConsultaProcedimientoPaso)) return null;
+    const responsable = p.responsable && (Validaciones.esTexto(p.responsable.nombre) || Validaciones.esTexto(p.responsable.rol))
         ? congelar({ nombre: textoONull(p.responsable.nombre), rol: textoONull(p.responsable.rol) }) : null;
     return congelar({
         idConsultaProcedimientoPaso: p.idConsultaProcedimientoPaso,
@@ -88,7 +79,7 @@ function normalizarPaso(p) {
 
 /** Rol responsable de la definición del paso ({ idRol, nombre }), si el backend lo envía; si no, null. */
 function normalizarRolPaso(rol) {
-    if (!rol || typeof rol.idRol !== "string" || !UUID.test(rol.idRol)) return null;
+    if (!rol || typeof rol.idRol !== "string" || !Validaciones.UUID.test(rol.idRol)) return null;
     return congelar({ idRol: rol.idRol, nombre: textoONull(rol.nombre) });
 }
 
@@ -99,7 +90,7 @@ export function esPasoDeMiRol(paso, rolActivo) {
 }
 
 function normalizarProcedimiento(p) {
-    if (!p || typeof p.idConsultaProcedimiento !== "string" || !UUID.test(p.idConsultaProcedimiento)) return null;
+    if (!p || typeof p.idConsultaProcedimiento !== "string" || !Validaciones.UUID.test(p.idConsultaProcedimiento)) return null;
     return congelar({
         idConsultaProcedimiento: p.idConsultaProcedimiento,
         nombre: textoONull(p.nombre) ?? "Procedimiento sin nombre",
@@ -112,9 +103,9 @@ function normalizarProcedimiento(p) {
 /** Limpia y congela la respuesta del dashboard, conservando el orden del backend. */
 export function normalizarConsultas(datos) {
     if (!Array.isArray(datos)) return NINGUNA;
-    return congelar(datos.filter(c => c && typeof c.idConsulta === "string" && UUID.test(c.idConsulta)).map(c => {
+    return congelar(datos.filter(c => c && typeof c.idConsulta === "string" && Validaciones.UUID.test(c.idConsulta)).map(c => {
         const p = c.paciente ?? {};
-        const nombre = [p.nombres, p.apellidos].filter(texto).map(t => t.trim()).join(" ");
+        const nombre = [p.nombres, p.apellidos].filter(Validaciones.esTexto).map(t => t.trim()).join(" ");
         return congelar({
             idConsulta: c.idConsulta,
             fechaInicio: textoONull(c.fechaInicio),
@@ -125,7 +116,7 @@ export function normalizarConsultas(datos) {
                 edad: Number.isInteger(p.edad) && p.edad >= 0 ? p.edad : null,
                 fechaNacimiento: esFechaISO(p.fechaNacimiento) ? p.fechaNacimiento : null,
                 documentos: congelar((Array.isArray(p.documentos) ? p.documentos : [])
-                    .filter(d => d && texto(d.tipoDocumento) && texto(d.numero))
+                    .filter(d => d && Validaciones.esTexto(d.tipoDocumento) && Validaciones.esTexto(d.numero))
                     .map(d => congelar({ tipoDocumento: d.tipoDocumento.trim(), numero: d.numero.trim() }))),
             }),
             procedimientos: congelar((Array.isArray(c.procedimientos) ? c.procedimientos : []).map(normalizarProcedimiento).filter(Boolean)),
@@ -182,7 +173,7 @@ export function accionAtender(consulta) {
 export function motivoNoAtender(consulta, { enLinea = true, soloLectura = false, hoy = hoySV() } = {}) {
     if (!consulta) return MENSAJES.sinPendiente;
     if (consulta.fechaFin) return MENSAJES.cerrada;
-    if (diaConsulta(consulta.fechaInicio) > hoy) return MENSAJES.futura;
+    if (FechasSV.diaDe(Date.parse(consulta.fechaInicio)) > hoy) return MENSAJES.futura;
     if (!consulta.pendienteParaMi) {
         const [pendiente] = pendientesDe(consulta);
         return pendiente ? motivoOtroRol(pendiente) : MENSAJES.soloFinalizador;
@@ -520,7 +511,7 @@ export class ControladorConsultas {
 
     /** F8: marca la consulta en curso para su insignia. Solo un UUID; cualquier otra cosa es null. */
     marcarEnCurso(idConsulta) {
-        this.estado.enCurso = typeof idConsulta === "string" && UUID.test(idConsulta) ? idConsulta : null;
+        this.estado.enCurso = typeof idConsulta === "string" && Validaciones.UUID.test(idConsulta) ? idConsulta : null;
     }
 
     /** F8: true si la consulta es la que está en curso en la sesión. */

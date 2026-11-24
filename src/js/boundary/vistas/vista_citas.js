@@ -12,11 +12,12 @@
  * en el mismo toque, emite EVENTO_INSTALAR. Al cerrar la ventana, el foco vuelve a "Ver ticket".
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  */
-import { ControladorCitas, MENSAJES, MAX_NUMERO_DOCUMENTO, motivoNoBuscar, formatearHoraSV } from "./controlador_citas.js";
-import { formatearFecha } from "../fechas_sv.js";
+import { ControladorCitas, MENSAJES, motivoNoBuscar } from "./controlador_citas.js";
+import { formatearFecha, FechasSV } from "../fechas_sv.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { plantilla } from "../plantilla.js";
 import { EVENTO_OFRECER, EVENTO_INSTALAR } from "../pwa/controlador_instalacion.js";
+import { Validaciones } from "../../control/validaciones.js";
 import "../components/citas/tarjeta_cita.js";
 import "../components/citas/ventana_ticket.js";
 
@@ -38,7 +39,7 @@ const PLANTILLA = plantilla(`
       <label for="numero">Número de documento</label>
       <p class="indicaciones" id="numero-indicaciones" hidden></p>
       <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
-             maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones" />
+             maxlength="${Validaciones.MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones" />
     </div>
     <div class="campo">
       <label for="clinica">Clínica</label>
@@ -199,7 +200,7 @@ class VistaCitas extends HTMLElement {
         if (cambio("citas", "enLinea", "bloqueadoHasta")) this.#pintarTarjetas(estado);
         if (cambio("citas", "tickets", "ticketAbierto", "enLinea", "bloqueadoHasta")) this.#pintarVentana(estado);
         this.#pintarAcciones(estado);
-        const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn))
+        const memoria = estado.desdeMemoria && estado.citas ? MENSAJES.memoria(FechasSV.hora(estado.actualizadoEn))
             : !estado.enLinea && !estado.citas ? MENSAJES.sinDatos : null;
         this.$("aviso-memoria").hidden = !memoria;
         this.$("aviso-memoria").textContent = memoria ?? "";

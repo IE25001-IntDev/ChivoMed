@@ -1,4 +1,4 @@
-import { componentStyles } from './component_styles.js';
+import { hojaDeEstilos } from '../vistas/estilos.js';
 import { plantilla } from '../plantilla.js';
 
 const PLANTILLA = plantilla(`<button class="theme-button" type="button" aria-label="Modo oscuro" aria-pressed="false">
@@ -29,7 +29,7 @@ class ThemeToggle extends HTMLElement {
 
     connectedCallback() {
         if (!this.root.childElementCount) {
-            this.root.append(componentStyles(), PLANTILLA.clonar());
+            this.root.append(hojaDeEstilos('components.css'), PLANTILLA.clonar());
         }
         this.root.querySelector('button').addEventListener('click', this.toggle);
         this.media.addEventListener('change', this.systemChange);

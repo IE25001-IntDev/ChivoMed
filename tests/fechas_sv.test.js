@@ -9,6 +9,10 @@ describe('fechas_sv', () => {
         assert.equal(hoySV(() => new Date('2026-11-14T06:00:00Z')), '2026-11-14');
     });
 
+    test('hoySV con un reloj que devuelve una fecha inválida lanza RangeError', () => {
+        assert.throws(() => hoySV(() => new Date('no es una fecha')), RangeError);
+    });
+
     test('sumarDias y diasEntre cruzan meses, años y años bisiestos', () => {
         assert.equal(sumarDias('2026-11-13', 30), '2026-12-13');
         assert.equal(sumarDias('2026-12-31', 1), '2027-01-01');

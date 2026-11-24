@@ -4,7 +4,8 @@ import { crearAlmacenOffline, NOMBRE_BASE, ALMACEN } from '../src/js/boundary/pw
 import { MemoriaVistas, VIGENCIA_MS, RANURA_SESION, ranuraDe } from '../src/js/boundary/vistas/memoria_vistas.js';
 import { ControladorConsultas } from '../src/js/boundary/vistas/controlador_consultas.js';
 import * as memoriaVistas from '../src/js/boundary/vistas/memoria_vistas.js';
-import { ControladorCitas, CLAVE_MEMORIA as CLAVE_CITAS, MENSAJES as MENSAJES_CITAS, formatearHoraSV } from '../src/js/boundary/vistas/controlador_citas.js';
+import { ControladorCitas, CLAVE_MEMORIA as CLAVE_CITAS, MENSAJES as MENSAJES_CITAS } from '../src/js/boundary/vistas/controlador_citas.js';
+import { FechasSV } from '../src/js/boundary/fechas_sv.js';
 import { crearIndexedDbDoble } from './dobles/indexeddb_doble.js';
 import { ControladorConexion } from '../src/js/boundary/pwa/controlador_conexion.js';
 import { listarTiposDocumento, CABECERA_COPIA } from '../src/js/control/auth_service.js';
@@ -306,7 +307,7 @@ describe('búsqueda de citas sin conexión (IndexedDB)', () => {
         assert.deepEqual(sinRed.estado.citas, [CITA]);
         assert.equal(sinRed.estado.numeroDocumento, NUMERO);
         assert.equal(sinRed.estado.desdeMemoria, true);
-        assert.equal(MENSAJES_CITAS.memoria(formatearHoraSV(sinRed.estado.actualizadoEn)), 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
+        assert.equal(MENSAJES_CITAS.memoria(FechasSV.hora(sinRed.estado.actualizadoEn)), 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
         assert.equal(sinRed.estado.habilitado.buscar, false, 'sin red no se puede buscar');
         await sinRed.controlador.buscar();
         assert.equal(sinRed.llamadas.citas, 0);

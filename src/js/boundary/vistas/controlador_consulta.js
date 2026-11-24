@@ -26,11 +26,11 @@ import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
 import { normalizarConsultas, motivoNoAtender, esPasoDeMiRol, MENSAJES as MENSAJES_DASHBOARD } from "./controlador_consultas.js";
+import { Validaciones } from "../../control/validaciones.js";
 
 export const MAX_TEXTO = 255;
 const NINGUNA = Object.freeze([]);
 const congelar = Object.freeze;
-const texto = valor => typeof valor === "string" && valor.trim().length > 0;
 
 export const MENSAJES = Object.freeze({
     otroRol: MENSAJES_DASHBOARD.otroRol,
@@ -116,14 +116,14 @@ const RECARGAR_TRAS_ORDEN = new Set(["consulta.ordenPasoCompletado", "consulta.p
 /** Traduce un error del servicio a un texto para el usuario, sin detalles internos. */
 export function mensajeDeErrorConsulta(error) {
     const code = error?.code;
-    if (code && Object.hasOwn(USAR_MENSAJE_BACKEND, code)) return texto(error.message) ? error.message.trim() : USAR_MENSAJE_BACKEND[code];
+    if (code && Object.hasOwn(USAR_MENSAJE_BACKEND, code)) return Validaciones.esTexto(error.message) ? error.message.trim() : USAR_MENSAJE_BACKEND[code];
     if (code && Object.hasOwn(POR_CODIGO, code)) return POR_CODIGO[code];
     switch (error?.status) {
         case 0: return MENSAJES.conexion;
         case 401: return MENSAJES.sesionFinalizada;
         case 403: return MENSAJES.sinPermiso;
         case 404: return MENSAJES.noEncontrada;
-        case 400: case 409: return texto(error.message) ? error.message.trim() : MENSAJES.generico;
+        case 400: case 409: return Validaciones.esTexto(error.message) ? error.message.trim() : MENSAJES.generico;
         default: return MENSAJES.generico;
     }
 }
@@ -170,7 +170,7 @@ export function puedeOfrecerRetroceso(paso) {
 /** null si se puede retroceder; si no, el motivo que el frontend ya conoce (el backend decide el resto). */
 export function motivoNoRetroceder({ ordenes = NINGUNA, valorGuardado = null } = {}) {
     if (ordenes.length) return MENSAJES.retrocesoConOrdenes;
-    if (texto(valorGuardado)) return MENSAJES.retrocesoConRegistro;
+    if (Validaciones.esTexto(valorGuardado)) return MENSAJES.retrocesoConRegistro;
     return null;
 }
 
@@ -191,7 +191,7 @@ function normalizarTipos(datos) {
     const vistos = new Set();
     const tipos = [];
     for (const t of datos) {
-        if (!t || !texto(t.idTipoExamen) || !texto(t.nombre) || vistos.has(t.idTipoExamen)) continue;
+        if (!t || !Validaciones.esTexto(t.idTipoExamen) || !Validaciones.esTexto(t.nombre) || vistos.has(t.idTipoExamen)) continue;
         vistos.add(t.idTipoExamen);
         tipos.push(congelar({ idTipoExamen: t.idTipoExamen, nombre: t.nombre.trim() }));
     }
@@ -204,7 +204,7 @@ function normalizarTipos(datos) {
  */
 export function normalizarAsignables(datos) {
     if (!Array.isArray(datos)) return NINGUNA;
-    return congelar(datos.filter(e => e && texto(e.idExamen) && texto(e.nombre))
+    return congelar(datos.filter(e => e && Validaciones.esTexto(e.idExamen) && Validaciones.esTexto(e.nombre))
         .map(e => congelar({ idExamen: e.idExamen, nombre: e.nombre.trim(), tiposExamen: normalizarTipos(e.tiposExamen) })));
 }
 
@@ -223,7 +223,7 @@ export function examenesVisibles(asignables, idTipoExamen = "") {
 
 /** F9: idExamen ya ordenados en el paso. El backend no impide repetir una orden; el frontend sí. */
 export function idsOrdenados(ordenes) {
-    return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(texto))]);
+    return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(Validaciones.esTexto))]);
 }
 
 /** F9: texto de cuántos exámenes hay seleccionados. */
@@ -251,11 +251,11 @@ export function validarAsignacion({ idsExamen, indicaciones } = {}, asignables =
 
 function normalizarOrdenes(datos) {
     if (!Array.isArray(datos)) return NINGUNA;
-    return congelar(datos.filter(o => o && texto(o.idOrdenExamen)).map(o => congelar({
+    return congelar(datos.filter(o => o && Validaciones.esTexto(o.idOrdenExamen)).map(o => congelar({
         idOrdenExamen: o.idOrdenExamen,
-        idExamen: texto(o.idExamen) ? o.idExamen : null,
-        indicaciones: texto(o.indicaciones) ? o.indicaciones.trim() : null,
-        fechaCreacion: texto(o.fechaCreacion) ? o.fechaCreacion : null,
+        idExamen: Validaciones.esTexto(o.idExamen) ? o.idExamen : null,
+        indicaciones: Validaciones.esTexto(o.indicaciones) ? o.indicaciones.trim() : null,
+        fechaCreacion: Validaciones.esTexto(o.fechaCreacion) ? o.fechaCreacion : null,
     })));
 }
 
@@ -507,7 +507,7 @@ export class ControladorConsulta {
         try {
             const { data } = await this.#servicio.contexto();
             if (id !== this.#secuencia) return;
-            const enCurso = texto(data?.idConsulta) && data.idConsulta !== this.estado.idConsulta ? data.idConsulta : null;
+            const enCurso = Validaciones.esTexto(data?.idConsulta) && data.idConsulta !== this.estado.idConsulta ? data.idConsulta : null;
             this.estado.enCurso = enCurso;
         } catch { /* Sin el enlace, el mensaje sigue siendo útil. */ }
     }
@@ -541,7 +541,7 @@ export class ControladorConsulta {
             const idDefinicion = registro?.data?.idProcedimientoPaso;
             const definicion = idDefinicion ? await this.#servicio.definicion(idDefinicion) : null;
             if (idDetalle !== this.#secuenciaDetalle || idCarga !== this.#secuencia) return;
-            const valorGuardado = texto(registro?.data?.valor) ? registro.data.valor : null;
+            const valorGuardado = Validaciones.esTexto(registro?.data?.valor) ? registro.data.valor : null;
             this.estado.detalle = congelar({
                 idPaso, cargando: false, error: null, valorGuardado,
                 indicaFin: definicion ? definicion.data?.indicaFin === true : null,
@@ -751,7 +751,7 @@ export class ControladorConsulta {
         return this.#ejecutar("retroceder", async () => { anterior = (await this.#servicio.retroceder(idPaso))?.data ?? null; }, {
             alTerminar: async () => {
                 this.#olvidarBorrador(idPaso);
-                const idAnterior = texto(anterior?.idConsultaProcedimientoPaso) ? anterior.idConsultaProcedimientoPaso : null;
+                const idAnterior = Validaciones.esTexto(anterior?.idConsultaProcedimientoPaso) ? anterior.idConsultaProcedimientoPaso : null;
                 // El paso reabierto muestra su valor guardado, no un borrador viejo de antes de completarlo.
                 if (idAnterior) this.#olvidarBorrador(idAnterior);
                 Object.assign(this.estado, { idElegido: idAnterior, aviso: null, borrador: "" });

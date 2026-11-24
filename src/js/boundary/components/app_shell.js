@@ -7,7 +7,9 @@
  *  - 'sesion-actualizada' { sesion } desde una vista (cambio de rol) → actualiza la sesión de la
  *    vista (la que compara verificarSesionActual antes de escribir) y la barra de sesión.
  * Sin red, el router monta las rutas de empleado en solo lectura con la última sesión verificada
- * (memoria_vistas) o, si no hay, <vista-sin-conexion>; al volver la red se vuelve a verificar.
+ * (memoria_vistas) o, si no hay, el aviso de sin conexión (<vista-aviso>); al volver la red se vuelve a verificar.
+ * Un error al abrir una ruta se muestra también en un <vista-aviso> (con role="alert"); su evento
+ * 'reintentar' vuelve a procesar la ruta.
  * Antes de la primera ruta espera a que memoria_vistas cargue su copia en IndexedDB, para que
  * una recarga sin red siga mostrando el último dashboard y la consulta abierta. Un 401 al verificar
  * la sesión también borra esa copia.
@@ -26,6 +28,7 @@ import "./session_bar.js";
 import "./theme_toggle.js";
 import "./install_prompt.js";
 import "./estado_conexion.js";
+import "../vistas/vista_aviso.js";
 import { plantilla } from "../plantilla.js";
 
 const PLANTILLA = plantilla(`
@@ -157,27 +160,24 @@ class AppShell extends HTMLElement {
     #mostrarError(error, contexto) {
         this.#rutaActual = contexto.ruta;
         this.#montadaSinRed = false;
-        const raiz = this.shadowRoot;
         this.#mostrarSesion(contexto);
-        const caja = document.createElement("section");
-        caja.className = "error-ruta";
-        caja.setAttribute("role", "alert");
-        const titulo = document.createElement("h1");
-        titulo.tabIndex = -1;
-        titulo.textContent = "No pudimos abrir esta página";
-        const detalle = document.createElement("p");
-        // Solo los errores del servicio (con status HTTP) traen un mensaje pensado para el usuario;
-        // los demás (p. ej. un módulo que no carga) pueden incluir URLs internas.
-        detalle.textContent = typeof error?.status === "number" && error.message
-            ? error.message
-            : "No pudimos cargar esta sección. Revisa tu conexión e inténtalo de nuevo.";
-        const reintentar = document.createElement("button");
-        reintentar.type = "button";
-        reintentar.textContent = "Volver a intentar";
-        reintentar.addEventListener("click", () => { this.#router.pendiente = this.#router.procesar(); });
-        caja.append(titulo, detalle, reintentar);
-        raiz.getElementById("contenido").replaceChildren(caja);
-        this.#anunciar("Error", caja);
+        const aviso = document.createElement("vista-aviso");
+        aviso.aviso = Object.freeze({
+            titulo: "No pudimos abrir esta página",
+            // Solo los errores del servicio (con status HTTP) traen un mensaje pensado para el usuario;
+            // los demás (p. ej. un módulo que no carga) pueden incluir URLs internas.
+            texto: typeof error?.status === "number" && error.message
+                ? error.message
+                : "No pudimos cargar esta sección. Revisa tu conexión e inténtalo de nuevo.",
+            accion: "reintentar",
+            alerta: true,
+        });
+        aviso.addEventListener("reintentar", event => {
+            event.stopPropagation();
+            this.#router.pendiente = this.#router.procesar();
+        });
+        this.shadowRoot.getElementById("contenido").replaceChildren(aviso);
+        this.#anunciar("Error", aviso);
     }
 
     #anunciar(titulo, contenedor) {

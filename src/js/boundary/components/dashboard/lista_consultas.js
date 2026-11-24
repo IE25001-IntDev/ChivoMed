@@ -13,7 +13,7 @@
 import { ControladorConsultas, motivoNoAtender, resumenResultado } from "../../vistas/controlador_consultas.js";
 import { hojaDeEstilos } from "../../vistas/estilos.js";
 import { plantilla } from "../../plantilla.js";
-import { ZONA_SV } from "../../fechas_sv.js";
+import { FechasSV } from "../../fechas_sv.js";
 import { mensajeGuardado } from "../../pwa/controlador_conexion.js";
 import "./tarjeta_consulta_dashboard.js";
 
@@ -45,9 +45,6 @@ const PLANTILLA = plantilla(`
 </div>
 <p class="resumen" id="resumen" aria-live="polite"></p>
 <div class="cuadricula-consultas" id="cuadricula"></div>`);
-
-const hora = fecha => (fecha instanceof Date
-    ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_SV }) : "");
 
 class ListaConsultas extends HTMLElement {
     #controlador = null;
@@ -140,7 +137,7 @@ class ListaConsultas extends HTMLElement {
         }
 
         const aviso = estado.cargando && !estado.consultas.length ? "Cargando consultas…"
-            : estado.desdeMemoria ? mensajeGuardado(hora(estado.actualizadoEn)) : null;
+            : estado.desdeMemoria ? mensajeGuardado(FechasSV.hora(estado.actualizadoEn)) : null;
         this.$("estado").hidden = !aviso;
         this.$("estado").textContent = aviso ?? "";
         this.$("error").hidden = !estado.error;

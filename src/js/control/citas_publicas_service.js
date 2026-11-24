@@ -12,11 +12,9 @@
  */
 import DefaultService from "./default_service.js";
 import DefaultError from "../entities/default_error.js";
+import { Validaciones } from "./validaciones.js";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const ESPERA_POR_DEFECTO = 300;
-
-const texto = valor => typeof valor === "string" && valor.trim().length > 0;
 
 /** Segundos de Retry-After de un 429; 300 (lo que envía el backend) si falta o no es válido. */
 export function segundosDeEspera(error) {
@@ -34,20 +32,20 @@ export function nombreDeArchivo(disposicion, idConsulta) {
 function normalizarClinicas(datos) {
     if (!Array.isArray(datos)) return Object.freeze([]);
     return Object.freeze(datos
-        .filter(c => c && typeof c.idClinica === "string" && UUID.test(c.idClinica) && texto(c.nombre))
+        .filter(c => c && typeof c.idClinica === "string" && Validaciones.UUID.test(c.idClinica) && Validaciones.esTexto(c.nombre))
         .map(c => Object.freeze({ idClinica: c.idClinica, nombre: c.nombre.trim() })));
 }
 
 function normalizarCitas(datos) {
     if (!Array.isArray(datos)) return Object.freeze([]);
     return Object.freeze(datos
-        .filter(c => c && typeof c.idConsulta === "string" && UUID.test(c.idConsulta) && texto(c.fechaInicio))
+        .filter(c => c && typeof c.idConsulta === "string" && Validaciones.UUID.test(c.idConsulta) && Validaciones.esTexto(c.fechaInicio))
         .map(c => Object.freeze({
             idConsulta: c.idConsulta,
             fechaInicio: c.fechaInicio,
-            nombreClinica: texto(c.nombreClinica) ? c.nombreClinica.trim() : "",
-            nombrePaciente: texto(c.nombrePaciente) ? c.nombrePaciente.trim() : null,
-            procedimientos: Object.freeze(Array.isArray(c.procedimientos) ? c.procedimientos.filter(texto) : []),
+            nombreClinica: Validaciones.esTexto(c.nombreClinica) ? c.nombreClinica.trim() : "",
+            nombrePaciente: Validaciones.esTexto(c.nombrePaciente) ? c.nombrePaciente.trim() : null,
+            procedimientos: Object.freeze(Array.isArray(c.procedimientos) ? c.procedimientos.filter(Validaciones.esTexto) : []),
         })));
 }
 

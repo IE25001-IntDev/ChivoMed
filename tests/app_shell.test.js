@@ -2,6 +2,7 @@ import { test, describe, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict';
 import { instalarDom, conectar, desconectar } from './dobles/dom_minimo.js';
 import { crearVentana, instalarVentana, hasta } from './dobles/ventana_doble.js';
+import { RUTA_NO_ENCONTRADA, RUTA_SIN_CONEXION } from '../src/js/boundary/rutas.js';
 
 // Datos inventados; nunca datos reales.
 const UUID = n => `90000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -130,8 +131,9 @@ describe('<app-shell>: montaje de rutas', () => {
         assert.equal(peticiones.length, 0, 'una ruta pública no consulta la sesión');
     });
 
-    test('una ruta desconocida monta <vista-no-encontrada> con la dirección pedida', async () => {
-        const ctx = await montar('#/no-existe', 'vista-no-encontrada');
+    test('una ruta desconocida monta <vista-aviso> con la dirección pedida', async () => {
+        const ctx = await montar('#/no-existe', 'vista-aviso');
+        assert.equal(ctx.vista().contexto.ruta, RUTA_NO_ENCONTRADA);
         assert.equal(ctx.vista().contexto.path, '/no-existe');
         assert.equal(document.title, 'Página no encontrada | ChivoMed');
     });
@@ -165,11 +167,13 @@ describe('<app-shell>: montaje de rutas', () => {
         const ctx = await montar('#/citas', 'vista-citas');
         servidor(() => json({}, 500));
         ventana.location.hash = '#/dashboard';
-        await hasta(() => ctx.contenido().querySelector('section[role="alert"]'));
-        assert.equal(ctx.raiz.activeElement, ctx.contenido().querySelector('h1'));
+        await hasta(() => ctx.contenido().querySelector('vista-aviso')?.shadowRoot.querySelector('section[role="alert"]'));
+        const aviso = ctx.contenido().querySelector('vista-aviso');
+        assert.equal(ctx.raiz.activeElement, aviso);
+        assert.equal(aviso.shadowRoot.activeElement, aviso.shadowRoot.querySelector('h1'));
         // En el DOM mínimo la vista montada no se conecta y no tiene <h1>: se usa <main>.
         ventana.location.hash = '#/no-existe';
-        await ctx.esperar('vista-no-encontrada');
+        await hasta(() => ctx.vista()?.contexto?.ruta === RUTA_NO_ENCONTRADA, { mensaje: 'no se montó el aviso de no encontrada' });
         assert.equal(ctx.raiz.activeElement, ctx.contenido());
     });
 });
@@ -179,7 +183,7 @@ describe('<app-shell>: eventos de las vistas', () => {
         const ctx = await montar('#/citas', 'vista-citas');
         ctx.shell.dispatchEvent(new CustomEvent('navegar', { detail: { ruta: '/no-existe' } }));
         assert.deepEqual(ventana.historial, ['#/no-existe']);
-        await ctx.esperar('vista-no-encontrada');
+        await ctx.esperar('vista-aviso');
     });
 
     test('"sesion-cerrada": borra la memoria y los cachés con datos y va al login sin el aviso de sesión finalizada', async () => {
@@ -246,11 +250,16 @@ describe('<app-shell>: eventos de las vistas', () => {
 });
 
 describe('<app-shell>: errores', () => {
+    /** La caja de error es un <vista-aviso>: su contenido está en su Shadow DOM. */
+    async function alertaDeError(ctx) {
+        await hasta(() => ctx.contenido().querySelector('vista-aviso')?.shadowRoot.querySelector('section[role="alert"]'));
+        return ctx.contenido().querySelector('vista-aviso').shadowRoot.querySelector('section[role="alert"]');
+    }
+
     test('un error del servidor se muestra en una alerta con su mensaje y se puede reintentar', async () => {
         servidor(() => json({}, 500));
         const ctx = await montar('#/dashboard');
-        await hasta(() => ctx.contenido().querySelector('section[role="alert"]'));
-        const alerta = ctx.contenido().querySelector('section');
+        const alerta = await alertaDeError(ctx);
         assert.equal(alerta.querySelector('h1').textContent, 'No pudimos abrir esta página');
         assert.equal(alerta.querySelector('p').textContent, 'El servicio no está disponible. Inténtalo más tarde.');
         assert.equal(document.title, 'Error | ChivoMed');
@@ -264,18 +273,19 @@ describe('<app-shell>: errores', () => {
     test('una respuesta ilegible del servidor también se explica sin mostrar detalles internos', async () => {
         servidor(() => new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } }));
         const ctx = await montar('#/dashboard');
-        await hasta(() => ctx.contenido().querySelector('section[role="alert"]'));
-        assert.equal(ctx.contenido().querySelector('p').textContent, 'No pudimos verificar tu sesión. Inténtalo de nuevo.');
+        const alerta = await alertaDeError(ctx);
+        assert.equal(alerta.querySelector('p').textContent, 'No pudimos verificar tu sesión. Inténtalo de nuevo.');
     });
 });
 
 describe('<app-shell>: sin red', () => {
     const sinRed = () => { throw new TypeError('fetch failed'); };
 
-    test('sin sesión en memoria monta <vista-sin-conexion> y, al volver la red, la ruta pedida', async () => {
+    test('sin sesión en memoria monta <vista-aviso> de sin conexión y, al volver la red, la ruta pedida', async () => {
         ventana.cambiarRed(false);
         servidor(sinRed);
-        const ctx = await montar('#/dashboard', 'vista-sin-conexion');
+        const ctx = await montar('#/dashboard', 'vista-aviso');
+        assert.equal(ctx.vista().contexto.ruta, RUTA_SIN_CONEXION);
         assert.equal(ctx.vista().contexto.rutaPedida.patron, '/dashboard');
         assert.equal(ventana.location.hash, '#/dashboard', 'no manda al login: sin red tampoco funcionaría');
         servidor(() => json(sesion()));
@@ -330,13 +340,13 @@ describe('<app-shell>: desconexión', () => {
     test('montado sin red, al desconectarse ya no reacciona al volver la red', async () => {
         ventana.cambiarRed(false);
         servidor(() => { throw new TypeError('fetch failed'); });
-        const ctx = await montar('#/dashboard', 'vista-sin-conexion');
+        const ctx = await montar('#/dashboard', 'vista-aviso');
         desconectar(ctx.shell);
         servidor(() => json(sesion()));
         ventana.cambiarRed(true);
         await pausa();
         // La verificación del servidor (?verificar=1) es de `conexion`, no del shell.
         assert.equal(peticiones.filter(p => !p.url.includes('verificar=1')).length, 0);
-        assert.equal(ctx.vista().localName, 'vista-sin-conexion');
+        assert.equal(ctx.vista().localName, 'vista-aviso');
     });
 });

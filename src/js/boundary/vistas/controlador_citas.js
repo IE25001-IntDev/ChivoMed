@@ -27,14 +27,14 @@ import CitasPublicasService, { segundosDeEspera } from "../../control/citas_publ
 import { listarTiposDocumento as listarTiposHttp, MENSAJES_POR_CODIGO, CODIGO_SIN_RED } from "../../control/auth_service.js";
 import { crearValidadorFormato, sinRestriccion } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
-import { hoySV, sumarDias, diasEntre, esFechaISO, ZONA_SV } from "../fechas_sv.js";
+import { hoySV, sumarDias, diasEntre, esFechaISO, FechasSV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "./memoria_vistas.js";
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
+import { Validaciones } from "../../control/validaciones.js";
 
 /** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
 export const CLAVE_MEMORIA = CLAVE_PUBLICA_CITAS;
-export const MAX_NUMERO_DOCUMENTO = 50;
 /** El backend compara ChronoUnit.DAYS.between(desde, hasta) > 366 (D1: manda el código). */
 export const MAX_DIAS_RANGO = 366;
 export const DIAS_POR_DEFECTO = 30;
@@ -50,7 +50,7 @@ export const PASOS = Object.freeze([
 export const MENSAJES = Object.freeze({
     tipoRequerido: "Selecciona el tipo de documento.",
     numeroRequerido: "Escribe tu número de documento.",
-    numeroLargo: `El número no puede tener más de ${MAX_NUMERO_DOCUMENTO} caracteres.`,
+    numeroLargo: `El número no puede tener más de ${Validaciones.MAX_NUMERO_DOCUMENTO} caracteres.`,
     numeroSaltos: "El número no puede tener saltos de línea.",
     clinicaRequerida: "Selecciona una clínica.",
     fechasInvalidas: "Escribe dos fechas válidas.",
@@ -76,14 +76,6 @@ export const MENSAJES = Object.freeze({
     sinDatos: MENSAJE_SIN_DATOS,
 });
 
-const formatoHora = new Intl.DateTimeFormat("es-SV", { timeZone: ZONA_SV, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-
-/** "HH:MM" en El Salvador para una fecha o milisegundos; "" si no es válida. */
-export function formatearHoraSV(valor) {
-    const ms = valor instanceof Date ? valor.getTime() : valor;
-    return Number.isFinite(ms) ? formatoHora.format(ms) : "";
-}
-
 /** De hoy − 30 a hoy + 30 días de El Salvador: se ven citas pasadas, de hoy y futuras. */
 export function rangoPorDefecto(reloj = () => new Date()) {
     const hoy = hoySV(reloj);
@@ -95,7 +87,7 @@ export function validarNumero(tipo, numeroDocumento) {
     if (!tipo) return MENSAJES.tipoRequerido;
     const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
     if (!numero) return MENSAJES.numeroRequerido;
-    if (numero.length > MAX_NUMERO_DOCUMENTO) return MENSAJES.numeroLargo;
+    if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) return MENSAJES.numeroLargo;
     if (/[\r\n]/.test(numero)) return MENSAJES.numeroSaltos;
     const formato = crearValidadorFormato(tipo.expresionRegular);
     if (formato && !formato(numero)) {
@@ -206,7 +198,7 @@ export function pasoAlcanzable(paso, alcanzado) {
 /** Por qué no se puede hacer un POST ahora (sin red o bloqueado por el límite); null si se puede. */
 export function motivoNoBuscar({ enLinea, bloqueadoHasta }, ahora) {
     if (!enLinea) return MENSAJES.sinRedBuscar;
-    if (bloqueadoHasta && bloqueadoHasta > ahora) return MENSAJES.limite(formatearHoraSV(bloqueadoHasta));
+    if (bloqueadoHasta && bloqueadoHasta > ahora) return MENSAJES.limite(FechasSV.hora(bloqueadoHasta));
     return null;
 }
 
@@ -629,7 +621,7 @@ export class ControladorCitas {
             this.#desbloqueo = null;
             this.#actualizar({ bloqueadoHasta: null, mensaje: null });
         }, segundos * 1000);
-        this.#actualizar({ bloqueadoHasta, mensaje: MENSAJES.limite(formatearHoraSV(bloqueadoHasta)) });
+        this.#actualizar({ bloqueadoHasta, mensaje: MENSAJES.limite(FechasSV.hora(bloqueadoHasta)) });
     }
 
     #ticket(idConsulta, valor) {

@@ -13,11 +13,11 @@ import { MemoriaVistas, memoria as memoriaCompartida } from "./memoria_vistas.js
 import { conexion as conexionCompartida } from "../pwa/conexion.js";
 import { MENSAJE_SIN_DATOS, mensajeGuardado, motivoSinConexion } from "../pwa/controlador_conexion.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
-import { ZONA_SV } from "../fechas_sv.js";
+import { FechasSV } from "../fechas_sv.js";
+import { Validaciones } from "../../control/validaciones.js";
 
 export const CODIGO_CERRAR_ANTES = "rolCambio.cerrarAntesCambiar";
 const CLAVE_MEMORIA = "dashboard.asignaciones";
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MENSAJES = Object.freeze({
     sinRed: MENSAJE_SIN_DATOS,
@@ -35,17 +35,8 @@ export const MENSAJES = Object.freeze({
     sinAsignaciones: "No tienes roles de empleado activos en ninguna clínica.",
 });
 
-const texto = valor => typeof valor === "string" && valor.trim().length > 0;
-
-/** Hora corta para "datos de las HH:MM". */
-export function formatearHora(fecha) {
-    return fecha instanceof Date && !Number.isNaN(fecha.getTime())
-        ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_SV })
-        : "";
-}
-
 export function mensajeMemoria(fecha) {
-    return mensajeGuardado(formatearHora(fecha));
+    return mensajeGuardado(FechasSV.hora(fecha));
 }
 
 /**
@@ -57,15 +48,15 @@ export function normalizarAsignaciones(datos) {
     const vistos = new Set();
     const resultado = [];
     for (const a of datos) {
-        if (!a || typeof a.idPersonaRol !== "string" || !UUID.test(a.idPersonaRol)
-            || typeof a.idClinica !== "string" || !UUID.test(a.idClinica)
-            || a.codigoRol === CODIGO_PACIENTE || !(a.codigoRol == null || texto(a.codigoRol)) || !texto(a.nombreClinica)
+        if (!a || typeof a.idPersonaRol !== "string" || !Validaciones.UUID.test(a.idPersonaRol)
+            || typeof a.idClinica !== "string" || !Validaciones.UUID.test(a.idClinica)
+            || a.codigoRol === CODIGO_PACIENTE || !(a.codigoRol == null || Validaciones.esTexto(a.codigoRol)) || !Validaciones.esTexto(a.nombreClinica)
             || vistos.has(a.idPersonaRol)) continue;
         vistos.add(a.idPersonaRol);
         resultado.push(Object.freeze({
             idPersonaRol: a.idPersonaRol,
-            codigoRol: texto(a.codigoRol) ? a.codigoRol : null,
-            nombreRol: texto(a.nombreRol) ? a.nombreRol.trim() : ROL_SIN_NOMBRE,
+            codigoRol: Validaciones.esTexto(a.codigoRol) ? a.codigoRol : null,
+            nombreRol: Validaciones.esTexto(a.nombreRol) ? a.nombreRol.trim() : ROL_SIN_NOMBRE,
             idClinica: a.idClinica,
             nombreClinica: a.nombreClinica.trim(),
             activa: a.activa === true,
@@ -103,7 +94,7 @@ export function mensajeDeError(error, { cambio = false } = {}) {
         case 403: return MENSAJES.sinPermiso;
         case 404: return MENSAJES.noDisponible;
         // 409 de verificarSesionActual ("La sesión cambió…") u otro conflicto: el mensaje ya es para el usuario.
-        case 409: return texto(error.message) ? error.message : (cambio ? MENSAJES.cambioFallido : MENSAJES.generico);
+        case 409: return Validaciones.esTexto(error.message) ? error.message : (cambio ? MENSAJES.cambioFallido : MENSAJES.generico);
         default: return cambio ? MENSAJES.cambioFallido : MENSAJES.generico;
     }
 }
@@ -284,7 +275,7 @@ export class ControladorDashboard {
     async #leerEnCurso() {
         try {
             const { data } = await this.#servicio.contexto();
-            return typeof data?.idConsulta === "string" && UUID.test(data.idConsulta) ? data.idConsulta : null;
+            return typeof data?.idConsulta === "string" && Validaciones.UUID.test(data.idConsulta) ? data.idConsulta : null;
         } catch {
             return null;
         }

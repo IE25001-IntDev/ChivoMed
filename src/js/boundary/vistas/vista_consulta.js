@@ -22,12 +22,11 @@ import {
 import { arbolDePasos, etiquetaEstado } from "./controlador_consultas.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { plantilla } from "../plantilla.js";
-import { formatearFecha, formatearFechaHora, ZONA_SV } from "../fechas_sv.js";
+import { formatearFecha, formatearFechaHora, FechasSV } from "../fechas_sv.js";
+import { Validaciones } from "../../control/validaciones.js";
 import "../components/consulta/panel_paso_actual.js";
 import "../components/consulta/panel_examenes_paso.js";
 import "../components/consulta/panel_cierre_consulta.js";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** F8: textos fijos de los botones para salir de una consulta. */
 const TEXTOS = Object.freeze({
@@ -83,9 +82,6 @@ const PLANTILLA = plantilla(`
     <slot name="cierre"></slot>
   </div>
 </div>`);
-
-const hora = fecha => (fecha instanceof Date
-    ? fecha.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_SV }) : "");
 
 class VistaConsulta extends HTMLElement {
     #controlador = null;
@@ -202,13 +198,13 @@ class VistaConsulta extends HTMLElement {
     #pintarCabecera(estado, ctrl, cambio) {
         const { consulta } = estado;
         const estadoTexto = estado.cargando && !consulta ? "Cargando la consulta…"
-            : estado.desdeMemoria ? MENSAJES.desdeMemoria(hora(estado.actualizadoEn)) : null;
+            : estado.desdeMemoria ? MENSAJES.desdeMemoria(FechasSV.hora(estado.actualizadoEn)) : null;
         this.$("estado").hidden = !estadoTexto;
         this.$("estado").textContent = estadoTexto ?? "";
 
         this.$("error").hidden = !estado.error;
         this.$("error-texto").textContent = estado.error ?? "";
-        const enCurso = typeof estado.enCurso === "string" && UUID.test(estado.enCurso) ? estado.enCurso : null;
+        const enCurso = typeof estado.enCurso === "string" && Validaciones.UUID.test(estado.enCurso) ? estado.enCurso : null;
         this.$("en-curso").hidden = !enCurso;
         if (enCurso) this.$("en-curso").setAttribute("href", `#/consulta/${enCurso}`);
         else this.$("en-curso").removeAttribute("href");

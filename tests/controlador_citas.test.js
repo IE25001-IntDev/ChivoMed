@@ -2,8 +2,9 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     ControladorCitas, MENSAJES, CLAVE_MEMORIA, PASOS, validarNumero, validarRango, pasoAlcanzable,
-    motivoNoBuscar, mensajeDeErrorCitas, rangoPorDefecto, formatearHoraSV,
+    motivoNoBuscar, mensajeDeErrorCitas, rangoPorDefecto,
 } from '../src/js/boundary/vistas/controlador_citas.js';
+import { FechasSV } from '../src/js/boundary/fechas_sv.js';
 import * as citas from '../src/js/boundary/vistas/controlador_citas.js';
 import { MemoriaVistas } from '../src/js/boundary/vistas/memoria_vistas.js';
 import DefaultError from '../src/js/entities/default_error.js';
@@ -108,13 +109,13 @@ describe('ControladorCitas: funciones puras', () => {
         assert.equal(MENSAJES.sinRedBuscar, 'Sin conexión: necesitas conexión con el servidor para buscar.');
         assert.equal(MENSAJES.sinRedTicket, 'Sin conexión: necesitas conexión con el servidor para ver el ticket.');
         assert.equal(MENSAJES.tiposSinRed, 'Sin conexión: necesitas conexión con el servidor para cargar los tipos de documento.');
-        assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA + 60000 }, AHORA), MENSAJES.limite(formatearHoraSV(AHORA + 60000)));
+        assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA + 60000 }, AHORA), MENSAJES.limite(FechasSV.hora(AHORA + 60000)));
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: AHORA - 1 }, AHORA), null);
         assert.equal(motivoNoBuscar({ enLinea: true, bloqueadoHasta: null }, AHORA), null);
     });
 
-    test('formatearHoraSV: HH:MM en El Salvador', () => {
-        assert.equal(formatearHoraSV(AHORA), '09:30');
+    test('FechasSV.hora: HH:MM en El Salvador', () => {
+        assert.equal(FechasSV.hora(AHORA), '09:30');
     });
 
     test('mensajeDeErrorCitas: por código y status, sin detalles internos', () => {
@@ -464,7 +465,7 @@ describe('ControladorCitas: ticket', () => {
         const ctx = await enResultados();
         ctx.respuestas.ticket = async () => { throw new DefaultError({ status: 429, code: 'acceso.limite', headers: { 'retry-after': '120' } }); };
         await ctx.controlador.verTicket(CITA.idConsulta);
-        const mensaje = MENSAJES.limite(formatearHoraSV(AHORA + 120000));
+        const mensaje = MENSAJES.limite(FechasSV.hora(AHORA + 120000));
         assert.equal(ctx.estado.bloqueadoHasta, AHORA + 120000);
         assert.deepEqual({ ...ctx.estado.tickets[CITA.idConsulta] }, { estado: 'error', error: mensaje });
         await ctx.controlador.cargarTicket(CITA.idConsulta);
@@ -536,7 +537,7 @@ describe('ControladorCitas: sin red y memoria', () => {
         assert.deepEqual(estado.citas, [CITA]);
         assert.equal(estado.numeroDocumento, NUMERO);
         assert.equal(estado.desdeMemoria, true);
-        assert.equal(MENSAJES.memoria(formatearHoraSV(estado.actualizadoEn)), 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
+        assert.equal(MENSAJES.memoria(FechasSV.hora(estado.actualizadoEn)), 'Sin conexión con el servidor. Mostrando lo guardado a las 09:30.');
         otra.controlador.irA(2);
         await otra.controlador.siguiente();
         assert.equal(estado.paso, 3, 'las clínicas restauradas no necesitan red');

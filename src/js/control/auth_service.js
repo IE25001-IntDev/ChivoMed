@@ -1,4 +1,5 @@
 import { API_CONFIG } from "./api_config.js";
+import { Validaciones } from "./validaciones.js";
 
 /**
  * Regla de empleado (B8): cualquier rol activo excepto Paciente, incluso un rol sin código.
@@ -85,9 +86,6 @@ export async function verificarServidor() {
         return false;
     }
 }
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_NUMERO_DOCUMENTO = 50;
 
 const MENSAJES = Object.freeze({
     login: {
@@ -190,11 +188,10 @@ export async function listarTiposDocumento() {
     const mensaje = "No pudimos cargar los tipos de documento.";
     const datos = await leerJson(await solicitar("publico/tipos-documento", { tipo: "publico" }), mensaje);
     if (!Array.isArray(datos)) throw new AuthError(mensaje);
-    const texto = valor => typeof valor === "string" && valor.trim().length > 0;
     const opcional = valor => (typeof valor === "string" && valor.trim() ? valor : null);
     return datos
-        .filter(tipo => tipo && typeof tipo.idTipoDocumento === "string" && UUID.test(tipo.idTipoDocumento)
-            && texto(tipo.nombre) && tipo.activo !== false)
+        .filter(tipo => tipo && typeof tipo.idTipoDocumento === "string" && Validaciones.UUID.test(tipo.idTipoDocumento)
+            && Validaciones.esTexto(tipo.nombre) && tipo.activo !== false)
         .map(tipo => Object.freeze({
             idTipoDocumento: tipo.idTipoDocumento,
             nombre: tipo.nombre.trim(),
@@ -211,18 +208,17 @@ export async function listarTiposDocumento() {
 // `codigo` y `rolActivo` pueden ser null; los permisos de páginas dependen del rol.
 export async function obtenerSesion() {
     const sesion = await leerJson(await solicitar("auth/me"), "No pudimos verificar tu sesión. Inténtalo de nuevo.");
-    const identificador = valor => typeof valor === "string" && UUID.test(valor);
-    const texto = valor => typeof valor === "string" && valor.trim().length > 0;
+    const identificador = valor => typeof valor === "string" && Validaciones.UUID.test(valor);
     const { usuario, rolActivo, csrfToken } = sesion ?? {};
     const rolInvalido = rolActivo !== null && (rolActivo === undefined || !identificador(rolActivo?.idPersonaRol)
         || !identificador(rolActivo?.idClinica)
-        || !(rolActivo.codigo === null || texto(rolActivo.codigo))
+        || !(rolActivo.codigo === null || Validaciones.esTexto(rolActivo.codigo))
         || !(rolActivo.nombreRol == null || typeof rolActivo.nombreRol === "string")
-        || !texto(rolActivo.nombreClinica));
+        || !Validaciones.esTexto(rolActivo.nombreClinica));
     if (!identificador(usuario?.idUsuario) || !identificador(usuario?.idPersona)
-        || usuario.idUsuario !== usuario.idPersona || !texto(usuario?.nombres)
+        || usuario.idUsuario !== usuario.idPersona || !Validaciones.esTexto(usuario?.nombres)
         || typeof usuario.apellidos !== "string" || rolInvalido
-        || !texto(csrfToken) || /[\r\n]/.test(csrfToken)) {
+        || !Validaciones.esTexto(csrfToken) || /[\r\n]/.test(csrfToken)) {
         throw new AuthError("No pudimos cargar tu acceso. Comunícate con tu clínica.");
     }
     sesionActual = sesion;
@@ -235,8 +231,8 @@ export async function obtenerSesion() {
  */
 export async function iniciarSesion(idTipoDocumento, numeroDocumento) {
     const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
-    if (typeof idTipoDocumento !== "string" || !UUID.test(idTipoDocumento)
-        || !numero || numero.length > MAX_NUMERO_DOCUMENTO || /[\r\n]/.test(numero)) {
+    if (typeof idTipoDocumento !== "string" || !Validaciones.UUID.test(idTipoDocumento)
+        || !numero || numero.length > Validaciones.MAX_NUMERO_DOCUMENTO || /[\r\n]/.test(numero)) {
         throw new AuthError(MENSAJES.login[400], 400);
     }
     await solicitar("auth/login", { method: "POST", tipo: "login", datos: { idTipoDocumento, numeroDocumento: numero } });

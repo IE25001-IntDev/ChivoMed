@@ -10,6 +10,30 @@ const DIA_MS = 86400000;
 const formatoDia = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA_SV, year: "numeric", month: "2-digit", day: "2-digit" });
 const formatoFecha = new Intl.DateTimeFormat("es-SV", { timeZone: "UTC", dateStyle: "medium" });
 const formatoFechaHora = new Intl.DateTimeFormat("es-SV", { timeZone: ZONA_SV, dateStyle: "medium", timeStyle: "short" });
+const formatoHora = new Intl.DateTimeFormat("es-SV", { timeZone: ZONA_SV, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+/** Día y hora de El Salvador de un instante (una sola definición para controladores, vistas y componentes). */
+export class FechasSV {
+    /** "HH:MM" en El Salvador para una fecha o milisegundos; "" si no es válida. */
+    static hora(valor) {
+        const ms = FechasSV.#milisegundos(valor);
+        return Number.isNaN(ms) ? "" : formatoHora.format(ms);
+    }
+
+    /** Día de El Salvador ('yyyy-MM-dd') de una fecha o milisegundos; null si no es válida. */
+    static diaDe(valor) {
+        const ms = FechasSV.#milisegundos(valor);
+        if (Number.isNaN(ms)) return null;
+        const partes = Object.fromEntries(formatoDia.formatToParts(ms).map(p => [p.type, p.value]));
+        return `${partes.year}-${partes.month}-${partes.day}`;
+    }
+
+    /** Milisegundos de una fecha o de un número; NaN si no es ninguno de los dos. */
+    static #milisegundos(valor) {
+        const ms = valor instanceof Date ? valor.getTime() : valor;
+        return Number.isFinite(ms) ? ms : Number.NaN;
+    }
+}
 
 /** Milisegundos UTC de la medianoche de un día 'yyyy-MM-dd'; NaN si no es una fecha real. */
 function utc(iso) {

@@ -9,13 +9,12 @@ import { RUTAS, RUTA_POR_DEFECTO, inicioPorRol } from "../rutas.js";
 import { rutaDeRetorno, resolverRuta } from "../router.js";
 import { autoformatear, crearValidadorFormato } from "../../control/formato_documento.js";
 import { crearEstado } from "../../control/estado_reactivo.js";
-
-export const MAX_NUMERO_DOCUMENTO = 50;
+import { Validaciones } from "../../control/validaciones.js";
 
 export const MENSAJES = Object.freeze({
     tipoRequerido: "Selecciona el tipo de documento.",
     numeroRequerido: "Escribe tu número de documento.",
-    numeroLargo: `El número no puede tener más de ${MAX_NUMERO_DOCUMENTO} caracteres.`,
+    numeroLargo: `El número no puede tener más de ${Validaciones.MAX_NUMERO_DOCUMENTO} caracteres.`,
     sesionFinalizada: "Inicia sesión con tu documento para continuar.",
 });
 
@@ -87,7 +86,7 @@ export class ControladorLogin {
         const errores = { tipo: null, numero: null };
         if (!tipo) errores.tipo = MENSAJES.tipoRequerido;
         if (!numero) errores.numero = MENSAJES.numeroRequerido;
-        else if (numero.length > MAX_NUMERO_DOCUMENTO) errores.numero = MENSAJES.numeroLargo;
+        else if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) errores.numero = MENSAJES.numeroLargo;
         else if (tipo) {
             const formato = crearValidadorFormato(tipo.expresionRegular);
             if (formato && !formato(numero)) {

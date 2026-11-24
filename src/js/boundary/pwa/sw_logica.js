@@ -24,7 +24,7 @@
     "use strict";
 
     // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-    const VERSION = "2026-11-24.1";
+    const VERSION = "2026-11-24.2";
     const PREFIJO = "chivomed-";
     const CACHE_SHELL = `${PREFIJO}shell-${VERSION}`;
     const PREFIJO_DATOS = `${PREFIJO}datos-`;
@@ -65,7 +65,6 @@
         "./js/boundary/components/app_shell.js",
         "./js/boundary/components/session_bar.js",
         "./js/boundary/components/theme_toggle.js",
-        "./js/boundary/components/component_styles.js",
         "./js/boundary/components/install_prompt.js",
         "./js/boundary/components/estado_conexion.js",
         "./js/boundary/components/consulta/panel_cierre_consulta.js",
@@ -86,8 +85,7 @@
         "./js/boundary/vistas/vista_login.js",
         "./js/boundary/vistas/vista_dashboard.js",
         "./js/boundary/vistas/vista_consulta.js",
-        "./js/boundary/vistas/vista_no_encontrada.js",
-        "./js/boundary/vistas/vista_sin_conexion.js",
+        "./js/boundary/vistas/vista_aviso.js",
         "./js/boundary/pwa/sw_logica.js",
         "./js/boundary/pwa/almacen_offline.js",
         "./js/boundary/pwa/caches_cliente.js",
@@ -102,6 +100,7 @@
         "./js/control/default_service.js",
         "./js/control/estado_reactivo.js",
         "./js/control/formato_documento.js",
+        "./js/control/validaciones.js",
         "./js/control/consulta_procedimiento_paso_service.js",
         "./js/control/consulta_service.js",
         "./js/control/orden_examen_service.js",

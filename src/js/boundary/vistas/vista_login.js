@@ -6,12 +6,13 @@
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  * Emite 'navegar' { ruta } (bubbles, composed) cuando el personal puede entrar.
  */
-import { ControladorLogin, MENSAJES, MAX_NUMERO_DOCUMENTO, destinoTrasLogin } from "./controlador_login.js";
+import { ControladorLogin, MENSAJES, destinoTrasLogin } from "./controlador_login.js";
 import { hojaDeEstilos } from "./estilos.js";
 import { conexion } from "../pwa/conexion.js";
 import { MENSAJE_SIN_RED } from "../pwa/controlador_conexion.js";
 import { plantilla } from "../plantilla.js";
 import { EVENTO_OFRECER } from "../pwa/controlador_instalacion.js";
+import { Validaciones } from "../../control/validaciones.js";
 
 const PLANTILLA = plantilla(`
 <section class="tarjeta tarjeta-estrecha" aria-labelledby="titulo">
@@ -29,7 +30,7 @@ const PLANTILLA = plantilla(`
     <div class="campo">
       <label for="numero">Número de documento</label>
       <input id="numero" name="numero" type="text" required autocomplete="off" spellcheck="false"
-             maxlength="${MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones numero-error" />
+             maxlength="${Validaciones.MAX_NUMERO_DOCUMENTO}" aria-describedby="numero-indicaciones numero-error" />
       <p class="indicaciones" id="numero-indicaciones" hidden></p>
       <p class="error-campo" id="numero-error" hidden></p>
     </div>
