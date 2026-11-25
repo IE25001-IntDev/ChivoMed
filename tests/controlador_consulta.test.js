@@ -54,7 +54,7 @@ describe('mensajeDeErrorConsulta', () => {
 
 describe('pasos pendientes y paso actual', () => {
     const [varios] = ControladorConsultas.normalizarConsultas([consultaB6({ procedimientos: [
-        procedimiento(1, [paso(1), pendiente(2, { responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
+        procedimiento(1, [paso(1), pendiente(2, { rolPaso: null, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
         procedimiento(2, [paso(3), pendiente(4, { rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
     ] })]);
     const doctor = { idRol: ID_ROL_DOCTOR, nombreRol: 'Doctor' };
@@ -192,10 +192,10 @@ describe('ServicioConsulta', () => {
             definiciones: { buscarPorId: espia('definicion') },
         });
         s.retomar('c'); s.contexto(); s.consulta('c'); s.paso('p'); s.definicion('d'); s.ordenes('p'); s.asignables('p');
-        s.completar('p', 'v'); s.retroceder('p'); s.ordenar('p', { idExamen: 'e' }); s.cerrar('c', { observaciones: 'o' });
+        s.completar('p', 'v'); s.retroceder('p', { observaciones: 'Motivo' }); s.ordenar('p', { idExamen: 'e' }); s.cerrar('c', { observaciones: 'o' });
         s.salirDeConsulta();
         assert.deepEqual(hechas, [['retomar', 'c'], ['contexto'], ['consulta', 'c'], ['paso', 'p'], ['definicion', 'd'],
-            ['ordenesExamen', 'p'], ['listar'], ['asignables', 'p'], ['completar', 'p', 'v'], ['retroceder', 'p'],
+            ['ordenesExamen', 'p'], ['listar'], ['asignables', 'p'], ['completar', 'p', 'v'], ['retroceder', 'p', { observaciones: 'Motivo' }],
             ['ordenar', 'p', { idExamen: 'e' }], ['cerrar', 'c', { observaciones: 'o' }], ['salirDeConsulta']]);
     });
 
@@ -354,8 +354,8 @@ describe('ControladorConsulta: carga', () => {
 
     test('con varios pendientes empieza en el del rol activo y el selector cambia de paso pidiendo sus datos', async () => {
         const { controlador, llamadas, iniciar } = preparar({ sesion: sesionCon('DOCTOR', 1, ID_ROL_DOCTOR), respuestas: { consulta: () => consultaB6({ procedimientos: [
-            procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
             procedimiento(2, [pendiente(4, { nivel: 0, rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
+            procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
         ] }) } });
         await iniciar();
         assert.equal(controlador.pasoActual.idConsultaProcedimientoPaso, UUID(104));
@@ -373,8 +373,8 @@ describe('ControladorConsulta: carga', () => {
         const liberar = {};
         const { controlador, iniciar } = preparar({ sesion: sesionCon('DOCTOR', 1, ID_ROL_DOCTOR), respuestas: {
             consulta: () => consultaB6({ procedimientos: [
-                procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
                 procedimiento(2, [pendiente(4, { nivel: 0, rolPaso: { idRol: ID_ROL_DOCTOR, nombre: 'Doctor' } })]),
+                procedimiento(1, [pendiente(2, { nivel: 0, responsable: { nombre: 'Persona', rol: 'Doctor' } })]),
             ] }),
             asignables: id => (id === UUID(102) ? new Promise(r => { liberar.lento = () => r([examen(9)]); }) : [examen(1)]),
         } });

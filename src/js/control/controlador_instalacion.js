@@ -4,7 +4,7 @@
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  *
- * Invitación: al buscar citas o al ingresar, las vistas emiten EVENTO_OFRECER en document y
+ * Invitación: solo al abrir la ventana del ticket (vista_citas.js) se emite EVENTO_OFRECER en document y
  * <install-prompt> llama a invitar(), que pone `invitacion: true` (la vista abre su ventana propia)
  * cada vez, hasta que la app se instale. Con beforeinstallprompt, "Instalar" llama a
  * aceptarInvitacion() (prompt() dentro de ese clic); sin él (Firefox, o Chrome que todavía no la
@@ -22,7 +22,7 @@
  */
 import { EstadoReactivo } from "./estado_reactivo.js";
 
-/** Evento que emiten las vistas (en document) para invitar a instalar dentro del clic. */
+/** Evento que emite la vista de citas (en document) al abrir la ventana del ticket, para invitar a instalar. */
 export const EVENTO_OFRECER = "ofrecer-instalacion";
 /** Evento que emite la vista (en document) al descargar un ticket, después de entregar el PDF. */
 export const EVENTO_INSTALAR = "instalar-al-descargar";

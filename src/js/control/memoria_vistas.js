@@ -10,7 +10,7 @@
  * empleado funcionen sin red después de recargar. Se guardan:
  *  - la sesión verificada, sin `csrfToken`, con la hora de la verificación;
  *  - el último dashboard (`dashboard.ultimo:*`) y las asignaciones (`dashboard.asignaciones`);
- *  - la consulta abierta (`consulta:{id}`), sin el valor guardado del paso;
+ *  - la consulta abierta (`consulta:{id}`), sin el valor guardado ni el motivo de retroceso del paso;
  *  - las consultas de hoy que le tocan al rol activo (`consultas.pendientes:{idPersonaRol}`), con el
  *    mismo JSON del dashboard, para abrirlas sin red en solo lectura.
  * Cada uno reemplaza al anterior. Nunca van a disco los borradores ni lo leído en "Ver registro".
@@ -234,10 +234,10 @@ export class MemoriaVistas {
         return null;
     }
 
-    /** Lo que va a disco de cada ranura: la consulta sin el valor guardado del paso. */
+    /** Lo que va a disco de cada ranura: la consulta sin el valor guardado ni el motivo de retroceso del paso. */
     static #paraDisco(ranura, valor) {
         if (ranura !== "consulta" || !valor?.detalle) return valor;
-        return { ...valor, detalle: { ...valor.detalle, valorGuardado: null } };
+        return { ...valor, detalle: { ...valor.detalle, valorGuardado: null, motivoRetroceso: null } };
     }
 
     static #congelarProfundo(valor) {

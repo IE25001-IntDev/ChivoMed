@@ -395,8 +395,48 @@ describe('<vista-citas>: errores en un solo recuadro arriba del formulario', () 
     });
 });
 
-describe('<vista-citas>: invitación a instalar', () => {
-    test('al pulsar "Buscar citas" válido se pide en el mismo clic y la búsqueda sigue', async () => {
+describe('<vista-citas>: formulario abierto hasta tener resultados', () => {
+    const escucharHerramientas = vista => {
+        const eventos = [];
+        for (const tipo of ['abrir-herramientas', 'cerrar-herramientas']) vista.addEventListener(tipo, e => eventos.push(e.type));
+        return eventos;
+    };
+
+    test('arranca abierto; una búsqueda con resultados lo colapsa y "Limpiar búsqueda" lo vuelve a abrir', async () => {
+        const ctx = montar();
+        const eventos = escucharHerramientas(ctx.vista);
+        try {
+            conectar(ctx.vista);
+            await asentar();
+            assert.equal(ctx.vista.herramientasAbiertas, true, 'sin resultados, abierto al entrar');
+            await llenarFiltros(ctx);
+            await asentar();
+            assert.equal(ctx.estado.citas.length, 2);
+            assert.equal(ctx.vista.herramientasAbiertas, false);
+            assert.equal(eventos.at(-1), 'cerrar-herramientas', 'con resultados se colapsa en "Documento y filtros"');
+            ctx.$('nueva').click();
+            await asentar();
+            assert.equal(eventos.at(-1), 'abrir-herramientas', '"Limpiar búsqueda" lo abre');
+            assert.equal(ctx.vista.herramientasAbiertas, true);
+        } finally { desconectar(ctx.vista); }
+    });
+
+    test('una búsqueda sin citas lo deja abierto', async () => {
+        const ctx = montar({ citas: [] });
+        const eventos = escucharHerramientas(ctx.vista);
+        try {
+            await llenarFiltros(ctx);
+            await asentar();
+            assert.deepEqual(ctx.estado.citas, []);
+            assert.equal(eventos.includes('cerrar-herramientas'), false);
+            assert.equal(ctx.vista.herramientasAbiertas, true);
+        } finally { desconectar(ctx.vista); }
+    });
+});
+
+// Decisión del equipo: la invitación a instalar solo sale en la ventana del ticket, nunca al buscar.
+describe('<vista-citas>: sin invitación a instalar al buscar', () => {
+    test('al pulsar "Buscar citas" no se invita a instalar, ni con datos válidos ni sin ellos; la búsqueda sigue', async () => {
         const ctx = montar();
         const invitaciones = [];
         const escuchar = e => invitaciones.push(e);
@@ -415,10 +455,11 @@ describe('<vista-citas>: invitación a instalar', () => {
             ctx.$('clinica').value = NORTE.idClinica;
             ctx.$('clinica').dispatchEvent(new Event('change'));
             ctx.enviar();
-            assert.equal(invitaciones.length, 1, 'dentro del mismo submit, antes de esperar');
+            assert.equal(invitaciones.length, 0, 'con datos válidos tampoco se ofrece');
             await asentar();
             await asentar();
-            assert.equal(ctx.llamadas.citas, 1, 'la búsqueda continúa aunque se rechace');
+            assert.equal(ctx.llamadas.citas, 1, 'la búsqueda continúa');
+            assert.equal(invitaciones.length, 0, 'ni al llegar los resultados');
         } finally {
             document.removeEventListener('ofrecer-instalacion', escuchar);
             desconectar(ctx.vista);
@@ -463,8 +504,12 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         return e;
     }
 
-    /** Abre la página con beforeinstallprompt y pulsa "Buscar citas" con el foco en el botón. */
-    async function buscarConAviso(pagina = cargarPagina(), bip = aviso()) {
+    /**
+     * Abre la página con beforeinstallprompt, pulsa "Buscar citas" (que no invita a instalar) y
+     * después "Ver ticket" en la primera tarjeta, que es lo que abre la invitación encima de la ventana
+     * del ticket. `otroTicket()` cierra la ventana del ticket y vuelve a pulsar "Ver ticket".
+     */
+    async function ticketConAviso(pagina = cargarPagina(), bip = aviso()) {
         const ctx = montar();
         if (bip) pagina.ventana.dispatchEvent(bip);
         await asentar();
@@ -480,11 +525,31 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         ctx.$('buscar').focus();
         ctx.enviar();
         await asentar();
-        return { ...pagina, ctx, bip, cerrar: () => { desconectar(ctx.vista); desconectar(pagina.instalador); } };
+        await asentar();
+        assert.equal(pagina.dialogo.open, false, 'buscar citas no abre la invitación');
+        const ventana = ctx.vista.children.find(h => h.localName === 'ventana-ticket');
+        const tarjeta = ctx.vista.children.find(h => h.localName === 'tarjeta-cita');
+        conectar(ventana);
+        conectar(tarjeta);
+        await asentar();
+        const verTicket = async () => {
+            tarjeta.shadowRoot.getElementById('ver').focus();
+            tarjeta.shadowRoot.getElementById('ver').click();
+            await asentar();
+            await asentar();
+        };
+        const otroTicket = async () => {
+            ventana.shadowRoot.getElementById('cerrar').click();
+            await asentar();
+            await verTicket();
+        };
+        await verTicket();
+        return { ...pagina, ctx, bip, ventanaTicket: ventana, otroTicket,
+            cerrar: () => { desconectar(ctx.vista); desconectar(pagina.instalador); } };
     }
 
-    test('"Buscar citas" válido abre la ventana accesible con el foco en "Instalar", y la búsqueda sigue', async () => {
-        const p = await buscarConAviso();
+    test('"Ver ticket" abre la ventana accesible con el foco en "Instalar", y la búsqueda no la esperó', async () => {
+        const p = await ticketConAviso();
         try {
             assert.equal(p.dialogo.open, true, 'la ventana se abre');
             assert.equal(p.bip.llamadas, 0, 'prompt() espera al clic en "Instalar"');
@@ -503,14 +568,13 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     });
 
     test('"Instalar" llama a prompt(), cierra la ventana y devuelve el foco', async () => {
-        const p = await buscarConAviso();
+        const p = await ticketConAviso();
         try {
             p.$i('invitacion-instalar').click();
             assert.equal(p.bip.llamadas, 1, 'dentro del clic en "Instalar"');
             await asentar();
             assert.equal(p.dialogo.open, false);
-            assert.equal(document.activeElement, p.ctx.vista);
-            assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'));
+            assert.equal(document.activeElement, p.ventanaTicket, 'el foco vuelve a la ventana del ticket');
         } finally { p.cerrar(); }
     });
 
@@ -519,20 +583,19 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         ['Esc', p => { p.dialogo.dispatchEvent(new Event('cancel')); p.dialogo.close(); }],
         ['clic fuera', p => { const e = new Event('click'); Object.defineProperty(e, 'target', { value: p.dialogo }); p.dialogo.dispatchEvent(e); }],
     ]) {
-        test(`${nombre} cierra la ventana solo esa vez y devuelve el foco; la siguiente búsqueda la abre otra vez`, async () => {
-            const p = await buscarConAviso();
+        test(`${nombre} cierra la ventana solo esa vez y devuelve el foco; el siguiente ticket la abre otra vez`, async () => {
+            const p = await ticketConAviso();
             try {
                 rechazar(p);
                 await asentar();
                 await asentar();
                 assert.equal(p.dialogo.open, false);
                 assert.equal(p.bip.llamadas, 0);
-                assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'));
-                p.ctx.enviar();
-                await asentar();
-                assert.equal(p.dialogo.open, true, 'otra búsqueda en la misma página la abre de nuevo');
+                assert.equal(document.activeElement, p.ventanaTicket, 'el foco vuelve a la ventana del ticket');
+                await p.otroTicket();
+                assert.equal(p.dialogo.open, true, 'otro ticket en la misma página la abre de nuevo');
             } finally { p.cerrar(); }
-            const recargada = await buscarConAviso(cargarPagina(p.pestana));
+            const recargada = await ticketConAviso(cargarPagina(p.pestana));
             try {
                 assert.equal(recargada.dialogo.open, true, 'y tras recargar también');
                 assert.equal(recargada.$i('instalar').hidden, false);
@@ -541,7 +604,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     }
 
     test('un clic dentro de la ventana no cuenta como rechazo', async () => {
-        const p = await buscarConAviso();
+        const p = await ticketConAviso();
         try {
             const e = new Event('click');
             Object.defineProperty(e, 'target', { value: p.$i('invitacion-texto') });
@@ -552,16 +615,16 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     });
 
     test('una ventana sin respuesta (se recargó) vuelve a salir al recargar', async () => {
-        const primera = await buscarConAviso();
+        const primera = await ticketConAviso();
         primera.cerrar();
-        const segunda = await buscarConAviso(cargarPagina(primera.pestana));
+        const segunda = await ticketConAviso(cargarPagina(primera.pestana));
         try {
             assert.equal(segunda.dialogo.open, true);
         } finally { segunda.cerrar(); }
     });
 
     test('con beforeinstallprompt se ve "Instalar" y "Ahora no", sin "Entendido"', async () => {
-        const p = await buscarConAviso();
+        const p = await ticketConAviso();
         try {
             assert.equal(p.$i('invitacion-instalar').hidden, false);
             assert.equal(p.$i('invitacion-no').hidden, false);
@@ -570,7 +633,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
     });
 
     test('sin beforeinstallprompt y sin instalar, la ventana da instrucciones con un solo botón "Entendido"', async () => {
-        const p = await buscarConAviso(cargarPagina(), null);
+        const p = await ticketConAviso(cargarPagina(), null);
         try {
             assert.equal(p.dialogo.open, true, 'la ventana se abre igual');
             assert.equal(p.dialogo.getAttribute('aria-labelledby'), 'invitacion-titulo');
@@ -589,15 +652,14 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
             await asentar();
             await asentar();
             assert.equal(p.dialogo.open, false);
-            assert.equal(p.ctx.vista.shadowRoot.activeElement, p.ctx.$('buscar'), 'el foco vuelve');
-            p.ctx.enviar();
-            await asentar();
+            assert.equal(document.activeElement, p.ventanaTicket, 'el foco vuelve a la ventana del ticket');
+            await p.otroTicket();
             assert.equal(p.dialogo.open, true, '"Entendido" la cierra solo esa vez');
         } finally { p.cerrar(); }
     });
 
     test('las instrucciones también se cierran con Esc solo esa vez', async () => {
-        const p = await buscarConAviso(cargarPagina(), null);
+        const p = await ticketConAviso(cargarPagina(), null);
         try {
             p.dialogo.dispatchEvent(new Event('cancel'));
             p.dialogo.close();
@@ -605,14 +667,14 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
             await asentar();
             assert.equal(p.dialogo.open, false);
         } finally { p.cerrar(); }
-        const recargada = await buscarConAviso(cargarPagina(p.pestana), null);
+        const recargada = await ticketConAviso(cargarPagina(p.pestana), null);
         try { assert.equal(recargada.dialogo.open, true); } finally { recargada.cerrar(); }
     });
 
-    test('sale dos veces seguidas: al buscar y luego al ingresar', async () => {
+    test('tras rechazarla en el ticket no sale al ingresar (solo el ticket invita)', async () => {
         const { default: VistaLogin } = await import('../src/js/boundary/vistas/vista_login.js');
         const { ControladorLogin } = await import('../src/js/control/controladores/controlador_login.js');
-        const p = await buscarConAviso();
+        const p = await ticketConAviso();
         const login = new VistaLogin();
         login.contexto = { query: new URLSearchParams() };
         login.controlador = new ControladorLogin({ servicio: {
@@ -622,7 +684,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         } });
         const $l = id => login.shadowRoot.getElementById(id);
         try {
-            assert.equal(p.dialogo.open, true, 'primera vez: "Buscar citas"');
+            assert.equal(p.dialogo.open, true, 'el ticket la abre');
             p.$i('invitacion-no').click();
             await asentar();
             await asentar();
@@ -635,7 +697,9 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
             $l('numero').dispatchEvent(new Event('input'));
             $l('formulario').dispatchEvent(new Event('submit', { cancelable: true }));
             await asentar();
-            assert.equal(p.dialogo.open, true, 'segunda vez: "Ingresar"');
+            await asentar();
+            assert.equal(p.dialogo.open, false, '"Ingresar" no la abre');
+            assert.equal(p.bip.llamadas, 0);
         } finally { desconectar(login); p.cerrar(); }
     });
 
@@ -646,12 +710,12 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         primera.ventana.dispatchEvent(new Event('appinstalled'));
         assert.equal(navegador.get('chivomed:instalada'), '1', 'guarda la marca en localStorage');
         desconectar(primera.instalador);
-        const normal = await buscarConAviso(cargarPagina(navegador), null);
+        const normal = await ticketConAviso(cargarPagina(navegador), null);
         try {
             assert.equal(normal.dialogo.open, false, 'pestaña normal sin beforeinstallprompt: no sale');
             assert.equal(normal.ctx.llamadas.citas, 1, 'la búsqueda sigue');
         } finally { normal.cerrar(); }
-        const desinstalada = await buscarConAviso(cargarPagina(navegador));
+        const desinstalada = await ticketConAviso(cargarPagina(navegador));
         try {
             assert.equal(navegador.has('chivomed:instalada'), false, 'beforeinstallprompt borra la marca');
             assert.equal(desinstalada.dialogo.open, true, 'y la ventana vuelve a salir');
@@ -662,16 +726,16 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         const encontrada = cargarPagina(new Map(), { relacionadas: [{ platform: 'webapp', url: 'http://localhost:3000/manifest.webmanifest' }] });
         await asentar();
         desconectar(encontrada.instalador);
-        const conApoyo = await buscarConAviso(cargarPagina(new Map(), { relacionadas: [{ platform: 'webapp' }] }), null);
+        const conApoyo = await ticketConAviso(cargarPagina(new Map(), { relacionadas: [{ platform: 'webapp' }] }), null);
         try { assert.equal(conApoyo.dialogo.open, false, 'la encontró instalada'); } finally { conApoyo.cerrar(); }
-        const falla = await buscarConAviso(cargarPagina(new Map(), { relacionadas: new Error('NotSupported') }), null);
+        const falla = await ticketConAviso(cargarPagina(new Map(), { relacionadas: new Error('NotSupported') }), null);
         try { assert.equal(falla.dialogo.open, true, 'si falla, sale (no hay marca)'); } finally { falla.cerrar(); }
-        const vacia = await buscarConAviso(cargarPagina(new Map(), { relacionadas: [] }), null);
+        const vacia = await ticketConAviso(cargarPagina(new Map(), { relacionadas: [] }), null);
         try { assert.equal(vacia.dialogo.open, true, 'sin apps relacionadas, sale'); } finally { vacia.cerrar(); }
     });
 
     test('con localStorage bloqueado no se rompe', async () => {
-        const p = await buscarConAviso(cargarPagina(new Map(), { bloqueado: true }));
+        const p = await ticketConAviso(cargarPagina(new Map(), { bloqueado: true }));
         try {
             assert.equal(p.dialogo.open, true);
             p.$i('invitacion-no').click();
@@ -679,15 +743,14 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
             await asentar();
             p.ventana.dispatchEvent(new Event('appinstalled'));
             await asentar();
-            p.ctx.enviar();
-            await asentar();
+            await p.otroTicket();
             assert.equal(p.dialogo.open, false, 'instalada en esta página: no sale');
         } finally { p.cerrar(); }
     });
 
     test('si la app ya está instalada (standalone) no sale nada, con o sin beforeinstallprompt', async () => {
         for (const bip of [aviso(), null]) {
-            const instalada = await buscarConAviso(cargarPagina(new Map(), { instalada: true }), bip);
+            const instalada = await ticketConAviso(cargarPagina(new Map(), { instalada: true }), bip);
             try {
                 assert.equal(instalada.dialogo.open, false);
                 assert.equal(instalada.ctx.llamadas.citas, 1);

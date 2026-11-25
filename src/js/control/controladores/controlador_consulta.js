@@ -9,13 +9,15 @@
  * queda en solo lectura sin pedir la sesión ni los datos clínicos del paso.
  *
  * Acciones: completar el paso ("Avanzar", o "Completar paso" si es el último), retroceder al
- * anterior, emitir órdenes y cerrar la consulta. Cada paso lo atiende su rol responsable y cierra
+ * anterior (con observaciones e indicaciones que quedan como `motivoRetroceso` del paso
+ * anterior), emitir órdenes y cerrar la consulta. Solo actúa sobre el paso actual si es de su rol
+ * (`atiendePaso`); los datos clínicos de un paso ajeno no se piden. Cada paso lo atiende su rol responsable y cierra
  * quien completó el paso final (B8); lo decide el backend. Una consulta cerrada, una que no le toca
  * al rol activo o la falta de red dejan la vista en solo lectura con su motivo.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * Lo cargado y el borrador quedan en memoria_vistas para seguir mostrándolos sin red; solo la
- * consulta (sin borrador ni valor guardado) va además a disco para verla tras recargar sin red.
+ * consulta (sin borrador, valor guardado ni motivo de retroceso) va además a disco para verla tras recargar sin red.
  */
 import AtencionService from "../atencion_service.js";
 import ConsultaService from "../consulta_service.js";
@@ -29,6 +31,8 @@ import { ControladorConsultas, MENSAJES as MENSAJES_DASHBOARD } from "./controla
 import { Validaciones } from "../validaciones.js";
 
 export const MAX_TEXTO = 255;
+/** Máximo de las observaciones de un retroceso (AtencionService.retroceder del backend). */
+const MAX_OBSERVACIONES_RETROCESO = 10000;
 const NINGUNA = Object.freeze([]);
 const congelar = Object.freeze;
 
@@ -144,13 +148,13 @@ export class ServicioConsulta {
     ordenes(id) { return this.#pasos.ordenesExamen(id).listar(); }
     asignables(id) { return this.#pasos.examenesAsignables(id); }
     completar(id, valor) { return this.#pasos.completar(id, valor); }
-    retroceder(id) { return this.#pasos.retroceder(id); }
+    retroceder(id, notas) { return this.#pasos.retroceder(id, notas); }
     ordenar(id, datos) { return this.#pasos.ordenar(id, datos); }
     cerrar(id, notas) { return this.#consultas.cerrar(id, notas); }
     salirDeConsulta() { return this.#atencion.salirDeConsulta(); }
 }
 
-const SIN_DETALLE = congelar({ idPaso: null, cargando: false, error: null, valorGuardado: null, indicaFin: null, ordenes: NINGUNA, asignables: NINGUNA });
+const SIN_DETALLE = congelar({ idPaso: null, cargando: false, error: null, valorGuardado: null, motivoRetroceso: null, indicaFin: null, ordenes: NINGUNA, asignables: NINGUNA });
 
 export class ControladorConsulta {
     /** Estado reactivo del controlador (composición): `estado` lo publica y `suscribir` delega en él. */
@@ -192,7 +196,7 @@ export class ControladorConsulta {
             consulta: null,
             /** idConsultaProcedimientoPaso elegido en el selector; null usa el del rol activo. */
             idElegido: null,
-            /** Datos del paso actual: { idPaso, cargando, error, valorGuardado, indicaFin, ordenes, asignables }. */
+            /** Datos del paso actual: { idPaso, cargando, error, valorGuardado, motivoRetroceso, indicaFin, ordenes, asignables }. */
             detalle: SIN_DETALLE,
             borrador: "",
             /** Acción en curso: null, "avanzar", "retroceder", "orden" o "cierre". */
@@ -230,6 +234,9 @@ export class ControladorConsulta {
         const { consulta, atendiendo } = this.estado;
         return atendiendo && Boolean(consulta) && !consulta.fechaFin && consulta.pendienteParaMi;
     }
+
+    /** true si el rol activo atiende la consulta y el paso actual es de su rol (`rolPaso.idRol`). */
+    get atiendePaso() { return this.atiende && ControladorConsultas.esPasoDeMiRol(this.pasoActual, this.estado.sesion?.rolActivo); }
 
     /**
      * F8: true si esta consulta está seleccionada en la sesión y sigue abierta. No exige
@@ -414,7 +421,7 @@ export class ControladorConsulta {
             const paso = this.pasoActual;
             const consulta = this.estado.consulta;
             const idDetalle = ++this.#secuenciaDetalle;
-            if (!paso || !this.atiende || consulta?.fechaFin) {
+            if (!paso || !this.atiendePaso || consulta?.fechaFin) {
                 this.estado.detalle = SIN_DETALLE;
                 this.estado.borrador = "";
                 if (this.estado.aviso === MENSAJES.reabierto) this.estado.aviso = null;
@@ -433,6 +440,7 @@ export class ControladorConsulta {
                 const valorGuardado = Validaciones.esTexto(registro?.data?.valor) ? registro.data.valor : null;
                 this.estado.detalle = congelar({
                     idPaso, cargando: false, error: null, valorGuardado,
+                    motivoRetroceso: Validaciones.esTexto(registro?.data?.motivoRetroceso) ? registro.data.motivoRetroceso : null,
                     indicaFin: definicion ? definicion.data?.indicaFin === true : null,
                     ordenes: ControladorConsulta.#normalizarOrdenes(ordenes?.data), asignables: ControladorConsulta.normalizarAsignables(asignables?.data),
                 });
@@ -508,6 +516,7 @@ export class ControladorConsulta {
         if (this.estado.accion) return MENSAJES.accionEnCurso;
         const paso = this.pasoActual;
         if (!paso) return MENSAJES.sinPendientes;
+        if (!this.atiendePaso) return MENSAJES.otroRol;
         const { detalle } = this.estado;
         if (detalle.error) return detalle.error;
         if (detalle.idPaso !== paso.idConsultaProcedimientoPaso || detalle.cargando) return MENSAJES.cargandoPaso;
@@ -644,10 +653,25 @@ export class ControladorConsulta {
         });
     }
 
-    /** Pide retroceder: si hay algo escrito, primero pide confirmar que se descartará. */
-    pedirRetroceso() {
+    /** Observaciones e indicaciones que viajan con el retroceso; se guardan en el paso anterior. */
+    #notasRetroceso = null;
+
+    /**
+     * Pide retroceder. Si hay observaciones (el borrador) o indicaciones escritas, primero pide
+     * confirmar que se guardarán como motivo del retroceso en el paso anterior; cancelar o un
+     * error conserva los campos.
+     * @param indicaciones texto de las indicaciones del panel de exámenes ("" si no se muestra).
+     */
+    pedirRetroceso(indicaciones = "") {
         if (!ControladorConsulta.puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
-        if (this.estado.borrador.trim()) {
+        const observaciones = this.estado.borrador.trim();
+        const instrucciones = typeof indicaciones === "string" ? indicaciones.trim() : "";
+        if (observaciones.length > MAX_OBSERVACIONES_RETROCESO || instrucciones.length > MAX_TEXTO) {
+            this.estado.errorAccion = `El retroceso admite hasta ${MAX_OBSERVACIONES_RETROCESO} caracteres de observaciones y ${MAX_TEXTO} de indicaciones.`;
+            return Promise.resolve(false);
+        }
+        this.#notasRetroceso = Object.freeze({ observaciones, indicaciones: instrucciones });
+        if (observaciones || instrucciones) {
             Object.assign(this.estado, { confirmando: "retroceso", errorAccion: null });
             return Promise.resolve(false);
         }
@@ -658,12 +682,13 @@ export class ControladorConsulta {
         if (!ControladorConsulta.puedeOfrecerRetroceso(this.pasoActual) || this.motivoNoRetroceder) return Promise.resolve(false);
         const idPaso = this.pasoActual.idConsultaProcedimientoPaso;
         let anterior = null;
-        const operacion = () => new Promise(resolve => resolve(this.#servicio.retroceder(idPaso)))
+        const operacion = () => new Promise(resolve => resolve(this.#servicio.retroceder(idPaso, this.#notasRetroceso)))
             .then(respuesta => { anterior = respuesta?.data ?? null; });
         return this.#ejecutar("retroceder", operacion, {
             alTerminar: () => new Promise(resolve => {
                 this.#olvidarBorrador(idPaso);
                 const idAnterior = Validaciones.esTexto(anterior?.idConsultaProcedimientoPaso) ? anterior.idConsultaProcedimientoPaso : null;
+                this.#notasRetroceso = null;
                 // El paso reabierto muestra su valor guardado, no un borrador viejo de antes de completarlo.
                 if (idAnterior) this.#olvidarBorrador(idAnterior);
                 Object.assign(this.estado, { idElegido: idAnterior, aviso: null, borrador: "" });

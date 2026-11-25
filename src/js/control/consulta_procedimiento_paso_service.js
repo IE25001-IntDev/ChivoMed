@@ -21,11 +21,11 @@ class ConsultaProcedimientoPasoService extends DefaultService {
     }
 
     /**
-     * HU4: reabre el paso anterior y elimina este paso vacío (PUT …/retroceso, sin cuerpo).
+     * HU4: reabre el paso anterior y elimina este paso vacío; envía observaciones e indicaciones del retroceso.
      * Responde con el paso anterior reabierto, que conserva su valor.
      */
-    retroceder(id, opciones = {}) {
-        return this.solicitar("PUT", `${this.ruta(id)}/retroceso`, opciones);
+    retroceder(id, notas = undefined, opciones = {}) {
+        return this.solicitar("PUT", `${this.ruta(id)}/retroceso`, { ...opciones, data: notas });
     }
 
     /**

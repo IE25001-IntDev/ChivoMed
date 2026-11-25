@@ -84,6 +84,9 @@ class PanelExamenesPaso extends ComponenteChivoMed {
         for (const casilla of this.#casillas()) casilla.removeEventListener("change", this.#alMarcar);
     }
 
+    /** Indicaciones escritas; viajan con el retroceso como motivo en el paso anterior. */
+    get indicaciones() { return this.$("indicaciones")?.value ?? ""; }
+
     /** Vacía las indicaciones tras asignar; el foco lo decide la vista (va a los resultados). */
     limpiar() {
         if (!this.$) return;
@@ -115,6 +118,7 @@ class PanelExamenesPaso extends ComponenteChivoMed {
         if (antes?.ordenes !== m.ordenes || antes?.asignables !== m.asignables) this.#pintarOrdenes(m);
         if (antes?.resultado !== m.resultado) this.#pintarResultado(m.resultado);
 
+        this.$("indicaciones").readOnly = Boolean(m.confirmando || m.accion);
         const sinAsignables = m.asignables.length === 0;
         this.$("formulario").hidden = sinAsignables;
         this.$("sin-asignables").hidden = !sinAsignables;

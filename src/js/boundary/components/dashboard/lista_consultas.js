@@ -18,6 +18,7 @@ import "./tarjeta_consulta_dashboard.js";
 import { ComponenteChivoMed } from "../componente_chivomed.js";
 
 const PLANTILLA = new Plantilla(`
+<div class="herramientas-vista">
 <form class="filtro-fechas" id="filtro" novalidate aria-label="Filtrar consultas por fecha">
   <div class="campo">
     <label for="desde">Desde</label>
@@ -37,6 +38,7 @@ const PLANTILLA = new Plantilla(`
   <label for="busqueda">Buscar paciente</label>
   <input id="busqueda" name="busqueda" type="search" maxlength="100" autocomplete="off"
     placeholder="Nombre o número de documento" aria-describedby="resumen" />
+</div>
 </div>
 <p class="aviso" id="estado" role="status" hidden></p>
 <div class="mensaje-error" id="error" role="alert" hidden>

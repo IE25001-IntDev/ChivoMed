@@ -10,7 +10,6 @@ import { ControladorLogin, MENSAJES } from "../../control/controladores/controla
 import { conexion } from "../../control/conexion.js";
 import { MENSAJE_SIN_RED } from "../../control/controlador_conexion.js";
 import { Plantilla } from "../plantilla.js";
-import { EVENTO_OFRECER } from "../../control/controlador_instalacion.js";
 import { Validaciones } from "../../control/validaciones.js";
 import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
@@ -168,9 +167,6 @@ class VistaLogin extends ComponenteChivoMed {
             // Sin red o sin servidor no se envía, aunque el submit llegue sin pasar por el botón deshabilitado.
             if (!conexion.enLinea) { resolve(); return; }
             const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
-            // Invitación a instalar (<install-prompt> abre su ventana); el login no la espera.
-            const invalido = this.#controlador.validar(datos);
-            if (!invalido.tipo && !invalido.numero && !this.#controlador.estado.enviando) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
             resolve(this.#controlador.enviar(datos).then(sesion => {
                 if (!this.isConnected) return;
                 if (sesion) {

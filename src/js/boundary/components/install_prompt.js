@@ -4,9 +4,9 @@
  * ya está instalada o cuando se instala (appinstalled). La lógica vive en ControladorInstalacion.
  * Se suscribe a su estado reactivo al conectarse y cancela al desconectarse.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea uno por conexión.
- * Escucha EVENTO_OFRECER en document (lo emiten la búsqueda de citas, el login y la apertura de la
- * ventana del ticket en vista_citas.js) y pide al controlador que invite a instalar (cada vez, hasta
- * que la app se instale). Con `invitacion` abre su <dialog> modal
+ * Escucha EVENTO_OFRECER en document (solo lo emite la apertura de la ventana del ticket en
+ * vista_citas.js; buscar citas y el login ya no invitan, por decisión del equipo) y pide al
+ * controlador que invite a instalar (cada vez, hasta que la app se instale). Con `invitacion` abre su <dialog> modal
  * (showModal); al cerrarse devuelve el foco a donde estaba. Con beforeinstallprompt muestra
  * "Instalar" (llama a prompt() en ese clic, foco inicial) y "Ahora no"; con `instrucciones`, el texto
  * para instalar desde el menú del navegador y un solo botón "Entendido" (foco inicial). "Ahora no",

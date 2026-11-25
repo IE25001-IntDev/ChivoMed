@@ -24,6 +24,10 @@ if (fs.existsSync(envPath)) {
 const PORT = parseInt(process.env.PORT || env.PORT || '3000', 10);
 const API_URL = (process.env.API_URL || env.API_URL || 'http://localhost:9080/galeno/api').replace(/\/+$/, '');
 const targetBackend = new URL(API_URL);
+// Contexto del backend (p. ej. /galeno) y el que ve el navegador: las cookies con Path del
+// backend se reescriben a /galeno para que el navegador las mande por el proxy.
+const backendContext = targetBackend.pathname.replace(/\/api$/, "");
+const CONTEXTO_NAVEGADOR = '/galeno';
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -56,7 +60,9 @@ const server = http.createServer((req, res) => {
             // Manejo robusto de cabeceras de respuesta, preservando arrays como Set-Cookie
             for (const [key, value] of Object.entries(proxyRes.headers)) {
                 if (key.toLowerCase() === 'set-cookie' && Array.isArray(value)) {
-                    res.setHeader('Set-Cookie', value);
+                    res.setHeader('Set-Cookie', value.map(cookie => cookie.replace(/(;\s*Path=)([^;]*)/i,
+                        (atributo, prefijo, ruta) => backendContext && (ruta === backendContext || ruta.startsWith(`${backendContext}/`))
+                            ? `${prefijo}${CONTEXTO_NAVEGADOR}${ruta.slice(backendContext.length)}` : atributo)));
                 } else if (value !== undefined) {
                     res.setHeader(key, value);
                 }

@@ -274,9 +274,8 @@ async function montar({ citas = [cita(1)], enLinea = true, standalone = false, b
     $v('form-busqueda').dispatchEvent(new Event('submit', { cancelable: true }));
     await asentar();
     await asentar();
-    // La búsqueda invitó a instalar (comportamiento de siempre): se cierra para empezar limpio.
-    instalacion.cerrarInvitacion();
-    await asentar();
+    // Buscar citas no invita a instalar: solo la ventana del ticket lo hace.
+    assert.equal(prompt.shadowRoot.getElementById('invitacion').open, false, 'buscar no invita a instalar');
 
     const ventana = vista.children.find(h => h.localName === 'ventana-ticket');
     ventana.visorPdf = visorPdf;

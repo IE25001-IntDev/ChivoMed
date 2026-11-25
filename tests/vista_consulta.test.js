@@ -324,3 +324,24 @@ describe('<vista-consulta>: salir de la consulta (F8)', () => {
         assert.equal(vista.shadowRoot.activeElement, $('error'));
     });
 });
+
+test('muestra el motivo recibido separado de la atención y oculta herramientas de un paso ajeno', async () => {
+    const motivo = 'Observaciones: Revisar medición\nIndicaciones: Repetir en reposo';
+    const { vista, controlador, p } = await montar({ respuestas: {
+        paso: id => ({ idConsultaProcedimientoPaso: id, valor: 'Registro anterior', motivoRetroceso: motivo }),
+        consulta: () => consultaB6({ procedimientos: [procedimiento(1, [pendiente(2),
+            pendiente(3, { rolPaso: { idRol: UUID(701), nombre: 'Enfermera' } })])] }),
+    } });
+    assert.equal(p('paso', 'notas-retroceso').textContent, motivo);
+    assert.equal(p('paso', 'valor').value, 'Registro anterior');
+    assert.equal(p('paso', 'acciones-atencion').hidden, false);
+    assert.equal(vista.hasAttribute('con-accion-fija'), true);
+    await controlador.elegirPaso(UUID(103));
+    await asentar();
+    assert.equal(p('paso', 'acciones-atencion').hidden, true);
+    assert.equal(p('paso', 'avanzar').hidden, true);
+    assert.equal(p('paso', 'retroceder').hidden, true);
+    assert.equal(p('paso', 'campo-atencion').hidden, true);
+    assert.equal(vista.paneles.examenes.hidden, true);
+    assert.equal(vista.hasAttribute('con-accion-fija'), false);
+});

@@ -261,7 +261,7 @@ describe('<install-prompt>', () => {
     });
 });
 
-// Punto 7: invitación a instalar al buscar o al ingresar, en cada vez, hasta que la app se instale.
+// Punto 7: invitación a instalar (hoy solo al abrir la ventana del ticket), cada vez, hasta que la app se instale.
 describe('ControladorInstalacion: invitar hasta que la app se instale', () => {
     const conAlmacen = (opciones = {}, { bloqueado = false } = {}) => {
         const ctx = preparar(opciones);
@@ -465,7 +465,7 @@ describe('ControladorInstalacion: ofrecer al descargar un ticket', () => {
         assert.equal(controlador.estado.invitacion, false);
     });
 
-    test('invitar() (búsqueda e inicio de sesión) no cambia: sigue abriendo la invitación con el evento sin usar', async () => {
+    test('invitar() (al abrir el ticket) no cambia: sigue abriendo la invitación con el evento sin usar', async () => {
         const { ventana, controlador } = preparar();
         const aviso = crearAviso();
         ventana.dispatchEvent(aviso);

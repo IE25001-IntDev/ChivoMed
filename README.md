@@ -8,8 +8,9 @@ dependencias de npm. Consume el API REST del backend Jakarta EE
 ## Requisitos
 
 - **Node.js 22.5** o superior (solo para el servidor de desarrollo y las pruebas).
-- El **backend GalenoSV** corriendo en `http://localhost:9080/galeno`, con PostgreSQL y los
-  datos demo cargados. Cómo levantarlo desde cero: `../galenasv/docs/LEVANTAR.md`.
+- El **backend GalenoSV** corriendo en `http://localhost:9080/galeno`, con PostgreSQL, la base
+  original más su parche (o una base de desarrollo compatible) y los datos demo cargados. Cómo
+  levantarlo desde cero: `../galenasv/docs/LEVANTAR.md`.
 - El frontend debe correr en el **puerto 3000**. El backend rechaza con `403 auth.origen` las
   escrituras (incluido el login) que vengan de otro origen. No cambies `PORT`.
 
@@ -30,6 +31,9 @@ efímeros. La matriz por historia de usuario, los resultados y los límites est�
 
 `npm start` funciona sin `.env`. Por defecto el proxy apunta a
 `http://localhost:9080/galeno/api`. Para otro backend, crea `.env` con `API_URL=…`.
+Si ya tienes `.env`, ajusta `API_URL` al contexto de tu backend. El navegador siempre usa
+`/galeno/api`; si el backend tiene otro contexto, el proxy traduce la ruta y el `Path` de sus
+cookies a `/galeno`.
 Todo el tráfico al API pasa por el proxy del puerto 3000, porque el backend no implementa CORS.
 
 Abre `http://localhost:3000`. La ruta inicial es la búsqueda pública de citas (`#/citas`). El
@@ -144,9 +148,12 @@ Application → Cache Storage queda un solo juego `chivomed-*` más `chivomed-vi
 
 ## Instalación
 
-El botón **"Instalar app"** de la cabecera aparece cuando el navegador lo permite. Además, cada
-vez que se pulsa "Buscar citas" o "Ingresar" con datos válidos se abre la ventana **"Instalar
-ChivoMed"**, hasta que la app se instale:
+El botón **"Instalar app"** de la cabecera aparece cuando el navegador lo permite (instalación
+manual). La invitación solo se ofrece desde la ventana del ticket (HU1): al abrir **"Ver ticket"**
+se abre la ventana **"Instalar ChivoMed"** encima, hasta que la app se instale, y al pulsar
+**"Descargar PDF"**, después de entregar el PDF, se abre el diálogo de instalación del navegador
+(o esa misma ventana, si el navegador no lo ofrece). Buscar citas e iniciar sesión
+no invitan a instalar.
 - Si el navegador permite instalar directo (Chrome, Edge), trae los botones **Instalar** (abre el
   diálogo de instalación del navegador) y **Ahora no**.
 - Si no (Firefox, o Chrome que todavía no la ofrece), explica cómo instalarla desde el menú del
@@ -156,7 +163,7 @@ ChivoMed"**, hasta que la app se instale:
 a donde estaba. Al instalarse, el navegador guarda la marca `chivomed:instalada` en localStorage y
 la ventana ya no sale, ni en una pestaña normal; si el navegador vuelve a ofrecer la instalación
 (por ejemplo, tras desinstalarla), la marca se borra. Abierta como app instalada, no sale nunca.
-La búsqueda y el login siguen por detrás sin esperar.
+El ticket sigue por detrás sin esperar.
 
 ## Qué es normal ver en la consola del navegador
 

@@ -151,7 +151,7 @@ describe('ControladorConsulta: retroceder', () => {
     test('sin nada escrito retrocede directo; el paso anterior queda actual con su valor precargado y aviso', async () => {
         const { controlador, llamadas } = await enPaso3();
         assert.equal(await controlador.pedirRetroceso(), true);
-        assert.deepEqual(llamadas.find(l => l[0] === 'retroceder'), ['retroceder', UUID(103)]);
+        assert.deepEqual(llamadas.find(l => l[0] === 'retroceder'), ['retroceder', UUID(103), { observaciones: '', indicaciones: '' }]);
         assert.equal(controlador.pasoActual.idConsultaProcedimientoPaso, UUID(102));
         assert.equal(controlador.estado.borrador, 'Registro del paso 2');
         assert.equal(controlador.estado.aviso, MENSAJES.reabierto);
@@ -618,4 +618,32 @@ describe('ControladorConsulta: ninguna escritura sin servidor', () => {
         assert.equal(f.controlador.estado.navegarA, null);
         await vuelveSinRepetir(f, 'salirDeConsulta');
     });
+});
+
+test('retroceso conserva observaciones e indicaciones; un fallo conserva el borrador', async () => {
+    const f = preparar({ respuestas: { retroceder: errorHttp(500) } });
+    await f.iniciar();
+    f.controlador.cambiarBorrador('Verificar medición');
+    await f.controlador.pedirRetroceso('Repetir en reposo');
+    assert.equal(f.controlador.estado.confirmando, 'retroceso');
+    assert.equal(await f.controlador.confirmar(), false);
+    assert.deepEqual(f.llamadas.find(l => l[0] === 'retroceder'), ['retroceder', UUID(102), {
+        observaciones: 'Verificar medición', indicaciones: 'Repetir en reposo',
+    }]);
+    assert.equal(f.controlador.estado.borrador, 'Verificar medición');
+});
+
+test('paso de otro rol: no carga herramientas ni permite acciones aunque la consulta tenga otro paso mío', async () => {
+    const f = preparar({ respuestas: { consulta: () => consultaB6({ procedimientos: [procedimiento(1, [
+        pendiente(2), pendiente(3, { rolPaso: { idRol: UUID(701), nombre: 'Otro rol' } }),
+    ])] }) } });
+    await f.iniciar();
+    assert.equal(f.controlador.atiendePaso, true);
+    await f.controlador.elegirPaso(UUID(103));
+    assert.equal(f.controlador.atiende, true);
+    assert.equal(f.controlador.atiendePaso, false);
+    assert.equal(f.controlador.motivoNoActuar, MENSAJES.otroRol);
+    assert.equal(await f.controlador.avanzar(), false);
+    assert.equal(await f.controlador.pedirRetroceso('Motivo'), false);
+    assert.equal(f.llamadas.some(l => ['paso', 'ordenes', 'asignables', 'completar', 'retroceder'].includes(l[0]) && l[1] === UUID(103)), false);
 });

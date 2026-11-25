@@ -177,8 +177,9 @@ describe('<vista-login>: autoformato del número', () => {
     });
 });
 
-describe('<vista-login>: invitación a instalar', () => {
-    test('al pulsar "Ingresar" con datos válidos se pide en el mismo clic y el login sigue', async () => {
+// Decisión del equipo: la invitación a instalar solo sale en la ventana del ticket (HU1), nunca al ingresar.
+describe('<vista-login>: sin invitación a instalar', () => {
+    test('al pulsar "Ingresar" no se invita a instalar, ni con datos válidos ni con errores; el login sigue', async () => {
         const ctx = montar();
         const invitaciones = [];
         const escuchar = e => invitaciones.push(e);
@@ -194,9 +195,10 @@ describe('<vista-login>: invitación a instalar', () => {
             ctx.$('numero').value = '01000001-1';
             ctx.$('numero').dispatchEvent(new Event('input'));
             ctx.enviar();
-            assert.equal(invitaciones.length, 1, 'dentro del mismo submit, antes de esperar');
+            assert.equal(invitaciones.length, 0, 'con datos válidos tampoco se ofrece');
             await asentar();
             await asentar();
+            assert.equal(invitaciones.length, 0, 'ni después de iniciar sesión');
             assert.equal(ctx.llamadas.login.length, 1, 'el login continúa');
             assert.equal(ctx.eventos.length, 1, 'y navega');
         } finally {
@@ -206,9 +208,9 @@ describe('<vista-login>: invitación a instalar', () => {
     });
 });
 
-// La invitación sale de la vista real y la recibe el <install-prompt> real (no se lanza desde document).
-describe('<vista-login> + <install-prompt>: ventana para instalar', () => {
-    test('"Ingresar" válido abre la ventana, el login continúa e "Instalar" llama a prompt()', async () => {
+// Con el <install-prompt> real escuchando: ingresar no abre su ventana ni usa beforeinstallprompt.
+describe('<vista-login> + <install-prompt>: sin ventana para instalar', () => {
+    test('"Ingresar" válido no abre la ventana ni llama a prompt(); el login continúa y "Instalar app" sigue disponible', async () => {
         const { default: InstallPrompt } = await import('../src/js/boundary/components/install_prompt.js');
         const { ControladorInstalacion } = await import('../src/js/control/controlador_instalacion.js');
         const ventana = new EventTarget();
@@ -236,15 +238,13 @@ describe('<vista-login> + <install-prompt>: ventana para instalar', () => {
             ctx.$('numero').dispatchEvent(new Event('input'));
             ctx.enviar();
             await asentar();
-            assert.equal($i('invitacion').open, true, 'el evento de la vista abre la ventana');
-            assert.equal(instalador.shadowRoot.activeElement, $i('invitacion-instalar'));
-            await asentar();
-            assert.equal(ctx.llamadas.login.length, 1, 'el login continúa');
-            assert.equal(ctx.eventos.length, 1, 'y navega');
-            $i('invitacion-instalar').click();
-            assert.equal(bip.llamadas, 1);
+            assert.equal($i('invitacion').open, false, 'ingresar no abre la ventana para instalar');
             await asentar();
             assert.equal($i('invitacion').open, false);
+            assert.equal(bip.llamadas, 0, 'no se usa beforeinstallprompt');
+            assert.equal(ctx.llamadas.login.length, 1, 'el login continúa');
+            assert.equal(ctx.eventos.length, 1, 'y navega');
+            assert.equal($i('instalar').hidden, false, 'el botón "Instalar app" se queda para instalar a mano');
         } finally {
             desconectar(ctx.vista);
             desconectar(instalador);

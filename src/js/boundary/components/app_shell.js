@@ -6,6 +6,10 @@
  *  - 'sesion-expirada' en document (lo emite auth_service ante un 401) → login, solo en rutas protegidas.
  *  - 'sesion-actualizada' { sesion } desde una vista (cambio de rol) → actualiza la sesión de la
  *    vista (la que compara verificarSesionActual antes de escribir) y la barra de sesión.
+ *  - 'abrir-herramientas' / 'cerrar-herramientas' desde una vista → abre o cierra sus herramientas
+ *    (filtros, rol). El botón de la cabecera las abre y cierra (aria-expanded) y Escape las cierra.
+ *    Cada vista nueva se monta con ellas cerradas, salvo que su `herramientasAbiertas` sea true.
+ * La barra de sesión va dentro del desplegable "Mi sesión" de la cabecera.
  * Sin red, el router monta las rutas de empleado en solo lectura con la última sesión verificada
  * (memoria_vistas) o, si no hay, el aviso de sin conexión (<vista-aviso>); al volver la red se vuelve a verificar.
  * Un error al abrir una ruta se muestra también en un <vista-aviso> (con role="alert"); su evento
@@ -38,12 +42,16 @@ const PLANTILLA = new Plantilla(`
     <span class="marca-icono" aria-hidden="true">+</span><span>Chivo<span class="marca-acento">Med</span></span>
   </a>
   <div class="acciones-cabecera">
+    <button id="herramientas" type="button" aria-expanded="false" aria-controls="vista-actual" hidden></button>
+    <details id="sesion-menu" hidden>
+      <summary>Mi sesión</summary>
+      <session-bar hidden></session-bar>
+    </details>
     <install-prompt></install-prompt>
     <theme-toggle></theme-toggle>
   </div>
 </header>
 <estado-conexion></estado-conexion>
-<session-bar hidden></session-bar>
 <main id="contenido" tabindex="-1"></main>
 <p class="solo-lectores" id="anuncio" aria-live="polite"></p>
 <footer class="pie"><p>ChivoMed · GalenoSV</p></footer>`);
@@ -56,6 +64,8 @@ class AppShell extends ComponenteChivoMed {
     #cancelarConexion = null;
     #alCambiarRed = enLinea => { if (enLinea && this.#montadaSinRed) this.#router.pendiente = this.#router.procesar(); };
     #alNavegar = event => { event.stopPropagation(); this.#router.navegar(event.detail.ruta); };
+    #alAbrirHerramientas = () => this.#mostrarHerramientas(true);
+    #alCerrarHerramientas = () => this.#mostrarHerramientas(false);
     #alCerrarSesion = () => this.#irAlLogin(false);
     #alActualizarSesion = event => {
         event.stopPropagation();
@@ -74,6 +84,16 @@ class AppShell extends ComponenteChivoMed {
 
     connectedCallback() {
         if (this.montar(PLANTILLA, "app_shell.css")) {
+            this.$("herramientas").addEventListener("click", () => {
+                this.#mostrarHerramientas(this.$("herramientas").getAttribute("aria-expanded") !== "true");
+            });
+            // Escape cierra las herramientas abiertas y devuelve el foco a su botón.
+            this.shadowRoot.addEventListener("keydown", event => {
+                if (event.key === "Escape" && this.$("herramientas").getAttribute("aria-expanded") === "true") {
+                    this.#mostrarHerramientas(false);
+                    this.$("herramientas").focus();
+                }
+            });
             // El enlace de salto no debe cambiar el hash: el router lo interpretaría como ruta.
             this.shadowRoot.querySelector(".saltar").addEventListener("click", event => {
                 event.preventDefault();
@@ -99,6 +119,8 @@ class AppShell extends ComponenteChivoMed {
             sesionSinRed: () => memoria.sesion,
             sinConexion: RUTA_SIN_CONEXION,
         });
+        this.addEventListener("abrir-herramientas", this.#alAbrirHerramientas);
+        this.addEventListener("cerrar-herramientas", this.#alCerrarHerramientas);
         this.addEventListener("navegar", this.#alNavegar);
         this.addEventListener("sesion-cerrada", this.#alCerrarSesion);
         this.addEventListener("sesion-actualizada", this.#alActualizarSesion);
@@ -112,6 +134,8 @@ class AppShell extends ComponenteChivoMed {
 
     disconnectedCallback() {
         this.#router?.detener();
+        this.removeEventListener("abrir-herramientas", this.#alAbrirHerramientas);
+        this.removeEventListener("cerrar-herramientas", this.#alCerrarHerramientas);
         this.removeEventListener("navegar", this.#alNavegar);
         this.removeEventListener("sesion-cerrada", this.#alCerrarSesion);
         this.removeEventListener("sesion-actualizada", this.#alActualizarSesion);
@@ -130,6 +154,7 @@ class AppShell extends ComponenteChivoMed {
     #montar(tag, contexto) {
         const vista = document.createElement(tag);
         vista.contexto = contexto;
+        vista.id = "vista-actual";
         this.#rutaActual = contexto.ruta;
         this.#montadaSinRed = Boolean(contexto.soloLectura || contexto.ruta === RUTA_SIN_CONEXION);
         // Solo una sesión verificada con el servidor sirve de respaldo para entrar sin red.
@@ -137,7 +162,20 @@ class AppShell extends ComponenteChivoMed {
 
         this.#mostrarSesion(contexto);
         this.$("contenido").replaceChildren(vista);
+        // Una vista con herramientas (filtros, rol) las declara en `tituloHerramientas`.
+        const herramientas = this.$("herramientas");
+        herramientas.textContent = vista.tituloHerramientas ?? "";
+        herramientas.hidden = !vista.tituloHerramientas;
+        this.#mostrarHerramientas(vista.herramientasAbiertas === true);
         this.#anunciar(contexto.ruta.titulo, vista);
+    }
+
+    /** Abre o cierra las herramientas de la vista montada con el atributo `herramientas-abiertas`. */
+    #mostrarHerramientas(abiertas) {
+        const vista = this.$("contenido").children[0];
+        if (abiertas) vista?.setAttribute("herramientas-abiertas", "");
+        else vista?.removeAttribute("herramientas-abiertas");
+        this.$("herramientas").setAttribute("aria-expanded", String(abiertas));
     }
 
     /** La barra de sesión solo se muestra en rutas de empleado con sesión verificada. */
@@ -147,12 +185,16 @@ class AppShell extends ComponenteChivoMed {
         const barra = this.shadowRoot.querySelector("session-bar");
         barra.sesion = protegida ? contexto.sesion : null;
         barra.hidden = !protegida;
+        this.$("sesion-menu").hidden = !protegida;
+        this.$("sesion-menu").removeAttribute("open");
     }
 
     #mostrarError(error, contexto) {
         this.#rutaActual = contexto.ruta;
         this.#montadaSinRed = false;
         this.#mostrarSesion(contexto);
+        this.$("herramientas").hidden = true;
+        this.#mostrarHerramientas(false);
         const aviso = document.createElement("vista-aviso");
         aviso.aviso = Object.freeze({
             titulo: "No pudimos abrir esta página",

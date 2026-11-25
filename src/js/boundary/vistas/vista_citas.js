@@ -10,6 +10,9 @@
  * abierta, se emite EVENTO_OFRECER para que <install-prompt> invite a instalar encima (solo si la app
  * no está instalada). "Descargar PDF" entrega primero el PDF ya cargado con un <a download> y después,
  * en el mismo toque, emite EVENTO_INSTALAR. Al cerrar la ventana, el foco vuelve a "Ver ticket".
+ * Formulario: arranca abierto mientras no haya resultados (`herramientasAbiertas`); al llegar
+ * resultados emite 'cerrar-herramientas' y queda en el botón "Documento y filtros" de <app-shell>;
+ * si los resultados se vacían o se invalidan, emite 'abrir-herramientas'. Buscar no invita a instalar.
  * Acepta `controlador` asignado antes de conectarse (pruebas); si no, crea el suyo.
  */
 import { ControladorCitas, MENSAJES } from "../../control/controladores/controlador_citas.js";
@@ -30,6 +33,7 @@ const PLANTILLA = new Plantilla(`
     <ul class="lista-errores" id="lista-errores"></ul>
     <p id="mensaje-texto"></p>
   </div>
+  <div class="herramientas-vista">
   <form id="form-busqueda" class="barra-busqueda" novalidate>
     <div class="campo">
       <label for="tipo">Tipo de documento</label>
@@ -59,6 +63,7 @@ const PLANTILLA = new Plantilla(`
       <button class="boton boton-principal" id="buscar" type="submit" aria-describedby="falta motivo">Buscar citas</button>
     </div>
   </form>
+  </div>
 
   <section class="resultados-citas" aria-labelledby="h-resultados">
     <h2 id="h-resultados" tabindex="-1">Resultados</h2>
@@ -95,6 +100,10 @@ class VistaCitas extends ComponenteChivoMed {
     #abierto = null;
     #alVer = e => this.#controlador.verTicket(e.detail?.idConsulta);
     contexto = null;
+    tituloHerramientas = "Documento y filtros";
+
+    /** El formulario arranca abierto mientras no haya resultados (<app-shell> lo lee al montar la vista). */
+    get herramientasAbiertas() { return !this.#controlador?.estado.citas?.length; }
 
     set controlador(valor) {
         if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
@@ -136,7 +145,10 @@ class VistaCitas extends ComponenteChivoMed {
             this.#escuchar(this.$(id), "change", () => c.fijarFechas({ desde: this.$("desde").value, hasta: this.$("hasta").value }));
         }
         this.#escuchar(this.$("reintentar-tipos"), "click", () => c.cargarTipos());
-        this.#escuchar(this.$("nueva"), "click", () => c.nuevaBusqueda());
+        this.#escuchar(this.$("nueva"), "click", () => {
+            this.emitir("abrir-herramientas");
+            c.nuevaBusqueda();
+        });
         this.#cancelar = c.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         c.iniciar();
         this.#pintar(c.estado, null);
@@ -164,8 +176,6 @@ class VistaCitas extends ComponenteChivoMed {
         return new Promise(resolve => {
             event.preventDefault();
             const c = this.#controlador;
-            // Invitación a instalar (<install-prompt> abre su ventana); la búsqueda no la espera.
-            if (c.estado.habilitado.buscar) document.dispatchEvent(new CustomEvent(EVENTO_OFRECER));
             resolve(c.buscar().then(() => {
                 if (!this.isConnected) return;
                 if (!this.#enfocarError() && c.estado.citas) this.$("h-resultados").focus();
@@ -176,7 +186,10 @@ class VistaCitas extends ComponenteChivoMed {
     /** Lleva el foco al primer campo con error. Devuelve true si había alguno. */
     #enfocarError() {
         const campo = CAMPOS_CON_ERROR.find(([clave]) => this.#controlador.estado.errores[clave])?.[1][0];
-        if (campo) this.$(campo).focus();
+        if (campo) {
+            this.emitir("abrir-herramientas");
+            this.$(campo).focus();
+        }
         return Boolean(campo);
     }
 
@@ -193,6 +206,8 @@ class VistaCitas extends ComponenteChivoMed {
         }
         if (cambio("errores", "mensaje")) this.#pintarErrores(estado);
         if (cambio("citas")) this.#pintarResultados(estado);
+        // Con resultados el formulario se colapsa en "Documento y filtros"; sin ellos vuelve a abrirse.
+        if (cambios?.has("citas")) this.emitir(estado.citas?.length ? "cerrar-herramientas" : "abrir-herramientas");
         if (cambio("citas", "enLinea", "bloqueadoHasta")) this.#pintarTarjetas(estado);
         if (cambio("citas", "tickets", "ticketAbierto", "enLinea", "bloqueadoHasta")) this.#pintarVentana(estado);
         this.#pintarAcciones(estado);
