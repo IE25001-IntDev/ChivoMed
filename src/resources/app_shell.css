@@ -5,7 +5,7 @@
 *, *::before, *::after { box-sizing: border-box; } /* El box-sizing global no entra al Shadow DOM. */
 
 .saltar {
-  position: absolute; left: var(--espacio-4); top: -100px; z-index: 10;
+  position: absolute; inset-inline-start: var(--espacio-4); top: -100px; z-index: 10;
   padding: var(--espacio-2) var(--espacio-4); border-radius: 8px;
   background: var(--accent); color: var(--on-accent); font-weight: 600;
 }
@@ -73,7 +73,7 @@ button:disabled { opacity: .6; cursor: not-allowed; }
   border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text);
 }
 #sesion-menu session-bar {
-  position: absolute; z-index: 5; right: 1rem; left: 1rem;
+  position: absolute; z-index: 5; inset-inline: 1rem;
   margin-top: var(--espacio-2); background: var(--tarjeta); box-shadow: var(--sombra); border-radius: 10px;
 }
 @media (max-width: 680px) {

@@ -89,7 +89,7 @@ h2 { margin: var(--espacio-6) 0 var(--espacio-3); font-size: 1.2rem; line-height
 .opcion-rol:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .opcion-rol input { width: 1.25rem; min-height: 0; height: 1.25rem; margin: 0; accent-color: var(--accent); }
 .insignia {
-  margin-left: auto; padding: 2px var(--espacio-2); border-radius: 999px;
+  margin-inline-start: auto; padding: 2px var(--espacio-2); border-radius: 999px;
   background: var(--mint-soft); color: var(--accent-text); font-size: .8rem; font-weight: 700;
 }
 #selector .boton-principal { justify-self: start; }

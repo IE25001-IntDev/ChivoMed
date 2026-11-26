@@ -53,7 +53,7 @@ h4 { margin: 0; font-size: 1rem; }
 .procedimientos { display: grid; gap: var(--espacio-3); }
 .procedimiento { display: grid; gap: var(--espacio-2); }
 .arbol-pasos, .arbol-pasos ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--espacio-2); }
-.arbol-pasos ol { margin-top: var(--espacio-2); margin-left: var(--espacio-2); padding-left: var(--espacio-3); border-left: 2px solid var(--border-strong); }
+.arbol-pasos ol { margin-top: var(--espacio-2); margin-inline-start: var(--espacio-2); padding-inline-start: var(--espacio-3); border-inline-start: 2px solid var(--border-strong); }
 .paso-detalle { display: grid; gap: 2px; justify-items: start; }
 .paso-titulo { display: flex; flex-wrap: wrap; gap: var(--espacio-2); align-items: center; margin: 0; font-weight: 600; }
 .paso-nombre { overflow-wrap: anywhere; }

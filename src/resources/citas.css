@@ -81,6 +81,6 @@
 }
 
 /* Recuadro único de avisos de la búsqueda: errores de los campos en lista. */
-.lista-errores { margin: 0; padding-left: 1.25rem; font-weight: 600; }
+.lista-errores { margin: 0; padding-inline-start: 1.25rem; font-weight: 600; }
 .lista-errores li + li { margin-top: var(--espacio-1); }
 .lista-errores:not([hidden]) + p:not([hidden]) { margin-top: var(--espacio-2); }
