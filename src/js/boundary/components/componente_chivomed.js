@@ -17,6 +17,7 @@ export class ComponenteChivoMed extends HTMLElement {
     #modelo;
     #modeloVacio;
     #escuchas = null;
+    #controlador = null;
 
     /** @param modeloVacio valor de `modelo` al crearse y al asignarle null (por defecto null). */
     constructor(modeloVacio = null) {
@@ -33,6 +34,19 @@ export class ComponenteChivoMed extends HTMLElement {
     set modelo(valor) {
         this.#modelo = valor ?? this.#modeloVacio;
         if (this.isConnected) this.pintar();
+    }
+
+    inyectarControlador(controlador) {
+        if (this.isConnected) throw new Error("El controlador se inyecta antes de conectar el componente.");
+        this.#controlador = controlador;
+    }
+
+    get controlador() {
+        return this.#controlador;
+    }
+
+    usarControlador(crear) {
+        return this.#controlador ??= crear();
     }
 
     /** Repinta a partir de `modelo`. Lo redefinen los componentes que usan `modelo`. */

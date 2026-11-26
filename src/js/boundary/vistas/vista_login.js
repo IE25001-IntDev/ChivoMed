@@ -44,11 +44,10 @@ const PLANTILLA = new Plantilla(`
 </section>`);
 
 class VistaLogin extends ComponenteChivoMed {
-    #controlador = null;
     #cancelar = null;
     #alEnviar = event => this.#enviar(event);
     #alCambiarTipo = () => this.#mostrarIndicaciones();
-    #alReintentar = () => this.#controlador.cargarTipos();
+    #alReintentar = () => this.controlador.cargarTipos();
     #alEscribirNumero = () => this.#formatearNumero();
     /** Último valor del número, para no reformatear mientras se borra. */
     #numeroAnterior = "";
@@ -57,14 +56,6 @@ class VistaLogin extends ComponenteChivoMed {
     #cargaPintada = null;
     /** Contexto del router: { query, sesion, ... }. */
     contexto = null;
-
-    /** Controlador inyectado; solo se puede asignar antes de conectar la vista. */
-    set controlador(valor) {
-        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
-        this.#controlador = valor;
-    }
-
-    get controlador() { return this.#controlador; }
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css");
@@ -76,15 +67,15 @@ class VistaLogin extends ComponenteChivoMed {
         aviso.hidden = this.contexto?.query?.get("sesion") !== "finalizada";
         aviso.textContent = aviso.hidden ? "" : MENSAJES.sesionFinalizada;
         this.#cancelarConexion = conexion.suscribir(enLinea => {
-            this.#pintar(this.#controlador.estado);
+            this.#pintar(this.controlador.estado);
             // Al volver la red, si los tipos no cargaron, se reintenta sin pedirlo al usuario.
-            if (enLinea && this.#controlador.estado.errorTipos) this.#controlador.cargarTipos();
+            if (enLinea && this.controlador.estado.errorTipos) this.controlador.cargarTipos();
         });
-        this.#controlador ??= new ControladorLogin();
-        this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
+        this.usarControlador(() => new ControladorLogin());
+        this.#cancelar = this.controlador.suscribir((_cambios, estado) => this.#pintar(estado));
         // cargarTipos() escribe "cargando" de forma síncrona; se pinta enseguida para que se vea ya.
-        this.#controlador.cargarTipos();
-        this.#pintar(this.#controlador.estado);
+        this.controlador.cargarTipos();
+        this.#pintar(this.controlador.estado);
     }
 
     disconnectedCallback() {
@@ -140,13 +131,13 @@ class VistaLogin extends ComponenteChivoMed {
 
     #formatearNumero() {
         const campo = this.$("numero");
-        const formateado = this.#controlador.formatearNumero(this.$("tipo").value, campo.value, this.#numeroAnterior);
+        const formateado = this.controlador.formatearNumero(this.$("tipo").value, campo.value, this.#numeroAnterior);
         if (formateado !== campo.value) campo.value = formateado;
         this.#numeroAnterior = formateado;
     }
 
     #mostrarIndicaciones() {
-        const tipo = this.#controlador.tipo(this.$("tipo").value);
+        const tipo = this.controlador.tipo(this.$("tipo").value);
         const indicaciones = this.$("numero-indicaciones");
         indicaciones.hidden = !tipo?.indicaciones;
         indicaciones.textContent = tipo?.indicaciones ?? "";
@@ -158,13 +149,13 @@ class VistaLogin extends ComponenteChivoMed {
             // Sin red o sin servidor no se envía, aunque el submit llegue sin pasar por el botón deshabilitado.
             if (!conexion.enLinea) { resolve(); return; }
             const datos = { idTipoDocumento: this.$("tipo").value, numeroDocumento: this.$("numero").value };
-            resolve(this.#controlador.enviar(datos).then(sesion => {
+            resolve(this.controlador.enviar(datos).then(sesion => {
                 if (!this.isConnected) return;
                 if (sesion) {
                     this.emitir("navegar", { ruta: ControladorLogin.destinoTrasLogin(this.contexto?.query, sesion) });
                     return;
                 }
-                const { errores, mensaje } = this.#controlador.estado;
+                const { errores, mensaje } = this.controlador.estado;
                 if (errores.tipo) this.$("tipo").focus();
                 else if (errores.numero) this.$("numero").focus();
                 else if (mensaje) this.$("numero").focus();

@@ -20,7 +20,7 @@ async function montar({ sesion = sesionCon(), soloLectura = false, ...opciones }
     base.controlador.suscribir = fn => suscribir((c, e) => { espia.repintados++; fn(c, e); });
     const vista = new (customElements.get('vista-consulta'))();
     vista.contexto = { params: { id: ID_CONSULTA }, sesion, soloLectura };
-    vista.controlador = base.controlador;
+    vista.inyectarControlador(base.controlador);
     conectar(vista);
     for (const panel of Object.values(vista.paneles)) conectar(panel);
     await asentar(); await asentar();

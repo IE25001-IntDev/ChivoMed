@@ -49,34 +49,26 @@ const PLANTILLA = new Plantilla(`
 <div class="cuadricula-consultas" id="cuadricula"></div>`);
 
 class ListaConsultas extends ComponenteChivoMed {
-    #controlador = null;
     #cancelar = null;
     /** idConsulta → <tarjeta-consulta-dashboard> pintadas. */
     #tarjetas = new Map();
     #alBuscar = event => this.#buscar(event);
-    #alCambiarFecha = () => this.#controlador.cambiarFechas(this.$("desde").value, this.$("hasta").value);
+    #alCambiarFecha = () => this.controlador.cambiarFechas(this.$("desde").value, this.$("hasta").value);
     #alHoy = () => {
-        this.#controlador.hoy();
+        this.controlador.hoy();
         // Si el usuario cambió una fecha en este mismo tick, el estado volvió a su valor original y no
         // notifica (A→B→A); los campos se alinean con el estado aquí mismo.
-        this.$("desde").value = this.#controlador.estado.desde;
-        this.$("hasta").value = this.#controlador.estado.hasta;
+        this.$("desde").value = this.controlador.estado.desde;
+        this.$("hasta").value = this.controlador.estado.hasta;
     };
-    #alReintentar = () => this.#controlador.buscar();
-    #alBuscarPaciente = () => this.#controlador.buscarPaciente(this.$("busqueda").value);
+    #alReintentar = () => this.controlador.buscar();
+    #alBuscarPaciente = () => this.controlador.buscarPaciente(this.$("busqueda").value);
     contexto = null;
-
-    set controlador(valor) {
-        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la lista.");
-        this.#controlador = valor;
-    }
-
-    get controlador() { return this.#controlador; }
 
     /** F8: idConsulta en curso que conoce <vista-dashboard>; marca la insignia de su tarjeta. */
     set enCurso(valor) {
         this.contexto = { ...this.contexto, enCurso: valor ?? null };
-        if (this.#cancelar) this.#controlador.marcarEnCurso(valor);
+        if (this.#cancelar) this.controlador.marcarEnCurso(valor);
     }
 
     get enCurso() { return this.contexto?.enCurso ?? null; }
@@ -84,7 +76,7 @@ class ListaConsultas extends ComponenteChivoMed {
     /** Cambio de rol hecho en el selector (parte 1): otra clínica, así que se vuelve a buscar. */
     set sesion(valor) {
         this.contexto = { ...this.contexto, sesion: valor };
-        if (this.#cancelar) this.#controlador.cambiarSesion(valor);
+        if (this.#cancelar) this.controlador.cambiarSesion(valor);
     }
 
     connectedCallback() {
@@ -95,19 +87,19 @@ class ListaConsultas extends ComponenteChivoMed {
         this.escuchar(this.$("hoy"), "click", this.#alHoy);
         this.escuchar(this.$("reintentar"), "click", this.#alReintentar);
         this.escuchar(this.$("busqueda"), "input", this.#alBuscarPaciente);
-        this.#controlador ??= new ControladorConsultas();
-        this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
+        this.usarControlador(() => new ControladorConsultas());
+        this.#cancelar = this.controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         this.#tarjetas = new Map();
-        this.#controlador.marcarEnCurso(this.contexto?.enCurso ?? null);
-        this.#controlador.iniciar(this.contexto?.sesion ?? null, { soloLectura: Boolean(this.contexto?.soloLectura) });
-        this.#pintar(this.#controlador.estado, null);
+        this.controlador.marcarEnCurso(this.contexto?.enCurso ?? null);
+        this.controlador.iniciar(this.contexto?.sesion ?? null, { soloLectura: Boolean(this.contexto?.soloLectura) });
+        this.#pintar(this.controlador.estado, null);
     }
 
     disconnectedCallback() {
         this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
-        this.#controlador?.detener();
+        this.controlador?.detener();
     }
 
     /** `cambios` es el Set de claves del lote, o null para el pintado completo. */
@@ -139,33 +131,33 @@ class ListaConsultas extends ComponenteChivoMed {
             this.$("resumen").textContent = estado.cargando ? "" : ControladorConsultas.resumenResultado(estado.consultas, estado.consultado, estado.busqueda);
         }
         if (cambio("consultado")) {
-            this.dispatchEvent(new CustomEvent("titulo-consultas", { bubbles: true, detail: { titulo: this.#controlador.titulo } }));
+            this.dispatchEvent(new CustomEvent("titulo-consultas", { bubbles: true, detail: { titulo: this.controlador.titulo } }));
         }
 
         if (cambio("consultas") || cambio("busqueda")) this.#pintarTarjetas(estado);
         else {
             if (cambio("enLinea") || cambio("soloLectura")) this.#pintarMotivos(estado);
             if (cambio("valores")) for (const t of this.#tarjetas.values()) t.valores = estado.valores;
-            if (cambio("enCurso")) for (const t of this.#tarjetas.values()) t.enCurso = this.#controlador.estaEnCurso(t.consulta);
+            if (cambio("enCurso")) for (const t of this.#tarjetas.values()) t.enCurso = this.controlador.estaEnCurso(t.consulta);
         }
     }
 
     #motivo(consulta) {
-        return ControladorConsultas.motivoNoAtender(consulta, this.#controlador.contextoAtender());
+        return ControladorConsultas.motivoNoAtender(consulta, this.controlador.contextoAtender());
     }
 
     #pintarTarjetas(estado) {
         this.#tarjetas = new Map();
-        const tarjetas = this.#controlador.consultasVisibles.map(consulta => {
+        const tarjetas = this.controlador.consultasVisibles.map(consulta => {
             const tarjeta = document.createElement("tarjeta-consulta-dashboard");
             tarjeta.consulta = consulta;
             tarjeta.valores = estado.valores;
             tarjeta.motivo = this.#motivo(consulta);
-            tarjeta.verSinConexion = this.#controlador.puedeVerSinConexion(consulta);
-            tarjeta.enCurso = this.#controlador.estaEnCurso(consulta);
-            tarjeta.addEventListener("ver-registro", e => { e.stopPropagation(); this.#controlador.alternarRegistro(e.detail.idPaso); });
-            tarjeta.addEventListener("reintentar-registro", e => { e.stopPropagation(); this.#controlador.cargarRegistro(e.detail.idPaso); });
-            tarjeta.addEventListener("atender", e => { e.stopPropagation(); this.#controlador.atender(e.detail.idConsulta); });
+            tarjeta.verSinConexion = this.controlador.puedeVerSinConexion(consulta);
+            tarjeta.enCurso = this.controlador.estaEnCurso(consulta);
+            tarjeta.addEventListener("ver-registro", e => { e.stopPropagation(); this.controlador.alternarRegistro(e.detail.idPaso); });
+            tarjeta.addEventListener("reintentar-registro", e => { e.stopPropagation(); this.controlador.cargarRegistro(e.detail.idPaso); });
+            tarjeta.addEventListener("atender", e => { e.stopPropagation(); this.controlador.atender(e.detail.idConsulta); });
             this.#tarjetas.set(consulta.idConsulta, tarjeta);
             return tarjeta;
         });
@@ -177,18 +169,18 @@ class ListaConsultas extends ComponenteChivoMed {
             const tarjeta = this.#tarjetas.get(consulta.idConsulta);
             if (!tarjeta) continue;
             tarjeta.motivo = this.#motivo(consulta);
-            tarjeta.verSinConexion = this.#controlador.puedeVerSinConexion(consulta);
+            tarjeta.verSinConexion = this.controlador.puedeVerSinConexion(consulta);
         }
     }
 
     #buscar(event) {
         event.preventDefault();
-        this.#controlador.cambiarFechas(this.$("desde").value, this.$("hasta").value);
-        if (this.#controlador.estado.errorRango) {
+        this.controlador.cambiarFechas(this.$("desde").value, this.$("hasta").value);
+        if (this.controlador.estado.errorRango) {
             this.$("desde").focus();
             return;
         }
-        this.#controlador.buscar();
+        this.controlador.buscar();
     }
 }
 

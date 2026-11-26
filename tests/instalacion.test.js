@@ -184,7 +184,7 @@ describe('<install-prompt>', () => {
         const detener = controlador.detener.bind(controlador);
         controlador.detener = () => { espia.detenido++; detener(); };
         const el = new InstallPrompt();
-        el.controlador = controlador;
+        el.inyectarControlador(controlador);
         const $ = id => el.shadowRoot.getElementById(id);
         return { el, ventana, controlador, espia, $ };
     }
@@ -238,7 +238,7 @@ describe('<install-prompt>', () => {
     test('el controlador solo se asigna antes de conectar', () => {
         const { el, controlador } = montar();
         conectar(el);
-        assert.throws(() => { el.controlador = controlador; });
+        assert.throws(() => { el.inyectarControlador(controlador); }, /se inyecta antes de conectar/);
     });
 
     test('sin controlador inyectado crea el suyo con la ventana real y escucha su aviso', async () => {
@@ -378,7 +378,7 @@ describe('<install-prompt>: escucha la invitación de las vistas', () => {
         const ventana = crearVentana();
         const controlador = new ControladorInstalacion({ ventana });
         const el = new InstallPrompt();
-        el.controlador = controlador;
+        el.inyectarControlador(controlador);
         conectar(el);
         ventana.dispatchEvent(crearAviso());
         await asentar();
@@ -483,7 +483,7 @@ describe('<install-prompt>: escucha la descarga del ticket', () => {
         const ventana = crearVentana();
         const controlador = new ControladorInstalacion({ ventana });
         const el = new InstallPrompt();
-        el.controlador = controlador;
+        el.inyectarControlador(controlador);
         conectar(el);
         const aviso = crearAviso('dismissed');
         ventana.dispatchEvent(aviso);

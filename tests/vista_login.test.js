@@ -31,7 +31,7 @@ function montar({ tipos = async () => [DUI], login = async () => sesion('DOCTOR'
     };
     const vista = new VistaLogin();
     vista.contexto = { query };
-    vista.controlador = controlador;
+    vista.inyectarControlador(controlador);
     const eventos = [];
     vista.addEventListener('navegar', e => eventos.push(e));
     const $ = id => vista.shadowRoot.getElementById(id);
@@ -63,7 +63,7 @@ describe('<vista-login>: suscripción y pintado', () => {
     test('el controlador solo se asigna antes de conectar', () => {
         const ctx = montar();
         conectar(ctx.vista);
-        assert.throws(() => { ctx.vista.controlador = ctx.controlador; });
+        assert.throws(() => { ctx.vista.inyectarControlador(ctx.controlador); }, /se inyecta antes de conectar/);
     });
 
     test('elegir un tipo muestra sus indicaciones', async () => {
@@ -219,7 +219,7 @@ describe('<vista-login> + <install-prompt>: sin ventana para instalar', () => {
         const pestana = new Map();
         ventana.localStorage = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)), removeItem: k => pestana.delete(k) };
         const instalador = new InstallPrompt();
-        instalador.controlador = new ControladorInstalacion({ ventana });
+        instalador.inyectarControlador(new ControladorInstalacion({ ventana }));
         conectar(instalador);
         const $i = id => instalador.shadowRoot.getElementById(id);
         assert.ok($i('invitacion'), '<install-prompt> trae su <dialog id="invitacion">');

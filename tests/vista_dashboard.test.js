@@ -56,7 +56,7 @@ function montar({ cambiarRol = async () => ({}), enLinea = true, idConsulta = nu
 
     const vista = new VistaDashboard();
     vista.contexto = { sesion: sesionCon(DOC_NORTE), soloLectura: false };
-    vista.controlador = controlador;
+    vista.inyectarControlador(controlador);
     const eventos = [];
     vista.addEventListener('sesion-actualizada', e => eventos.push(e));
     const $ = id => vista.shadowRoot.getElementById(id);
@@ -363,7 +363,7 @@ describe('<vista-dashboard>: ciclo de vida', () => {
     test('el controlador no se puede cambiar con la vista conectada', () => {
         const { vista, controlador } = montar();
         conectar(vista);
-        assert.throws(() => { vista.controlador = controlador; }, /antes de conectar/);
+        assert.throws(() => { vista.inyectarControlador(controlador); }, /antes de conectar/);
     });
 });
 

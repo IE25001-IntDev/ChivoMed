@@ -81,7 +81,6 @@ const PLANTILLA = new Plantilla(`
 </div>`);
 
 class VistaConsulta extends ComponenteChivoMed {
-    #controlador = null;
     #cancelar = null;
     #paneles = null;
     /** Última acción que pidió el usuario: decide dónde se muestra `errorAccion`. */
@@ -91,20 +90,13 @@ class VistaConsulta extends ComponenteChivoMed {
     /** Contexto del router: { params: { id }, sesion, soloLectura, ... }. */
     contexto = null;
 
-    set controlador(valor) {
-        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
-        this.#controlador = valor;
-    }
-
-    get controlador() { return this.#controlador; }
-
     /** Paneles hijos (para pruebas): { paso, examenes, cierre }. */
     get paneles() { return this.#paneles; }
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "consulta.css");
         if (!this.#paneles) this.#crearPaneles();
-        const c = () => this.#controlador;
+        const c = () => this.controlador;
         this.#escuchar(this.$("reintentar"), "click", () => c().reintentar());
         this.#escuchar(this.$("reintentar-detalle"), "click", () => c().reintentarDetalle());
         this.#escuchar(this.$("salir"), "click", () => this.#pedir("salir", () => c().salirDeConsulta()));
@@ -123,18 +115,18 @@ class VistaConsulta extends ComponenteChivoMed {
             this.#escuchar(panel, "cancelar", () => this.#cancelarConfirmacion(panel));
         }
 
-        this.#controlador ??= new ControladorConsulta();
-        this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
+        this.usarControlador(() => new ControladorConsulta());
+        this.#cancelar = this.controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         const ctx = this.contexto ?? {};
-        this.#controlador.iniciar(ctx.params?.id ?? null, ctx.sesion ?? null, { soloLectura: Boolean(ctx.soloLectura) });
-        this.#pintar(this.#controlador.estado, null);
+        this.controlador.iniciar(ctx.params?.id ?? null, ctx.sesion ?? null, { soloLectura: Boolean(ctx.soloLectura) });
+        this.#pintar(this.controlador.estado, null);
     }
 
     disconnectedCallback() {
         this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
-        this.#controlador?.detener();
+        this.controlador?.detener();
     }
 
     #escuchar(el, tipo, fn) {
@@ -163,14 +155,14 @@ class VistaConsulta extends ComponenteChivoMed {
     }
 
     #cancelarConfirmacion(panel) {
-        this.#controlador.cancelar();
+        this.controlador.cancelar();
         panel.enfocar?.();
     }
 
     /** `cambios` es el Set de claves del lote, o null para el pintado completo inicial. */
     #pintar(estado, cambios) {
         const cambio = (...claves) => !cambios || claves.some(c => cambios.has(c));
-        const ctrl = this.#controlador;
+        const ctrl = this.controlador;
         if (cambios?.has("navegarA") && estado.navegarA) {
             this.emitir("navegar", { ruta: estado.navegarA.ruta });
         }

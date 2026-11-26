@@ -194,7 +194,7 @@ function montarLista({ dashboard = async () => [consultaCruda(1), consultaCruda(
     const Clase = customElements.get('lista-consultas');
     const lista = new Clase();
     lista.contexto = { sesion: sesionCon(), soloLectura: false };
-    lista.controlador = controlador;
+    lista.inyectarControlador(controlador);
     const navegaciones = [];
     lista.addEventListener('navegar', e => navegaciones.push(e));
     const $ = id => lista.shadowRoot.getElementById(id);

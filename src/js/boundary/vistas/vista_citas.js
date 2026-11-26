@@ -89,7 +89,6 @@ const CAMPOS_CON_ERROR = Object.freeze([
 ]);
 
 class VistaCitas extends ComponenteChivoMed {
-    #controlador = null;
     #cancelar = null;
     /** idConsulta → <tarjeta-cita> de los resultados pintados. */
     #tarjetas = new Map();
@@ -97,24 +96,17 @@ class VistaCitas extends ComponenteChivoMed {
     #ventana = null;
     /** idConsulta del ticket que muestra la ventana; null si está cerrada. */
     #abierto = null;
-    #alVer = e => this.#controlador.verTicket(e.detail?.idConsulta);
+    #alVer = e => this.controlador.verTicket(e.detail?.idConsulta);
     contexto = null;
     tituloHerramientas = "Documento y filtros";
 
     /** El formulario arranca abierto mientras no haya resultados (<app-shell> lo lee al montar la vista). */
-    get herramientasAbiertas() { return !this.#controlador?.estado.citas?.length; }
-
-    set controlador(valor) {
-        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
-        this.#controlador = valor;
-    }
-
-    get controlador() { return this.#controlador; }
+    get herramientasAbiertas() { return !this.controlador?.estado.citas?.length; }
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "citas.css");
-        this.#controlador ??= new ControladorCitas();
-        const c = this.#controlador;
+        this.usarControlador(() => new ControladorCitas());
+        const c = this.controlador;
         if (!this.#ventana) {
             this.#ventana = document.createElement("ventana-ticket");
             this.#ventana.slot = "ticket";
@@ -155,20 +147,20 @@ class VistaCitas extends ComponenteChivoMed {
 
     disconnectedCallback() {
         // Salir de la vista (p. ej. con Atrás) cierra la ventana del ticket y suelta el PDF.
-        this.#controlador?.cerrarTicket();
+        this.controlador?.cerrarTicket();
         this.#abierto = null;
         if (this.#ventana) this.#ventana.modelo = VENTANA_CERRADA;
         this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
-        this.#controlador?.detener();
+        this.controlador?.detener();
     }
 
     /** Envía todos los filtros de una vez y enfoca el primer dato que necesite atención. */
     #buscar(event) {
         return new Promise(resolve => {
             event.preventDefault();
-            const c = this.#controlador;
+            const c = this.controlador;
             resolve(c.buscar().then(() => {
                 if (!this.isConnected) return;
                 if (!this.#enfocarError() && c.estado.citas) this.$("h-resultados").focus();
@@ -178,7 +170,7 @@ class VistaCitas extends ComponenteChivoMed {
 
     /** Lleva el foco al primer campo con error. Devuelve true si había alguno. */
     #enfocarError() {
-        const campo = CAMPOS_CON_ERROR.find(([clave]) => this.#controlador.estado.errores[clave])?.[1][0];
+        const campo = CAMPOS_CON_ERROR.find(([clave]) => this.controlador.estado.errores[clave])?.[1][0];
         if (campo) {
             this.emitir("abrir-herramientas");
             this.$(campo).focus();
@@ -329,7 +321,7 @@ class VistaCitas extends ComponenteChivoMed {
      */
     #descargarPdf(idConsulta) {
         return new Promise(resolve => {
-            const c = this.#controlador;
+            const c = this.controlador;
             if (!idConsulta || c.estado.ticketAbierto !== idConsulta) { resolve(); return; }
             // Con el PDF ya listo se entrega en el acto, dentro del mismo clic (gesto del usuario).
             if (c.estado.tickets[idConsulta]?.estado === "listo") {
@@ -346,7 +338,7 @@ class VistaCitas extends ComponenteChivoMed {
 
     /** Entrega el PDF de la ventana abierta si está listo y luego invita a instalar. */
     #entregarTicket(idConsulta) {
-        const c = this.#controlador;
+        const c = this.controlador;
         const ticket = c.estado.tickets[idConsulta];
         if (c.estado.ticketAbierto !== idConsulta || ticket?.estado !== "listo") return;
         this.#entregar(ticket.archivo);

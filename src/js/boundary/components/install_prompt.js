@@ -42,31 +42,21 @@ const PLANTILLA = new Plantilla(`
 </dialog>`);
 
 class InstallPrompt extends ComponenteChivoMed {
-    #controlador = null;
-    #inyectado = null;
     #cancelar = null;
-    #alPulsar = () => this.#controlador.instalar();
-    #alOfrecer = () => this.#controlador.invitar();
-    #alInstalarAlDescargar = () => this.#controlador.ofrecerAlDescargar();
-    #alAceptar = () => this.#controlador.aceptarInvitacion();
-    #alRechazar = () => this.#controlador.cerrarInvitacion();
+    #alPulsar = () => this.controlador.instalar();
+    #alOfrecer = () => this.controlador.invitar();
+    #alInstalarAlDescargar = () => this.controlador.ofrecerAlDescargar();
+    #alAceptar = () => this.controlador.aceptarInvitacion();
+    #alRechazar = () => this.controlador.cerrarInvitacion();
     /** Esc (o cualquier cierre que no pasó por el controlador) la cierra esa vez. */
-    #alCerrarDialogo = () => { if (this.#controlador.estado.invitacion) this.#controlador.cerrarInvitacion(); };
+    #alCerrarDialogo = () => { if (this.controlador.estado.invitacion) this.controlador.cerrarInvitacion(); };
     /** El cuerpo llena la ventana: un clic cuyo destino es el <dialog> mismo cayó en el fondo. */
-    #alClicDialogo = event => { if (event.target === this.$("invitacion")) this.#controlador.cerrarInvitacion(); };
-
-    /** Controlador inyectado; solo se puede asignar antes de conectar el componente. */
-    set controlador(valor) {
-        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar el componente.");
-        this.#inyectado = valor;
-    }
-
-    get controlador() { return this.#controlador ?? this.#inyectado; }
+    #alClicDialogo = event => { if (event.target === this.$("invitacion")) this.controlador.cerrarInvitacion(); };
 
     connectedCallback() {
         this.montar(PLANTILLA, "pwa.css");
-        this.#controlador = this.#inyectado ?? new ControladorInstalacion({ ventana: window });
-        this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
+        this.usarControlador(() => new ControladorInstalacion({ ventana: window }));
+        this.#cancelar = this.controlador.suscribir((_cambios, estado) => this.#pintar(estado));
         this.escuchar(this.$("instalar"), "click", this.#alPulsar);
         this.escuchar(this.$("invitacion-instalar"), "click", this.#alAceptar);
         this.escuchar(this.$("invitacion-no"), "click", this.#alRechazar);
@@ -75,15 +65,15 @@ class InstallPrompt extends ComponenteChivoMed {
         this.escuchar(this.$("invitacion"), "click", this.#alClicDialogo);
         this.escuchar(document, EVENTO_OFRECER, this.#alOfrecer);
         this.escuchar(document, EVENTO_INSTALAR, this.#alInstalarAlDescargar);
-        this.#controlador.iniciar();
-        this.#pintar(this.#controlador.estado);
+        this.controlador.iniciar();
+        this.#pintar(this.controlador.estado);
     }
 
     disconnectedCallback() {
         this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
-        this.#controlador?.detener();
+        this.controlador?.detener();
     }
 
     #pintar(estado) {

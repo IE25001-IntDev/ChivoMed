@@ -71,7 +71,6 @@ const PLANTILLA = new Plantilla(`
 </section>`);
 
 class VistaDashboard extends ComponenteChivoMed {
-    #controlador = null;
     #cancelar = null;
     #lista = null;
     #alEnviar = event => this.#enviar(event);
@@ -81,27 +80,19 @@ class VistaDashboard extends ComponenteChivoMed {
         if (typeof event.detail?.titulo === "string") this.$("titulo-consultas").textContent = event.detail.titulo;
     };
     #alElegir = () => {
-        this.#pintarBoton(this.#controlador.estado);
+        this.#pintarBoton(this.controlador.estado);
         this.$("roles").removeAttribute("open");
         this.$("rol-elegido").focus();
     };
     #alClinica = () => {
-        this.#pintarRoles(this.#controlador.estado);
-        this.#pintarBoton(this.#controlador.estado);
+        this.#pintarRoles(this.controlador.estado);
+        this.#pintarBoton(this.controlador.estado);
     };
-    #alReintentar = () => this.#controlador.cargar();
+    #alReintentar = () => this.controlador.cargar();
     #alSalir = () => this.#salir();
     /** Contexto del router: { sesion, soloLectura, ... }. */
     contexto = null;
     tituloHerramientas = "Rol y filtros";
-
-    /** Controlador inyectado; solo se puede asignar antes de conectar la vista. */
-    set controlador(valor) {
-        if (this.#cancelar) throw new Error("El controlador se asigna antes de conectar la vista.");
-        this.#controlador = valor;
-    }
-
-    get controlador() { return this.#controlador; }
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css");
@@ -117,19 +108,19 @@ class VistaDashboard extends ComponenteChivoMed {
             this.#lista.contexto = { sesion: this.contexto?.sesion ?? null, soloLectura: Boolean(this.contexto?.soloLectura), enCurso: null };
             this.append(this.#lista);
         }
-        this.#controlador ??= new ControladorDashboard();
-        this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
+        this.usarControlador(() => new ControladorDashboard());
+        this.#cancelar = this.controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         // iniciar() escribe la sesión y "cargando" de forma síncrona; el pintado completo va después
         // para que se vean de inmediato. Lo que llegue luego, llega por la suscripción.
-        this.#controlador.iniciar(this.contexto?.sesion ?? null, { soloLectura: Boolean(this.contexto?.soloLectura) });
-        this.#pintar(this.#controlador.estado, null);
+        this.controlador.iniciar(this.contexto?.sesion ?? null, { soloLectura: Boolean(this.contexto?.soloLectura) });
+        this.#pintar(this.controlador.estado, null);
     }
 
     disconnectedCallback() {
         this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
-        this.#controlador?.detener();
+        this.controlador?.detener();
     }
 
     /** `cambios` es el Set de claves del lote, o null para el pintado completo inicial. */
@@ -222,7 +213,7 @@ class VistaDashboard extends ComponenteChivoMed {
 
     #seleccion() {
         const id = this.shadowRoot.querySelector('input[name="asignacion"]:checked')?.value;
-        const grupo = this.#controlador.estado.grupos.find(g => g.idClinica === this.$("clinica").value);
+        const grupo = this.controlador.estado.grupos.find(g => g.idClinica === this.$("clinica").value);
         return grupo?.roles.some(r => r.idPersonaRol === id) ? id : null;
     }
 
@@ -241,9 +232,9 @@ class VistaDashboard extends ComponenteChivoMed {
 
     /** "Salir de la consulta". El foco va a la confirmación o al motivo del fallo. */
     #salir() {
-        return new Promise(resolve => resolve(this.#controlador.salirDeConsulta())).then(salio => {
+        return new Promise(resolve => resolve(this.controlador.salirDeConsulta())).then(salio => {
             if (!this.isConnected) return;
-            const { aviso, error } = this.#controlador.estado;
+            const { aviso, error } = this.controlador.estado;
             if (salio) this.$("confirmacion").focus();
             else if (aviso) this.$("aviso").focus();
             else if (error) this.$("error").focus();
@@ -255,12 +246,12 @@ class VistaDashboard extends ComponenteChivoMed {
             event.preventDefault();
             const seleccion = this.#seleccion();
             if (!seleccion) { resolve(); return; }
-            resolve(this.#controlador.cambiar(seleccion).then(cambio => {
+            resolve(this.controlador.cambiar(seleccion).then(cambio => {
                 if (!this.isConnected || cambio) return;
                 // Rechazado: la selección vuelve al rol vigente y el foco va al motivo.
-                this.#pintarGrupos(this.#controlador.estado);
-                this.#pintarBoton(this.#controlador.estado);
-                const { aviso, error } = this.#controlador.estado;
+                this.#pintarGrupos(this.controlador.estado);
+                this.#pintarBoton(this.controlador.estado);
+                const { aviso, error } = this.controlador.estado;
                 if (aviso) this.$("aviso").focus();
                 else if (error) this.$("error").focus();
             }));

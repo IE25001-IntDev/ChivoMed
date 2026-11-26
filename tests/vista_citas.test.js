@@ -49,7 +49,7 @@ function montar({ clinicas = [NORTE, SUR], citas = [cita(1), cita(2)], enLinea =
     const detener = controlador.detener.bind(controlador);
     controlador.detener = () => { espia.detenido++; detener(); };
     const vista = new VistaCitas();
-    vista.controlador = controlador;
+    vista.inyectarControlador(controlador);
     const $ = id => vista.shadowRoot.getElementById(id);
     const enviar = () => $('form-busqueda').dispatchEvent(new Event('submit', { cancelable: true }));
     return { vista, controlador, estado: controlador.estado, espia, llamadas, $, enviar };
@@ -489,7 +489,7 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         const almacen = { getItem: k => pestana.get(k) ?? null, setItem: (k, v) => pestana.set(k, String(v)), removeItem: k => pestana.delete(k) };
         Object.defineProperty(ventana, 'localStorage', { get() { if (bloqueado) throw new Error('SecurityError'); return almacen; } });
         const instalador = new InstallPrompt();
-        instalador.controlador = new ControladorInstalacion({ ventana });
+        instalador.inyectarControlador(new ControladorInstalacion({ ventana }));
         conectar(instalador);
         const $i = id => instalador.shadowRoot.getElementById(id);
         assert.ok($i('invitacion'), '<install-prompt> trae su <dialog id="invitacion">');
@@ -677,11 +677,11 @@ describe('<vista-citas> + <install-prompt>: ventana para instalar', () => {
         const p = await ticketConAviso();
         const login = new VistaLogin();
         login.contexto = { query: new URLSearchParams() };
-        login.controlador = new ControladorLogin({ servicio: {
+        login.inyectarControlador(new ControladorLogin({ servicio: {
             listarTiposDocumento: async () => [DUI],
             iniciarSesion: async () => ({ usuario: { idUsuario: UUID(90) }, rolActivo: { idPersonaRol: UUID(91), codigo: 'DOCTOR' }, csrfToken: 'csrf-prueba' }),
             cerrarSesion: async () => {},
-        } });
+        } }));
         const $l = id => login.shadowRoot.getElementById(id);
         try {
             assert.equal(p.dialogo.open, true, 'el ticket la abre');

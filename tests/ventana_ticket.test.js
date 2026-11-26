@@ -256,13 +256,13 @@ async function montar({ citas = [cita(1)], enLinea = true, standalone = false, b
     const navegador = ventanaNavegador({ standalone });
     const instalacion = new ControladorInstalacion({ ventana: navegador });
     const prompt = new InstallPrompt();
-    prompt.controlador = instalacion;
+    prompt.inyectarControlador(instalacion);
     conectar(prompt);
     const aviso = beforeinstallprompt ? crearAviso() : null;
     if (aviso) navegador.dispatchEvent(aviso);
 
     const vista = new VistaCitas();
-    vista.controlador = controlador;
+    vista.inyectarControlador(controlador);
     conectar(vista);
     await asentar();
     const $v = id => vista.shadowRoot.getElementById(id);
