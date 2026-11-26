@@ -1,6 +1,4 @@
 /* Estilos globales del documento: tokens de tema y fondo. Cada componente trae los suyos en su Shadow DOM. */
-@import url("./theme.css");
-
 :root {
   --fuente: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   --tarjeta: #ffffff;
