@@ -30,7 +30,7 @@ class DefaultService {
      * siguen leyendo como JSON.
      */
     solicitar(metodo, ruta, parametros = {}) {
-        // El ejecutor corre en el acto: un throw síncrono (p. ej. al leer los parámetros) es un rechazo, como en una async.
+        // El ejecutor corre en el acto: un throw síncrono (p. ej. al leer los parámetros) se vuelve un rechazo.
         return new Promise(resolve => {
             const { data, filtros = {}, Entidad = this.Entidad,
                 headers: adicionales, respuesta: modo = "json", ...opciones } = parametros;

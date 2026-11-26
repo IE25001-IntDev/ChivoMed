@@ -93,7 +93,6 @@ class VistaCitas extends ComponenteChivoMed {
     #cancelar = null;
     /** idConsulta → <tarjeta-cita> de los resultados pintados. */
     #tarjetas = new Map();
-    #escuchas = [];
     /** <ventana-ticket slot="ticket">, creada una vez. */
     #ventana = null;
     /** idConsulta del ticket que muestra la ventana; null si está cerrada. */
@@ -121,31 +120,31 @@ class VistaCitas extends ComponenteChivoMed {
             this.#ventana.slot = "ticket";
             this.append(this.#ventana);
         }
-        this.#escuchar(this.#ventana, "cerrar-ticket", () => c.cerrarTicket());
-        this.#escuchar(this.#ventana, "descargar-pdf", e => this.#descargarPdf(e.detail?.idConsulta));
-        this.#escuchar(this.$("form-busqueda"), "submit", e => this.#buscar(e));
-        this.#escuchar(this.$("tipo"), "change", () => {
+        this.escuchar(this.#ventana, "cerrar-ticket", () => c.cerrarTicket());
+        this.escuchar(this.#ventana, "descargar-pdf", e => this.#descargarPdf(e.detail?.idConsulta));
+        this.escuchar(this.$("form-busqueda"), "submit", e => this.#buscar(e));
+        this.escuchar(this.$("tipo"), "change", () => {
             c.elegirTipo(this.$("tipo").value);
             c.prepararClinicas();
         });
-        this.#escuchar(this.$("numero"), "input", () => {
+        this.escuchar(this.$("numero"), "input", () => {
             c.escribirNumero(this.$("numero").value);
             // Si la máscara descartó lo escrito, el estado no cambia y no hay repintado: se repone aquí.
             if (this.$("numero").value !== c.estado.numeroDocumento) this.$("numero").value = c.estado.numeroDocumento;
         });
-        this.#escuchar(this.$("numero"), "change", () => c.prepararClinicas());
+        this.escuchar(this.$("numero"), "change", () => c.prepararClinicas());
         // Enter en el número es "intentar seguir": valida y lleva el foco al primer campo con error.
-        this.#escuchar(this.$("numero"), "keydown", e => {
+        this.escuchar(this.$("numero"), "keydown", e => {
             if (e.key !== "Enter") return;
             e.preventDefault();
             c.prepararClinicas().then(() => { if (this.isConnected) this.#enfocarError(); });
         });
-        this.#escuchar(this.$("clinica"), "change", () => c.elegirClinica(this.$("clinica").value));
+        this.escuchar(this.$("clinica"), "change", () => c.elegirClinica(this.$("clinica").value));
         for (const id of ["desde", "hasta"]) {
-            this.#escuchar(this.$(id), "change", () => c.fijarFechas({ desde: this.$("desde").value, hasta: this.$("hasta").value }));
+            this.escuchar(this.$(id), "change", () => c.fijarFechas({ desde: this.$("desde").value, hasta: this.$("hasta").value }));
         }
-        this.#escuchar(this.$("reintentar-tipos"), "click", () => c.cargarTipos());
-        this.#escuchar(this.$("nueva"), "click", () => {
+        this.escuchar(this.$("reintentar-tipos"), "click", () => c.cargarTipos());
+        this.escuchar(this.$("nueva"), "click", () => {
             this.emitir("abrir-herramientas");
             c.nuevaBusqueda();
         });
@@ -159,16 +158,10 @@ class VistaCitas extends ComponenteChivoMed {
         this.#controlador?.cerrarTicket();
         this.#abierto = null;
         if (this.#ventana) this.#ventana.modelo = VENTANA_CERRADA;
-        for (const [objetivo, tipo, fn] of this.#escuchas) objetivo.removeEventListener(tipo, fn);
-        this.#escuchas = [];
+        this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();
-    }
-
-    #escuchar(objetivo, tipo, fn) {
-        objetivo.addEventListener(tipo, fn);
-        this.#escuchas.push([objetivo, tipo, fn]);
     }
 
     /** Envía todos los filtros de una vez y enfoca el primer dato que necesite atención. */
@@ -220,13 +213,7 @@ class VistaCitas extends ComponenteChivoMed {
     #pintarTipos(estado) {
         const select = this.$("tipo");
         const inicial = estado.cargandoTipos ? "Cargando tipos…" : estado.tipos.length ? "Selecciona un tipo" : "Sin tipos disponibles";
-        const opcion = (texto, valor) => {
-            const o = document.createElement("option");
-            o.value = valor;
-            o.textContent = texto;
-            return o;
-        };
-        select.replaceChildren(opcion(inicial, ""), ...estado.tipos.map(t => opcion(t.nombre, t.idTipoDocumento)));
+        select.replaceChildren(new Option(inicial, ""), ...estado.tipos.map(t => new Option(t.nombre, t.idTipoDocumento)));
         select.value = estado.tipos.some(t => t.idTipoDocumento === estado.idTipoDocumento) ? estado.idTipoDocumento : "";
         select.disabled = estado.cargandoTipos || !estado.tipos.length;
         this.$("error-tipos").hidden = !estado.errorTipos;
@@ -241,16 +228,7 @@ class VistaCitas extends ComponenteChivoMed {
         const select = this.$("clinica");
         const inicial = estado.cargando === "clinicas" ? "Cargando clínicas…"
             : estado.clinicas?.length ? "Selecciona una clínica" : "Sin documento";
-        const opcion = (texto, valor) => {
-            const o = document.createElement("option");
-            o.value = valor;
-            o.textContent = texto;
-            return o;
-        };
-        const opciones = (estado.clinicas ?? []).map(clinica => {
-            return opcion(clinica.nombre, clinica.idClinica);
-        });
-        select.replaceChildren(opcion(inicial, ""), ...opciones);
+        select.replaceChildren(new Option(inicial, ""), ...(estado.clinicas ?? []).map(clinica => new Option(clinica.nombre, clinica.idClinica)));
         select.value = estado.clinicas?.some(c => c.idClinica === estado.idClinica) ? estado.idClinica : "";
     }
 
@@ -276,11 +254,7 @@ class VistaCitas extends ComponenteChivoMed {
             if (error && !textos.includes(error)) textos.push(error);
             for (const id of ids) this.#marcarCampo(this.$(id), Boolean(error));
         }
-        this.$("lista-errores").replaceChildren(...textos.map(texto => {
-            const li = document.createElement("li");
-            li.textContent = texto;
-            return li;
-        }));
+        this.$("lista-errores").replaceChildren(...textos.map(texto => this.texto("li", texto)));
         this.$("lista-errores").hidden = !textos.length;
         this.$("mensaje-texto").hidden = !estado.mensaje;
         this.$("mensaje-texto").textContent = estado.mensaje ?? "";

@@ -174,6 +174,14 @@ class Dialogo extends Elemento {
     }
 }
 
+class Opcion extends Elemento {
+    constructor(texto = "", valor) {
+        super("option");
+        this.textContent = texto;
+        if (valor !== undefined) this.value = valor;
+    }
+}
+
 class Plantilla extends Elemento {
     constructor() { super("template"); this.content = new Fragmento(); }
     set innerHTML(html) { this.content.replaceChildren(...parsear(html)); }
@@ -270,6 +278,7 @@ class HTMLElementDoble extends Elemento {
 export function instalarDom() {
     const registro = globalThis.customElements?.registro ?? new Map();
     if (!globalThis.HTMLElement) globalThis.HTMLElement = HTMLElementDoble;
+    if (!globalThis.Option) globalThis.Option = Opcion;
     if (!globalThis.customElements) {
         globalThis.customElements = {
             registro,

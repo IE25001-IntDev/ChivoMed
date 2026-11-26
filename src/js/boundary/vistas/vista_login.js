@@ -68,10 +68,10 @@ class VistaLogin extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css");
-        this.$("formulario").addEventListener("submit", this.#alEnviar);
-        this.$("tipo").addEventListener("change", this.#alCambiarTipo);
-        this.$("numero").addEventListener("input", this.#alEscribirNumero);
-        this.$("reintentar").addEventListener("click", this.#alReintentar);
+        this.escuchar(this.$("formulario"), "submit", this.#alEnviar);
+        this.escuchar(this.$("tipo"), "change", this.#alCambiarTipo);
+        this.escuchar(this.$("numero"), "input", this.#alEscribirNumero);
+        this.escuchar(this.$("reintentar"), "click", this.#alReintentar);
         const aviso = this.$("aviso");
         aviso.hidden = this.contexto?.query?.get("sesion") !== "finalizada";
         aviso.textContent = aviso.hidden ? "" : MENSAJES.sesionFinalizada;
@@ -88,10 +88,7 @@ class VistaLogin extends ComponenteChivoMed {
     }
 
     disconnectedCallback() {
-        this.$("formulario").removeEventListener("submit", this.#alEnviar);
-        this.$("tipo").removeEventListener("change", this.#alCambiarTipo);
-        this.$("numero").removeEventListener("input", this.#alEscribirNumero);
-        this.$("reintentar").removeEventListener("click", this.#alReintentar);
+        this.dejarDeEscuchar();
         this.#cancelarConexion?.();
         this.#cancelar?.();
         this.#cancelar = null;
@@ -104,13 +101,7 @@ class VistaLogin extends ComponenteChivoMed {
             const seleccionado = select.value;
             const inicial = estado.cargandoTipos ? "Cargando tipos…"
                 : estado.tipos.length ? "Selecciona un tipo" : "Sin tipos disponibles";
-            const opcion = (texto, valor) => {
-                const o = document.createElement("option");
-                o.value = valor;
-                o.textContent = texto;
-                return o;
-            };
-            select.replaceChildren(opcion(inicial, ""), ...estado.tipos.map(t => opcion(t.nombre, t.idTipoDocumento)));
+            select.replaceChildren(new Option(inicial, ""), ...estado.tipos.map(t => new Option(t.nombre, t.idTipoDocumento)));
             select.value = estado.tipos.some(t => t.idTipoDocumento === seleccionado) ? seleccionado : "";
             this.#tiposPintados = estado.tipos;
             this.#cargaPintada = estado.cargandoTipos;

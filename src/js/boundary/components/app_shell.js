@@ -119,12 +119,12 @@ class AppShell extends ComponenteChivoMed {
             sesionSinRed: () => memoria.sesion,
             sinConexion: RUTA_SIN_CONEXION,
         });
-        this.addEventListener("abrir-herramientas", this.#alAbrirHerramientas);
-        this.addEventListener("cerrar-herramientas", this.#alCerrarHerramientas);
-        this.addEventListener("navegar", this.#alNavegar);
-        this.addEventListener("sesion-cerrada", this.#alCerrarSesion);
-        this.addEventListener("sesion-actualizada", this.#alActualizarSesion);
-        document.addEventListener("sesion-expirada", this.#alExpirar);
+        this.escuchar(this, "abrir-herramientas", this.#alAbrirHerramientas);
+        this.escuchar(this, "cerrar-herramientas", this.#alCerrarHerramientas);
+        this.escuchar(this, "navegar", this.#alNavegar);
+        this.escuchar(this, "sesion-cerrada", this.#alCerrarSesion);
+        this.escuchar(this, "sesion-actualizada", this.#alActualizarSesion);
+        this.escuchar(document, "sesion-expirada", this.#alExpirar);
         this.#cancelarConexion = conexion.suscribir(this.#alCambiarRed);
         const hidratando = memoria.hidratar();
         if (hidratando) hidratando.finally(() => { if (this.isConnected) this.#router.iniciar(); });
@@ -133,13 +133,8 @@ class AppShell extends ComponenteChivoMed {
     }
 
     disconnectedCallback() {
+        this.dejarDeEscuchar();
         this.#router?.detener();
-        this.removeEventListener("abrir-herramientas", this.#alAbrirHerramientas);
-        this.removeEventListener("cerrar-herramientas", this.#alCerrarHerramientas);
-        this.removeEventListener("navegar", this.#alNavegar);
-        this.removeEventListener("sesion-cerrada", this.#alCerrarSesion);
-        this.removeEventListener("sesion-actualizada", this.#alActualizarSesion);
-        document.removeEventListener("sesion-expirada", this.#alExpirar);
         this.#cancelarConexion?.();
     }
 

@@ -35,12 +35,12 @@ class TarjetaCita extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "citas.css");
-        this.$("ver").addEventListener("click", this.#alVer);
+        this.escuchar(this.$("ver"), "click", this.#alVer);
         this.pintar();
     }
 
     disconnectedCallback() {
-        this.$("ver").removeEventListener("click", this.#alVer);
+        this.dejarDeEscuchar();
     }
 
     /** Devuelve el foco al botón "Ver ticket". */
@@ -55,11 +55,7 @@ class TarjetaCita extends ComponenteChivoMed {
         this.$("fecha").textContent = fecha;
         this.$("clinica").textContent = cita.nombreClinica;
         const procedimientos = cita.procedimientos ?? [];
-        this.$("procedimientos").replaceChildren(...procedimientos.map(nombre => {
-            const li = document.createElement("li");
-            li.textContent = nombre;
-            return li;
-        }));
+        this.$("procedimientos").replaceChildren(...procedimientos.map(nombre => this.texto("li", nombre)));
         this.$("procedimientos").hidden = !procedimientos.length;
         this.$("sin-procedimientos").hidden = procedimientos.length > 0;
 

@@ -58,7 +58,7 @@ export class Router {
     }
 
     procesar() {
-        // El ejecutor corre en el acto: la secuencia sube y autenticar() se llama durante la llamada, como antes.
+        // El ejecutor corre en el acto: la secuencia sube y autenticar() se llama durante la llamada.
         return new Promise(resolve => {
             const id = ++this.#secuencia;
             const vigente = () => id === this.#secuencia;
@@ -79,7 +79,7 @@ export class Router {
                 return;
             }
 
-            // Lo que seguía después del try/catch de autenticar(), con o sin sesión.
+            // Común a los dos caminos: con la sesión verificada o después de sinSesion.
             const continuar = () => {
                 if (!vigente()) return undefined;
                 if (contexto.sesion) {
@@ -114,7 +114,7 @@ export class Router {
                 // Solo invitados: sin sesión (o sin poder verificarla) se muestra el login.
                 return continuar();
             };
-            // Dos argumentos: el try original solo envolvía autenticar(); los errores de lo que sigue se propagan.
+            // Dos argumentos: sinSesion solo atiende el fallo de autenticar(); los errores de continuar() se propagan.
             resolve(new Promise(autenticar => autenticar(o.autenticar())).then(sesion => {
                 contexto.sesion = sesion;
                 return continuar();
@@ -123,7 +123,7 @@ export class Router {
     }
 
     #cargarYMontar(ruta, contexto, vigente) {
-        // Dos argumentos: el try original solo envolvía cargar(); un error al montar se propaga.
+        // Dos argumentos: solo un fallo de cargar() se muestra como error; un error al montar se propaga.
         return new Promise(resolve => resolve(ruta.cargar?.())).then(() => {
             if (vigente()) this.#opciones.montar(ruta.tag, contexto);
         }, error => {

@@ -37,7 +37,7 @@ const VACIO = Object.freeze(Object.create(null));
 /** Vigencia de la copia en disco: el máximo de una sesión en el backend. */
 export const VIGENCIA_MS = 8 * 60 * 60 * 1000;
 /** Tiempo máximo que el arranque espera a IndexedDB. */
-export const ESPERA_HIDRATAR_MS = 1500;
+const ESPERA_HIDRATAR_MS = 1500;
 
 /** Registros en disco: uno por ranura. */
 export const RANURA_SESION = "sesion";

@@ -27,7 +27,7 @@ export const EVENTO_OFRECER = "ofrecer-instalacion";
 /** Evento que emite la vista (en document) al descargar un ticket, después de entregar el PDF. */
 export const EVENTO_INSTALAR = "instalar-al-descargar";
 /** Marca en localStorage: ChivoMed se instaló desde este navegador. */
-export const CLAVE_INSTALADA = "chivomed:instalada";
+const CLAVE_INSTALADA = "chivomed:instalada";
 
 export class ControladorInstalacion {
     /** Modos del botón "Instalar app" (estado.modo). */

@@ -33,13 +33,13 @@ class SessionBar extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "app_shell.css");
-        this.$("salir").addEventListener("click", this.#alSalir);
+        this.escuchar(this.$("salir"), "click", this.#alSalir);
         this.#cancelarConexion = conexion.suscribir(() => this.#pintarRed());
         this.#pintar();
     }
 
     disconnectedCallback() {
-        this.$("salir").removeEventListener("click", this.#alSalir);
+        this.dejarDeEscuchar();
         this.#cancelarConexion?.();
     }
 

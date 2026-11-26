@@ -1,5 +1,5 @@
 /**
- * <panel-examenes-paso> (HU4, F9): exámenes asignables del paso actual, con filtro por categoría y
+ * <panel-examenes-paso> (HU4): exámenes asignables del paso actual, con filtro por categoría y
  * casillas para ordenar varios a la vez, el resultado por examen y las órdenes emitidas.
  * Solo presentación: el filtro, la selección y la validación los decide ControladorConsulta.
  *
@@ -68,9 +68,9 @@ class PanelExamenesPaso extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "consulta.css");
-        this.$("formulario").addEventListener("submit", this.#alEnviar);
-        this.$("indicaciones").addEventListener("input", this.#alEscribir);
-        this.$("categoria").addEventListener("change", this.#alCambiarCategoria);
+        this.escuchar(this.$("formulario"), "submit", this.#alEnviar);
+        this.escuchar(this.$("indicaciones"), "input", this.#alEscribir);
+        this.escuchar(this.$("categoria"), "change", this.#alCambiarCategoria);
         this.#alEscribir();
         this.#pintado = null;
         this.#claveCasillas = null;
@@ -78,10 +78,7 @@ class PanelExamenesPaso extends ComponenteChivoMed {
     }
 
     disconnectedCallback() {
-        this.$("formulario").removeEventListener("submit", this.#alEnviar);
-        this.$("indicaciones").removeEventListener("input", this.#alEscribir);
-        this.$("categoria").removeEventListener("change", this.#alCambiarCategoria);
-        for (const casilla of this.#casillas()) casilla.removeEventListener("change", this.#alMarcar);
+        this.dejarDeEscuchar();
     }
 
     /** Indicaciones escritas; viajan con el retroceso como motivo en el paso anterior. */
@@ -136,15 +133,7 @@ class PanelExamenesPaso extends ComponenteChivoMed {
     }
 
     #pintarCategorias(categorias) {
-        const todas = document.createElement("option");
-        todas.value = "";
-        todas.textContent = "Todas";
-        this.$("categoria").replaceChildren(todas, ...categorias.map(c => {
-            const opcion = document.createElement("option");
-            opcion.value = c.idTipoExamen;
-            opcion.textContent = c.nombre;
-            return opcion;
-        }));
+        this.$("categoria").replaceChildren(new Option("Todas", ""), ...categorias.map(c => new Option(c.nombre, c.idTipoExamen)));
     }
 
     /**
@@ -156,7 +145,6 @@ class PanelExamenesPaso extends ComponenteChivoMed {
         const clave = `${visibles.map(e => e.idExamen).join(",")}|${[...yaOrdenados].join(",")}`;
         if (clave !== this.#claveCasillas) {
             this.#claveCasillas = clave;
-            for (const casilla of this.#casillas()) casilla.removeEventListener("change", this.#alMarcar);
             this.$("casillas").replaceChildren(...visibles.map(e => this.#crearCasilla(e, yaOrdenados.has(e.idExamen))));
         }
         const elegidos = new Set(seleccion);
@@ -174,23 +162,14 @@ class PanelExamenesPaso extends ComponenteChivoMed {
         casilla.type = "checkbox";
         casilla.name = "examen";
         casilla.value = examen.idExamen;
-        casilla.addEventListener("change", this.#alMarcar);
-        const nombre = document.createElement("span");
-        nombre.className = "nombre-examen";
-        nombre.textContent = examen.nombre;
-        etiqueta.append(casilla, nombre);
+        this.escuchar(casilla, "change", this.#alMarcar);
+        etiqueta.append(casilla, this.texto("span", examen.nombre, "nombre-examen"));
         const tipos = examen.tiposExamen ?? [];
         if (tipos.length) {
-            const meta = document.createElement("span");
-            meta.className = "meta";
-            meta.textContent = tipos.map(t => t.nombre).join(" · ");
-            etiqueta.append(meta);
+            etiqueta.append(this.texto("span", tipos.map(t => t.nombre).join(" · "), "meta"));
         }
         if (ordenado) {
-            const insignia = document.createElement("span");
-            insignia.className = "insignia";
-            insignia.textContent = "Ya ordenado";
-            etiqueta.append(insignia);
+            etiqueta.append(this.texto("span", "Ya ordenado", "insignia"));
         }
         return etiqueta;
     }
@@ -201,13 +180,8 @@ class PanelExamenesPaso extends ComponenteChivoMed {
         this.$("lista-resultado").replaceChildren(...(resultado ?? []).map(r => {
             const li = document.createElement("li");
             li.className = r.ok ? "resultado-ok" : "resultado-fallo";
-            const estado = document.createElement("span");
-            estado.className = "estado-resultado";
-            estado.textContent = r.ok ? "Emitida" : "No emitida";
-            const texto = document.createElement("span");
-            texto.className = "texto-resultado";
-            texto.textContent = `${r.nombre}: ${r.mensaje}`;
-            li.append(estado, texto);
+            li.append(this.texto("span", r.ok ? "Emitida" : "No emitida", "estado-resultado"),
+                this.texto("span", `${r.nombre}: ${r.mensaje}`, "texto-resultado"));
             return li;
         }));
     }
@@ -217,22 +191,13 @@ class PanelExamenesPaso extends ComponenteChivoMed {
         this.$("ordenes").replaceChildren(...ordenes.map(orden => {
             const li = document.createElement("li");
             li.className = "orden";
-            const nombre = document.createElement("p");
             const disponible = Boolean(orden.idExamen) && asignables.some(e => e.idExamen === orden.idExamen);
-            nombre.className = disponible ? "orden-nombre" : "orden-nombre no-disponible";
-            nombre.textContent = ControladorConsulta.nombreDeOrden(orden, asignables);
-            li.append(nombre);
+            li.append(this.texto("p", ControladorConsulta.nombreDeOrden(orden, asignables), disponible ? "orden-nombre" : "orden-nombre no-disponible"));
             if (orden.fechaCreacion) {
-                const fecha = document.createElement("p");
-                fecha.className = "meta";
-                fecha.textContent = `Emitida el ${FechasSV.formatearFechaHora(orden.fechaCreacion)}`;
-                li.append(fecha);
+                li.append(this.texto("p", `Emitida el ${FechasSV.formatearFechaHora(orden.fechaCreacion)}`, "meta"));
             }
             if (orden.indicaciones) {
-                const indicaciones = document.createElement("p");
-                indicaciones.className = "orden-indicaciones";
-                indicaciones.textContent = orden.indicaciones;
-                li.append(indicaciones);
+                li.append(this.texto("p", orden.indicaciones, "orden-indicaciones"));
             }
             return li;
         }));

@@ -89,12 +89,12 @@ class ListaConsultas extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "consultas.css");
-        this.$("filtro").addEventListener("submit", this.#alBuscar);
-        this.$("desde").addEventListener("change", this.#alCambiarFecha);
-        this.$("hasta").addEventListener("change", this.#alCambiarFecha);
-        this.$("hoy").addEventListener("click", this.#alHoy);
-        this.$("reintentar").addEventListener("click", this.#alReintentar);
-        this.$("busqueda").addEventListener("input", this.#alBuscarPaciente);
+        this.escuchar(this.$("filtro"), "submit", this.#alBuscar);
+        this.escuchar(this.$("desde"), "change", this.#alCambiarFecha);
+        this.escuchar(this.$("hasta"), "change", this.#alCambiarFecha);
+        this.escuchar(this.$("hoy"), "click", this.#alHoy);
+        this.escuchar(this.$("reintentar"), "click", this.#alReintentar);
+        this.escuchar(this.$("busqueda"), "input", this.#alBuscarPaciente);
         this.#controlador ??= new ControladorConsultas();
         this.#cancelar = this.#controlador.suscribir((cambios, estado) => this.#pintar(estado, cambios));
         this.#tarjetas = new Map();
@@ -104,12 +104,7 @@ class ListaConsultas extends ComponenteChivoMed {
     }
 
     disconnectedCallback() {
-        this.$("filtro").removeEventListener("submit", this.#alBuscar);
-        this.$("desde").removeEventListener("change", this.#alCambiarFecha);
-        this.$("hasta").removeEventListener("change", this.#alCambiarFecha);
-        this.$("hoy").removeEventListener("click", this.#alHoy);
-        this.$("reintentar").removeEventListener("click", this.#alReintentar);
-        this.$("busqueda").removeEventListener("input", this.#alBuscarPaciente);
+        this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();

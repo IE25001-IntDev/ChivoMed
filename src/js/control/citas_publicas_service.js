@@ -14,7 +14,7 @@ import DefaultService from "./default_service.js";
 import DefaultError from "../entities/default_error.js";
 import { Validaciones } from "./validaciones.js";
 
-export const ESPERA_POR_DEFECTO = 300;
+const ESPERA_POR_DEFECTO = 300;
 
 export default class CitasPublicasService extends DefaultService {
     constructor(opciones = {}) {

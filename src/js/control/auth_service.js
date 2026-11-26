@@ -2,7 +2,7 @@ import { API_CONFIG } from "./api_config.js";
 import { Validaciones } from "./validaciones.js";
 
 /**
- * Regla de empleado (B8): cualquier rol activo excepto Paciente, incluso un rol sin código.
+ * Regla de empleado: cualquier rol activo excepto Paciente, incluso un rol sin código.
  * El código solo sirve para reconocer PACIENTE; para mostrar el rol se usa `nombreRol`.
  */
 export const CODIGO_PACIENTE = "PACIENTE";
@@ -186,7 +186,7 @@ export class AuthService {
             const headers = { Accept: "application/json" };
             if (datos !== undefined) headers["Content-Type"] = "application/json";
             if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
-            // Dos argumentos: el try original solo envolvía el fetch; lo de #responder se propaga tal cual.
+            // Dos argumentos: solo el fallo del fetch se trata como sin red; los errores de #responder se propagan tal cual.
             resolve(new Promise(enviar => enviar(fetch(`${API_CONFIG.baseUrl.replace(/\/+$/, "")}/${ruta}`, {
                 method, headers,
                 body: datos === undefined ? undefined : JSON.stringify(datos),

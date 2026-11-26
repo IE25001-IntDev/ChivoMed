@@ -87,7 +87,7 @@ export class EstadoReactivo {
         if (Object.is(objetivo[clave], valor)) return true;
         if (!this.#originales) {
             this.#originales = new Map();
-            // Se llama sin receptor, como antes: queueMicrotask del navegador lanza "Illegal invocation"
+            // Se llama sin receptor: queueMicrotask del navegador lanza "Illegal invocation"
             // si se invoca como this.#programar(...). La flecha conserva el this de #notificar.
             const programar = this.#programar;
             programar(() => this.#notificar());

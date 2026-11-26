@@ -5,7 +5,28 @@
  * Es solo una ayuda para el usuario: el backend decide. Una expresión que JS no compila no valida.
  */
 
+import { Validaciones } from "./validaciones.js";
+
 export class FormatoDocumento {
+    static MENSAJES = Object.freeze({
+        tipoRequerido: "Selecciona el tipo de documento.",
+        numeroRequerido: "Escribe tu número de documento.",
+        numeroLargo: `El número no puede tener más de ${Validaciones.MAX_NUMERO_DOCUMENTO} caracteres.`,
+        numeroSaltos: "El número no puede tener saltos de línea.",
+    });
+
+    static errorDelNumero(tipo, numeroDocumento) {
+        const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
+        if (!numero) return FormatoDocumento.MENSAJES.numeroRequerido;
+        if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) return FormatoDocumento.MENSAJES.numeroLargo;
+        if (/[\r\n]/.test(numero)) return FormatoDocumento.MENSAJES.numeroSaltos;
+        const formato = tipo ? FormatoDocumento.crearValidadorFormato(tipo.expresionRegular) : null;
+        if (!formato || formato(numero)) return null;
+        return tipo.indicaciones
+            ? `El número no tiene el formato de ${tipo.nombre}. ${tipo.indicaciones}`
+            : `El número no tiene el formato de ${tipo.nombre}.`;
+    }
+
     /** true si la expresión no impone formato (mismo criterio que FormatoExpresion.sinRestriccion). */
     static sinRestriccion(expresionRegular) {
         return typeof expresionRegular !== "string" || !expresionRegular.trim() || expresionRegular === ".";

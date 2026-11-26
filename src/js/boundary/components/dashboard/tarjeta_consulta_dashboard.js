@@ -5,7 +5,7 @@
  *  - valores:  { [idPaso]: { abierto, cargando, cargado, valor, fechaFin, error } } (solo actualiza
  *              los paneles de registro que cambiaron).
  *  - motivo:   null si se puede atender; si no, el texto que explica por qué no.
- *  - enCurso:  true si es la consulta en curso en la sesión (insignia "En curso", F8).
+ *  - enCurso:  true si es la consulta en curso en la sesión (insignia "En curso").
  *  - verSinConexion: true si, sin red, la consulta quedó guardada: el botón dice "Ver sin conexión"
  *              y se habilita aunque haya motivo (abre la consulta en solo lectura).
  * Emite (bubbles, composed): 'ver-registro' { idPaso }, 'reintentar-registro' { idPaso },
@@ -79,7 +79,7 @@ class TarjetaConsultaDashboard extends ComponenteChivoMed {
 
     get verSinConexion() { return this.#verSinConexion; }
 
-    /** F8: true si es la consulta en curso en la sesión (insignia "En curso"). */
+    /** true si es la consulta en curso en la sesión (insignia "En curso"). */
     set enCurso(valor) {
         this.#enCurso = valor === true;
         if (this.isConnected) this.$("en-curso").hidden = !this.#enCurso;
@@ -89,12 +89,12 @@ class TarjetaConsultaDashboard extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "consultas.css");
-        this.$("atender").addEventListener("click", this.#alAtender);
+        this.escuchar(this.$("atender"), "click", this.#alAtender);
         this.#pintarTodo();
     }
 
     disconnectedCallback() {
-        this.$("atender").removeEventListener("click", this.#alAtender);
+        this.dejarDeEscuchar();
     }
 
     #pintarTodo() {
@@ -115,30 +115,23 @@ class TarjetaConsultaDashboard extends ComponenteChivoMed {
 
         this.#registros = new Map();
         const procedimientos = c.procedimientos.map(p => this.#procedimiento(p));
-        if (!procedimientos.length) procedimientos.push(this.#texto("p", "Sin procedimientos registrados.", "vacio"));
+        if (!procedimientos.length) procedimientos.push(this.texto("p", "Sin procedimientos registrados.", "vacio"));
         this.$("procedimientos").replaceChildren(...procedimientos);
         this.#pintarRegistros();
         this.#pintarAtender();
     }
 
-    #texto(tag, contenido, clase) {
-        const nodo = document.createElement(tag);
-        nodo.textContent = contenido;
-        if (clase) nodo.className = clase;
-        return nodo;
-    }
-
     #procedimiento(p) {
         const seccion = document.createElement("section");
         seccion.className = "procedimiento";
-        seccion.append(this.#texto("h4", p.nombre));
+        seccion.append(this.texto("h4", p.nombre));
         if (p.fechaInicio) {
-            seccion.append(this.#texto("p", p.fechaFin
+            seccion.append(this.texto("p", p.fechaFin
                 ? `${FechasSV.formatearFechaHora(p.fechaInicio)} – ${FechasSV.formatearFechaHora(p.fechaFin)}`
                 : `Desde ${FechasSV.formatearFechaHora(p.fechaInicio)}`, "meta"));
         }
         const arbol = ControladorConsultas.arbolDePasos(p.pasos);
-        seccion.append(arbol.length ? this.#lista(arbol, "arbol-pasos") : this.#texto("p", "Sin pasos registrados.", "vacio"));
+        seccion.append(arbol.length ? this.#lista(arbol, "arbol-pasos") : this.texto("p", "Sin pasos registrados.", "vacio"));
         return seccion;
     }
 
@@ -160,15 +153,12 @@ class TarjetaConsultaDashboard extends ComponenteChivoMed {
         caja.className = "paso-detalle";
         const titulo = document.createElement("p");
         titulo.className = "paso-titulo";
-        const estadoClase = paso.estado === "PENDIENTE" ? "pendiente" : paso.estado === "COMPLETADO" ? "completado" : "otro";
-        titulo.append(this.#texto("span", paso.nombre, "paso-nombre"), this.#texto("span", ControladorConsultas.etiquetaEstado(paso.estado), `insignia insignia-estado ${estadoClase}`));
-        const responsable = paso.responsable
-            ? [paso.responsable.nombre, paso.responsable.rol].filter(Boolean).join(" · ") : "Sin responsable asignado";
-        const fechas = `${FechasSV.formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? FechasSV.formatearFechaHora(paso.fechaFin) : "En curso"}`;
-        caja.append(titulo, this.#texto("p", responsable, "meta"), this.#texto("p", fechas, "meta"));
+        const { claseEstado, responsable, fechas } = ControladorConsultas.resumenPaso(paso);
+        titulo.append(this.texto("span", paso.nombre, "paso-nombre"), this.texto("span", ControladorConsultas.etiquetaEstado(paso.estado), `insignia insignia-estado ${claseEstado}`));
+        caja.append(titulo, this.texto("p", responsable, "meta"), this.texto("p", fechas, "meta"));
         if (paso.tieneValor) {
             const id = `registro-${paso.idConsultaProcedimientoPaso}`;
-            const boton = this.#texto("button", "Ver registro", "boton boton-secundario boton-pequeno");
+            const boton = this.texto("button", "Ver registro", "boton boton-secundario boton-pequeno");
             boton.type = "button";
             boton.setAttribute("aria-expanded", "false");
             boton.setAttribute("aria-controls", id);
@@ -195,19 +185,19 @@ class TarjetaConsultaDashboard extends ComponenteChivoMed {
             registro.panel.hidden = !abierto;
             if (!abierto) continue;
             if (v.cargando) {
-                registro.panel.replaceChildren(this.#texto("p", "Cargando registro…", "meta"));
+                registro.panel.replaceChildren(this.texto("p", "Cargando registro…", "meta"));
             } else if (v.error) {
-                const error = this.#texto("p", v.error, "error-campo");
+                const error = this.texto("p", v.error, "error-campo");
                 error.setAttribute("role", "alert");
-                const reintentar = this.#texto("button", "Reintentar", "boton boton-secundario boton-pequeno");
+                const reintentar = this.texto("button", "Reintentar", "boton boton-secundario boton-pequeno");
                 reintentar.type = "button";
                 reintentar.addEventListener("click", () => this.emitir("reintentar-registro", { idPaso }));
                 registro.panel.replaceChildren(error, reintentar);
             } else {
                 const contenido = v.valor === null || v.valor === undefined || v.valor === ""
-                    ? this.#texto("p", "Sin valor registrado.", "meta") : this.#texto("p", v.valor, "valor");
+                    ? this.texto("p", "Sin valor registrado.", "meta") : this.texto("p", v.valor, "valor");
                 registro.panel.replaceChildren(contenido);
-                if (v.fechaFin) registro.panel.append(this.#texto("p", `Registrado el ${FechasSV.formatearFechaHora(v.fechaFin)}`, "meta"));
+                if (v.fechaFin) registro.panel.append(this.texto("p", `Registrado el ${FechasSV.formatearFechaHora(v.fechaFin)}`, "meta"));
             }
         }
     }

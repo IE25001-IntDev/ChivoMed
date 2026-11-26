@@ -1,5 +1,5 @@
 /** Registro del service worker (src/sw.js), cuyo alcance es toda la carpeta src/. */
-export const URL_SW = new URL("../../../sw.js", import.meta.url);
+const URL_SW = new URL("../../../sw.js", import.meta.url);
 
 export class RegistroServiceWorker {
     /** Devuelve el registro, o null si el navegador no admite service workers o el registro falla. */

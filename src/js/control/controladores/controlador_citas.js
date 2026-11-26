@@ -31,13 +31,12 @@ import { FechasSV } from "../fechas_sv.js";
 import { memoria as memoriaCompartida, CLAVE_PUBLICA_CITAS, VIGENCIA_MS } from "../memoria_vistas.js";
 import { conexion as conexionCompartida } from "../conexion.js";
 import { ControladorConexion, MENSAJE_SIN_DATOS } from "../controlador_conexion.js";
-import { Validaciones } from "../validaciones.js";
 
 /** Sin sesión no hay usuario: la clave es fija; se borra con "Nueva búsqueda", a las 8 horas y al cerrar o iniciar sesión. */
 export const CLAVE_MEMORIA = CLAVE_PUBLICA_CITAS;
 /** El backend compara ChronoUnit.DAYS.between(desde, hasta) > 366 (D1: manda el código). */
-export const MAX_DIAS_RANGO = 366;
-export const DIAS_POR_DEFECTO = 30;
+const MAX_DIAS_RANGO = 366;
+const DIAS_POR_DEFECTO = 30;
 
 export const PASOS = Object.freeze([
     Object.freeze({ numero: 1, nombre: "Tipo de documento" }),
@@ -48,10 +47,7 @@ export const PASOS = Object.freeze([
 ]);
 
 export const MENSAJES = Object.freeze({
-    tipoRequerido: "Selecciona el tipo de documento.",
-    numeroRequerido: "Escribe tu número de documento.",
-    numeroLargo: `El número no puede tener más de ${Validaciones.MAX_NUMERO_DOCUMENTO} caracteres.`,
-    numeroSaltos: "El número no puede tener saltos de línea.",
+    ...FormatoDocumento.MENSAJES,
     clinicaRequerida: "Selecciona una clínica.",
     fechasInvalidas: "Escribe dos fechas válidas.",
     rangoInvertido: "La fecha inicial no puede ser posterior a la final.",
@@ -601,18 +597,7 @@ export class ControladorCitas {
 
     /** Error del número para el tipo elegido (null si es válido). Mismas reglas que @NotBlank/@Size/@Pattern. */
     static validarNumero(tipo, numeroDocumento) {
-        if (!tipo) return MENSAJES.tipoRequerido;
-        const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
-        if (!numero) return MENSAJES.numeroRequerido;
-        if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) return MENSAJES.numeroLargo;
-        if (/[\r\n]/.test(numero)) return MENSAJES.numeroSaltos;
-        const formato = FormatoDocumento.crearValidadorFormato(tipo.expresionRegular);
-        if (formato && !formato(numero)) {
-            return tipo.indicaciones
-                ? `El número no tiene el formato de ${tipo.nombre}. ${tipo.indicaciones}`
-                : `El número no tiene el formato de ${tipo.nombre}.`;
-        }
-        return null;
+        return tipo ? FormatoDocumento.errorDelNumero(tipo, numeroDocumento) : MENSAJES.tipoRequerido;
     }
 
     /**

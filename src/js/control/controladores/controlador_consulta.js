@@ -12,7 +12,7 @@
  * anterior (con observaciones e indicaciones que quedan como `motivoRetroceso` del paso
  * anterior), emitir órdenes y cerrar la consulta. Solo actúa sobre el paso actual si es de su rol
  * (`atiendePaso`); los datos clínicos de un paso ajeno no se piden. Cada paso lo atiende su rol responsable y cierra
- * quien completó el paso final (B8); lo decide el backend. Una consulta cerrada, una que no le toca
+ * quien completó el paso final; lo decide el backend. Una consulta cerrada, una que no le toca
  * al rol activo o la falta de red dejan la vista en solo lectura con su motivo.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
@@ -48,7 +48,7 @@ export const MENSAJES = Object.freeze({
     sinRed: ControladorConexion.motivoSinConexion("registrar la atención"),
     sinRedCarga: MENSAJE_SIN_DATOS,
     desdeMemoria: ControladorConexion.mensajeGuardado,
-    /** F8: texto propio para consulta.cerrarAntesRetomar; se ignora el message del backend. */
+    /** Texto propio para consulta.cerrarAntesRetomar; se ignora el message del backend. */
     enCurso: "Tienes otra consulta en curso. Sal de ella o ciérrala antes de atender esta.",
     sinRedSalir: ControladorConexion.motivoSinConexion("salir de la consulta"),
     noEncontrada: "No encontramos esta consulta en tu clínica.",
@@ -108,7 +108,7 @@ const USAR_MENSAJE_BACKEND = Object.freeze({
 });
 
 /**
- * Rechazos por rol (B8): lo mostrado quedó viejo (ya no le toca al rol activo), así que se vuelve
+ * Rechazos por rol: lo mostrado quedó viejo (ya no le toca al rol activo), así que se vuelve
  * a leer la consulta y queda en solo lectura con su motivo.
  */
 export const CODIGOS_POR_ROL = Object.freeze(["consulta.noResponsablePaso", "consulta.soloFinalizador",
@@ -118,7 +118,7 @@ export const CODIGOS_POR_ROL = Object.freeze(["consulta.noResponsablePaso", "con
 const RECARGAR_TRAS_ORDEN = new Set(["consulta.ordenPasoCompletado", "consulta.pasoYaCompletado", "consulta.yaCerrada", ...CODIGOS_POR_ROL]);
 
 /**
- * F9: errores propios de un examen; la serie sigue con el siguiente. Cualquier otro (paso
+ * Errores propios de un examen; la serie sigue con el siguiente. Cualquier otro (paso
  * completado, consulta cerrada, rechazo por rol, sesión, red, desconocido) corta la serie.
  */
 const ERRORES_POR_EXAMEN = Object.freeze(["consulta.examenNoAsignable", "consulta.examenObligatorio"]);
@@ -168,6 +168,9 @@ export class ControladorConsulta {
     #secuencia = 0;
     #secuenciaDetalle = 0;
     #cancelarConexion = null;
+    /** Observaciones e indicaciones que viajan con el retroceso; se guardan en el paso anterior. */
+    #notasRetroceso = null;
+    #observaciones = "";
 
     /**
      * @param opciones opcional, con:
@@ -211,15 +214,15 @@ export class ControladorConsulta {
             actualizadoEn: null,
             /** Cambia (objeto nuevo) cuando una acción termina, para que la vista mueva el foco. */
             acabado: null,
-            /** { ruta } nuevo cuando hay que ir a otra vista (F8: al dashboard tras salir de la consulta). */
+            /** { ruta } nuevo cuando hay que ir a otra vista (al dashboard tras salir de la consulta). */
             navegarA: null,
-            /** F8: true mientras "Salir de esa consulta y atender esta" espera el DELETE. */
+            /** true mientras "Salir de esa consulta y atender esta" espera el DELETE. */
             saliendo: false,
-            /** F9: categoría elegida en el panel de exámenes: "" (Todas) o un idTipoExamen. */
+            /** Categoría elegida en el panel de exámenes: "" (Todas) o un idTipoExamen. */
             filtroExamenes: "",
-            /** F9: idExamen seleccionados (congelado, en el orden de la lista). Se conserva al filtrar. */
+            /** idExamen seleccionados (congelado, en el orden de la lista). Se conserva al filtrar. */
             seleccionExamenes: NINGUNA,
-            /** F9: resultado de la última asignación: [{ idExamen, nombre, ok, mensaje }] congelado, o null. */
+            /** Resultado de la última asignación: [{ idExamen, nombre, ok, mensaje }] congelado, o null. */
             resultadoExamenes: null,
         });
         this.estado = this.#reactivo.estado;
@@ -239,7 +242,7 @@ export class ControladorConsulta {
     get atiendePaso() { return this.atiende && ControladorConsultas.esPasoDeMiRol(this.pasoActual, this.estado.sesion?.rolActivo); }
 
     /**
-     * F8: true si esta consulta está seleccionada en la sesión y sigue abierta. No exige
+     * true si esta consulta está seleccionada en la sesión y sigue abierta. No exige
      * `pendienteParaMi`: quien completó su paso y ya no tiene nada pendiente también debe poder salir.
      */
     get puedeSalir() {
@@ -343,7 +346,7 @@ export class ControladorConsulta {
                 return;
             }
             this.estado.cargando = true;
-            // .catch al final: el try original envolvía la lectura, el retomar y el detalle.
+            // .catch al final: atrapa los errores de la lectura, del retomar y del detalle.
             resolve(new Promise(leer => leer(this.#leerConsulta(idConsulta)))
                 .then(consulta => {
                     if (id !== this.#secuencia) return undefined;
@@ -360,7 +363,7 @@ export class ControladorConsulta {
      * la vuelve a leer y queda en solo lectura con su motivo; cualquier otro rechazo detiene la carga.
      */
     #retomarSiToca(id, idConsulta, consulta) {
-        // Dos argumentos: el try interno solo envolvía el PUT; lo que relanza va al catch de #cargar.
+        // Dos argumentos: aquí solo llega el fallo del PUT; lo que se relanza va al .catch de #cargar.
         return new Promise(retomar => retomar(this.#servicio.retomar(idConsulta)))
             .then(() => ({ consulta, atendiendo: true, aviso: null }), error => {
                 if (error?.code !== "consulta.yaCerrada" && !CODIGOS_POR_ROL.includes(error?.code)) throw error;
@@ -432,7 +435,7 @@ export class ControladorConsulta {
             }
             const idPaso = paso.idConsultaProcedimientoPaso;
             const previo = this.estado.detalle.idPaso === idPaso ? this.estado.detalle : SIN_DETALLE;
-            // F9: el filtro, la selección y el resultado son del paso; otro paso empieza de cero.
+            // El filtro, la selección y el resultado son del paso; otro paso empieza de cero.
             if (previo === SIN_DETALLE) this.#reiniciarExamenes();
             this.estado.detalle = congelar({ ...previo, idPaso, cargando: true, error: null });
             const aplicar = (registro, ordenes, asignables, definicion) => {
@@ -448,7 +451,7 @@ export class ControladorConsulta {
                 this.#restaurarBorrador();
                 this.#guardarEnMemoria();
             };
-            // Las tres peticiones salen durante la llamada, como antes; .catch al final, como el try.
+            // Las tres peticiones salen durante la llamada; el .catch final atrapa también los errores del .then.
             resolve(new Promise(pedir => pedir(Promise.all([
                 this.#servicio.paso(idPaso), this.#servicio.ordenes(idPaso), this.#servicio.asignables(idPaso),
             ])))
@@ -467,13 +470,13 @@ export class ControladorConsulta {
         });
     }
 
-    /** F9: vuelve el filtro a "Todas" y vacía la selección y el resultado. */
+    /** Vuelve el filtro a "Todas" y vacía la selección y el resultado. */
     #reiniciarExamenes() {
         Object.assign(this.estado, { filtroExamenes: "", seleccionExamenes: NINGUNA, resultadoExamenes: null });
     }
 
     /**
-     * F9: tras recargar los asignables o las órdenes, quita de la selección lo que ya no se puede
+     * Tras recargar los asignables o las órdenes, quita de la selección lo que ya no se puede
      * asignar o ya se ordenó, y vuelve a "Todas" si la categoría elegida desapareció.
      */
     #depurarExamenes() {
@@ -531,7 +534,7 @@ export class ControladorConsulta {
     }
 
     /**
-     * F8: sale de esta consulta sin cerrarla (DELETE /atencion/consulta) y publica la navegación al
+     * Sale de esta consulta sin cerrarla (DELETE /atencion/consulta) y publica la navegación al
      * dashboard. Pasos, registros y órdenes quedan igual; el borrador sigue en memoria.
      */
     salirDeConsulta() {
@@ -549,7 +552,7 @@ export class ControladorConsulta {
     }
 
     /**
-     * F8: ante consulta.cerrarAntesRetomar, sale de la otra consulta (DELETE) y vuelve a cargar esta
+     * Ante consulta.cerrarAntesRetomar, sale de la otra consulta (DELETE) y vuelve a cargar esta
      * con #cargar, que la lee y solo pide PUT …/sesion si sigue abierta y `pendienteParaMi`; si no,
      * queda en solo lectura. Devuelve true si el DELETE se hizo.
      */
@@ -564,7 +567,7 @@ export class ControladorConsulta {
             }
             const id = this.#secuencia;
             this.estado.saliendo = true;
-            // Dos argumentos: el try solo envolvía el DELETE.
+            // Dos argumentos: solo un fallo del DELETE pasa por el manejo de error.
             resolve(new Promise(salir => salir(this.#servicio.salirDeConsulta())).then(() => {
                 if (id !== this.#secuencia) return false;
                 Object.assign(this.estado, { saliendo: false, error: null, enCurso: null, errorAccion: null });
@@ -594,7 +597,7 @@ export class ControladorConsulta {
             Object.assign(this.estado, { accion, errorAccion: null, confirmando: null });
             const idCarga = this.#secuencia;
             let ok = false;
-            // .catch después del .then: el try también envolvía alTerminar.
+            // .catch después del .then: también atrapa los errores de alTerminar.
             resolve(new Promise(operar => operar(operacion()))
                 .then(() => {
                     if (idCarga !== this.#secuencia) return false;
@@ -653,9 +656,6 @@ export class ControladorConsulta {
         });
     }
 
-    /** Observaciones e indicaciones que viajan con el retroceso; se guardan en el paso anterior. */
-    #notasRetroceso = null;
-
     /**
      * Pide retroceder. Si hay observaciones (el borrador) o indicaciones escritas, primero pide
      * confirmar que se guardarán como motivo del retroceso en el paso anterior; cancelar o un
@@ -710,8 +710,6 @@ export class ControladorConsulta {
         return true;
     }
 
-    #observaciones = "";
-
     #cerrar() {
         if (this.bloqueo || !ControladorConsulta.puedeCerrar(this.estado.consulta)) return Promise.resolve(false);
         const notas = this.#observaciones ? { observaciones: this.#observaciones } : {};
@@ -751,7 +749,7 @@ export class ControladorConsulta {
             });
     }
 
-    // ---------------------------------------------------------------- F9: varios exámenes
+    // ---------------------------------------------------------------- Varios exámenes
 
     /** idExamen ya ordenados en el paso actual: salen marcados y deshabilitados ("Ya ordenado"). */
     get examenesOrdenados() { return ControladorConsulta.idsOrdenados(this.estado.detalle.ordenes); }
@@ -774,7 +772,7 @@ export class ControladorConsulta {
     }
 
     /**
-     * F9: emite una orden por examen seleccionado, EN SERIE (el backend recibe una por petición), con
+     * Emite una orden por examen seleccionado, EN SERIE (el backend recibe una por petición), con
      * las mismas indicaciones. Un error propio del examen se anota y se sigue; cualquier otro corta la
      * serie (los que faltan quedan "No se envió.") y se muestra como error de la acción. Publica
      * `resultadoExamenes`, deja seleccionados los que fallaron y recarga las órdenes una sola vez (y los
@@ -815,14 +813,14 @@ export class ControladorConsulta {
     }
 
     /**
-     * F9: emite la orden del examen `i` y, al terminar, la del siguiente: EN SERIE, como el for…of
-     * original (nunca en paralelo). Un error propio del examen se anota y se sigue; cualquier otro
+     * Emite la orden del examen `i` y, al terminar, la del siguiente: EN SERIE
+     * (nunca en paralelo). Un error propio del examen se anota y se sigue; cualquier otro
      * marca los que faltan como "No se envió.", publica y corta la serie relanzando el error.
      */
     #ordenarDesde(i, serie) {
         if (i >= serie.idsExamen.length) return Promise.resolve();
         const idExamen = serie.idsExamen[i];
-        // .catch después del .then: el try también envolvía el registro del éxito.
+        // .catch después del .then: también atrapa los errores al registrar el éxito.
         return new Promise(resolve => resolve(this.#servicio.ordenar(serie.idPaso, { idExamen, indicaciones: serie.indicaciones })))
             .then(() => {
                 serie.resultados.push(congelar({ idExamen, nombre: serie.nombre(idExamen), ok: true, mensaje: MENSAJES.ordenEmitida }));
@@ -920,7 +918,7 @@ export class ControladorConsulta {
         return asignables.find(e => e.idExamen === orden.idExamen)?.nombre ?? MENSAJES.examenNoDisponible;
     }
 
-    /** Tipos de examen activos de un examen asignable (B8): válidos, sin repetir y congelados. */
+    /** Tipos de examen activos de un examen asignable: válidos, sin repetir y congelados. */
     static #normalizarTipos(datos) {
         if (!Array.isArray(datos)) return NINGUNA;
         const vistos = new Set();
@@ -943,20 +941,20 @@ export class ControladorConsulta {
             .map(e => congelar({ idExamen: e.idExamen, nombre: e.nombre.trim(), tiposExamen: ControladorConsulta.#normalizarTipos(e.tiposExamen) })));
     }
 
-    /** F9: categorías del filtro: la unión de los tipos de los asignables, por nombre. */
+    /** Categorías del filtro: la unión de los tipos de los asignables, por nombre. */
     static categoriasDe(asignables) {
         const porId = new Map();
         for (const e of asignables ?? NINGUNA) for (const t of e.tiposExamen ?? NINGUNA) if (!porId.has(t.idTipoExamen)) porId.set(t.idTipoExamen, t);
         return congelar([...porId.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
     }
 
-    /** F9: asignables de una categoría; "" (Todas) los devuelve todos. */
+    /** Asignables de una categoría; "" (Todas) los devuelve todos. */
     static examenesVisibles(asignables, idTipoExamen = "") {
         if (!idTipoExamen) return asignables;
         return congelar(asignables.filter(e => e.tiposExamen.some(t => t.idTipoExamen === idTipoExamen)));
     }
 
-    /** F9: idExamen ya ordenados en el paso. El backend no impide repetir una orden; el frontend sí. */
+    /** idExamen ya ordenados en el paso. El backend no impide repetir una orden; el frontend sí. */
     static idsOrdenados(ordenes) {
         return congelar([...new Set((ordenes ?? NINGUNA).map(o => o?.idExamen).filter(Validaciones.esTexto))]);
     }
@@ -966,13 +964,13 @@ export class ControladorConsulta {
         return `${valor.length}/${MAX_TEXTO} caracteres`;
     }
 
-    /** F9: texto de cuántos exámenes hay seleccionados. */
+    /** Texto de cuántos exámenes hay seleccionados. */
     static textoSeleccion(n) {
         if (!n) return "Ningún examen seleccionado";
         return n === 1 ? "1 seleccionado" : `${n} seleccionados`;
     }
 
-    /** F9: valida la asignación de varios exámenes antes de enviarla. Devuelve el mensaje o null. */
+    /** Valida la asignación de varios exámenes antes de enviarla. Devuelve el mensaje o null. */
     static validarAsignacion({ idsExamen, indicaciones } = {}, asignables = NINGUNA, ordenes = NINGUNA) {
         if (!Array.isArray(idsExamen) || idsExamen.length === 0) return MENSAJES.seleccionVacia;
         if (!idsExamen.every(id => asignables.some(e => e.idExamen === id))) return MENSAJES.examenAjeno;

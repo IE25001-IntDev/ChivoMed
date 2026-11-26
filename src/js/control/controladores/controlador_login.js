@@ -9,12 +9,9 @@ import { RUTAS, RUTA_POR_DEFECTO, TablaRutas } from "../../boundary/rutas.js";
 import { Router } from "../../boundary/router.js";
 import { FormatoDocumento } from "../formato_documento.js";
 import { EstadoReactivo } from "../estado_reactivo.js";
-import { Validaciones } from "../validaciones.js";
 
 export const MENSAJES = Object.freeze({
-    tipoRequerido: "Selecciona el tipo de documento.",
-    numeroRequerido: "Escribe tu número de documento.",
-    numeroLargo: `El número no puede tener más de ${Validaciones.MAX_NUMERO_DOCUMENTO} caracteres.`,
+    ...FormatoDocumento.MENSAJES,
     sesionFinalizada: "Inicia sesión con tu documento para continuar.",
 });
 
@@ -78,20 +75,10 @@ export class ControladorLogin {
     /** Devuelve los errores de cada campo (null si es válido) sin modificar el estado. */
     validar({ idTipoDocumento, numeroDocumento }) {
         const tipo = this.tipo(idTipoDocumento);
-        const numero = typeof numeroDocumento === "string" ? numeroDocumento.trim() : "";
-        const errores = { tipo: null, numero: null };
-        if (!tipo) errores.tipo = MENSAJES.tipoRequerido;
-        if (!numero) errores.numero = MENSAJES.numeroRequerido;
-        else if (numero.length > Validaciones.MAX_NUMERO_DOCUMENTO) errores.numero = MENSAJES.numeroLargo;
-        else if (tipo) {
-            const formato = FormatoDocumento.crearValidadorFormato(tipo.expresionRegular);
-            if (formato && !formato(numero)) {
-                errores.numero = tipo.indicaciones
-                    ? `El número no tiene el formato de ${tipo.nombre}. ${tipo.indicaciones}`
-                    : `El número no tiene el formato de ${tipo.nombre}.`;
-            }
-        }
-        return Object.freeze(errores);
+        return Object.freeze({
+            tipo: tipo ? null : MENSAJES.tipoRequerido,
+            numero: FormatoDocumento.errorDelNumero(tipo, numeroDocumento),
+        });
     }
 
     /** Devuelve la sesión si existe la persona y el documento activo. */

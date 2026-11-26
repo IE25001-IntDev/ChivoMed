@@ -8,7 +8,7 @@
  * (<panel-examenes-paso>) y `cierre` (<panel-cierre-consulta>). Traduce sus eventos a métodos del
  * controlador y, cuando termina una acción, mueve el foco.
  *
- * F8: con la consulta seleccionada en la sesión ofrece "Salir de la consulta" (DELETE y luego
+ * Con la consulta seleccionada en la sesión ofrece "Salir de la consulta" (DELETE y luego
  * emite 'navegar' { ruta: "/dashboard" }, bubbles y composed); ante otra consulta en curso, además
  * del enlace, "Salir de esa consulta y atender esta".
  *
@@ -25,7 +25,7 @@ import "../components/consulta/panel_examenes_paso.js";
 import "../components/consulta/panel_cierre_consulta.js";
 import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
-/** F8: textos fijos de los botones para salir de una consulta. */
+/** Textos fijos de los botones para salir de una consulta. */
 const TEXTOS = Object.freeze({
     salir: "Salir de la consulta",
     salirYAtender: "Salir de esa consulta y atender esta",
@@ -86,7 +86,6 @@ class VistaConsulta extends ComponenteChivoMed {
     #paneles = null;
     /** Última acción que pidió el usuario: decide dónde se muestra `errorAccion`. */
     #ultimaPedida = null;
-    #manejadores = [];
     /** Categorías de los últimos asignables: el mismo arreglo mientras no cambien (el <select> no se rehace). */
     #memoCategorias = { asignables: null, categorias: null };
     /** Contexto del router: { params: { id }, sesion, soloLectura, ... }. */
@@ -132,17 +131,14 @@ class VistaConsulta extends ComponenteChivoMed {
     }
 
     disconnectedCallback() {
-        for (const [el, tipo, fn] of this.#manejadores) el.removeEventListener(tipo, fn);
-        this.#manejadores = [];
+        this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();
     }
 
     #escuchar(el, tipo, fn) {
-        const manejador = event => { if (event.target !== this) event.stopPropagation?.(); fn(event); };
-        el.addEventListener(tipo, manejador);
-        this.#manejadores.push([el, tipo, manejador]);
+        this.escuchar(el, tipo, event => { if (event.target !== this) event.stopPropagation?.(); fn(event); });
     }
 
     #crearPaneles() {
@@ -200,7 +196,7 @@ class VistaConsulta extends ComponenteChivoMed {
         else this.$("en-curso").removeAttribute("href");
         this.$("reintentar").hidden = Boolean(enCurso);
         this.$("reintentar").disabled = !estado.enLinea || estado.cargando;
-        // F8: con otra consulta en curso, salir de ella y atender esta; con esta seleccionada, salir.
+        // Con otra consulta en curso, salir de ella y atender esta; con esta seleccionada, salir.
         const salirYAtender = this.$("salir-y-atender");
         salirYAtender.hidden = !enCurso;
         salirYAtender.disabled = estado.saliendo || estado.cargando;
@@ -241,20 +237,13 @@ class VistaConsulta extends ComponenteChivoMed {
         const procedimientos = consulta.procedimientos.map(p => {
             const seccion = document.createElement("section");
             seccion.className = "procedimiento";
-            seccion.append(this.#texto("h3", p.nombre));
+            seccion.append(this.texto("h3", p.nombre));
             const arbol = ControladorConsultas.arbolDePasos(p.pasos);
-            seccion.append(arbol.length ? this.#lista(arbol, actual, "arbol-pasos") : this.#texto("p", "Sin pasos registrados.", "vacio"));
+            seccion.append(arbol.length ? this.#lista(arbol, actual, "arbol-pasos") : this.texto("p", "Sin pasos registrados.", "vacio"));
             return seccion;
         });
-        if (!procedimientos.length) procedimientos.push(this.#texto("p", "Sin procedimientos registrados.", "vacio"));
+        if (!procedimientos.length) procedimientos.push(this.texto("p", "Sin procedimientos registrados.", "vacio"));
         this.$("recorrido").replaceChildren(...procedimientos);
-    }
-
-    #texto(tag, contenido, clase) {
-        const nodo = document.createElement(tag);
-        nodo.textContent = contenido;
-        if (clase) nodo.className = clase;
-        return nodo;
     }
 
     #lista(nodos, actual, clase) {
@@ -267,12 +256,9 @@ class VistaConsulta extends ComponenteChivoMed {
             if (paso.idConsultaProcedimientoPaso === actual) caja.setAttribute("aria-current", "step");
             const titulo = document.createElement("p");
             titulo.className = "paso-titulo";
-            const clase = paso.estado === "PENDIENTE" ? "pendiente" : paso.estado === "COMPLETADO" ? "completado" : "otro";
-            titulo.append(this.#texto("span", paso.nombre), this.#texto("span", ControladorConsultas.etiquetaEstado(paso.estado), `insignia ${clase}`));
-            const responsable = paso.responsable
-                ? [paso.responsable.nombre, paso.responsable.rol].filter(Boolean).join(" · ") : "Sin responsable asignado";
-            const fechas = `${FechasSV.formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? FechasSV.formatearFechaHora(paso.fechaFin) : "En curso"}`;
-            caja.append(titulo, this.#texto("p", responsable, "meta"), this.#texto("p", fechas, "meta"));
+            const { claseEstado, responsable, fechas } = ControladorConsultas.resumenPaso(paso);
+            titulo.append(this.texto("span", paso.nombre), this.texto("span", ControladorConsultas.etiquetaEstado(paso.estado), `insignia ${claseEstado}`));
+            caja.append(titulo, this.texto("p", responsable, "meta"), this.texto("p", fechas, "meta"));
             li.append(caja);
             if (hijos.length) li.append(this.#lista(hijos, actual));
             ol.append(li);

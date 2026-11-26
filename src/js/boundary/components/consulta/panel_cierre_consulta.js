@@ -37,19 +37,16 @@ class PanelCierreConsulta extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "consulta.css");
-        this.$("cerrar").addEventListener("click", this.#alCerrar);
-        this.$("confirmar").addEventListener("click", this.#alConfirmar);
-        this.$("cancelar").addEventListener("click", this.#alCancelar);
-        this.$("observaciones").addEventListener("input", this.#alEscribir);
+        this.escuchar(this.$("cerrar"), "click", this.#alCerrar);
+        this.escuchar(this.$("confirmar"), "click", this.#alConfirmar);
+        this.escuchar(this.$("cancelar"), "click", this.#alCancelar);
+        this.escuchar(this.$("observaciones"), "input", this.#alEscribir);
         this.#alEscribir();
         this.pintar();
     }
 
     disconnectedCallback() {
-        this.$("cerrar").removeEventListener("click", this.#alCerrar);
-        this.$("confirmar").removeEventListener("click", this.#alConfirmar);
-        this.$("cancelar").removeEventListener("click", this.#alCancelar);
-        this.$("observaciones").removeEventListener("input", this.#alEscribir);
+        this.dejarDeEscuchar();
     }
 
     /** Lleva el foco a la confirmación o, al cancelarla, de vuelta al botón. */

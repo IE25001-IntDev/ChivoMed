@@ -16,6 +16,7 @@ import { Estilos } from "../estilos.js";
 export class ComponenteChivoMed extends HTMLElement {
     #modelo;
     #modeloVacio;
+    #escuchas = null;
 
     /** @param modeloVacio valor de `modelo` al crearse y al asignarle null (por defecto null). */
     constructor(modeloVacio = null) {
@@ -52,6 +53,23 @@ export class ComponenteChivoMed extends HTMLElement {
     /** Elemento del Shadow DOM con ese id, o null. */
     $(id) {
         return this.shadowRoot.getElementById(id);
+    }
+
+    escuchar(objetivo, tipo, fn) {
+        this.#escuchas ??= new AbortController();
+        objetivo.addEventListener(tipo, fn, { signal: this.#escuchas.signal });
+    }
+
+    dejarDeEscuchar() {
+        this.#escuchas?.abort();
+        this.#escuchas = null;
+    }
+
+    texto(tag, contenido, clase) {
+        const nodo = document.createElement(tag);
+        nodo.textContent = contenido;
+        if (clase) nodo.className = clase;
+        return nodo;
     }
 
     /** Emite `tipo` desde el componente con bubbles y composed; `detalle` va en event.detail (null si falta). */

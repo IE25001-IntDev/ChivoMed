@@ -9,7 +9,7 @@
  * Slot `consultas`: al conectarse agrega <lista-consultas slot="consultas"> (parte 2) como hijo y,
  * tras un cambio de rol, le pasa la sesión nueva para que vuelva a buscar.
  * Emite 'sesion-actualizada' { sesion } (bubbles, composed) cuando el estado publica `sesionCambiada`.
- * F8: con una consulta en curso (estado.enCurso) muestra "Tienes una consulta en curso", el enlace
+ * Con una consulta en curso (estado.enCurso) muestra "Tienes una consulta en curso", el enlace
  * "Ir a la consulta en curso" y "Salir de la consulta", y le pasa `enCurso` a <lista-consultas>.
  */
 import { ControladorDashboard, MENSAJES } from "../../control/controladores/controlador_dashboard.js";
@@ -19,7 +19,7 @@ import "../components/dashboard/lista_consultas.js";
 import { Plantilla } from "../plantilla.js";
 import { ComponenteChivoMed } from "../components/componente_chivomed.js";
 
-/** F8: textos fijos del aviso de consulta en curso. */
+/** Textos fijos del aviso de consulta en curso. */
 const TEXTOS = Object.freeze({
     enCurso: "Tienes una consulta en curso.",
     irEnCurso: "Ir a la consulta en curso",
@@ -105,12 +105,12 @@ class VistaDashboard extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css");
-        this.$("selector").addEventListener("submit", this.#alEnviar);
-        this.$("grupos").addEventListener("change", this.#alElegir);
-        this.$("clinica").addEventListener("change", this.#alClinica);
-        this.$("reintentar").addEventListener("click", this.#alReintentar);
-        this.$("salir").addEventListener("click", this.#alSalir);
-        this.addEventListener("titulo-consultas", this.#alTitular);
+        this.escuchar(this.$("selector"), "submit", this.#alEnviar);
+        this.escuchar(this.$("grupos"), "change", this.#alElegir);
+        this.escuchar(this.$("clinica"), "change", this.#alClinica);
+        this.escuchar(this.$("reintentar"), "click", this.#alReintentar);
+        this.escuchar(this.$("salir"), "click", this.#alSalir);
+        this.escuchar(this, "titulo-consultas", this.#alTitular);
         if (!this.#lista) {
             this.#lista = document.createElement("lista-consultas");
             this.#lista.slot = "consultas";
@@ -126,12 +126,7 @@ class VistaDashboard extends ComponenteChivoMed {
     }
 
     disconnectedCallback() {
-        this.$("selector").removeEventListener("submit", this.#alEnviar);
-        this.$("grupos").removeEventListener("change", this.#alElegir);
-        this.$("clinica").removeEventListener("change", this.#alClinica);
-        this.$("reintentar").removeEventListener("click", this.#alReintentar);
-        this.$("salir").removeEventListener("click", this.#alSalir);
-        this.removeEventListener("titulo-consultas", this.#alTitular);
+        this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();
@@ -174,7 +169,7 @@ class VistaDashboard extends ComponenteChivoMed {
     }
 
     /**
-     * F8: la región role="status" nunca se oculta y solo tiene textos: el aviso de consulta en curso
+     * La región role="status" nunca se oculta y solo tiene textos: el aviso de consulta en curso
      * y la confirmación al salir. El enlace a #/consulta/{id} y "Salir de la consulta" van fuera de
      * ella, para que el lector de pantalla anuncie solo el mensaje.
      */
@@ -197,13 +192,7 @@ class VistaDashboard extends ComponenteChivoMed {
 
     /** Solo clínicas y roles que /atencion/asignaciones devuelve para esta cuenta. */
     #pintarGrupos(estado) {
-        const opciones = estado.grupos.map(grupo => {
-            const opcion = document.createElement("option");
-            opcion.value = grupo.idClinica;
-            opcion.textContent = grupo.nombreClinica;
-            return opcion;
-        });
-        this.$("clinica").replaceChildren(...opciones);
+        this.$("clinica").replaceChildren(...estado.grupos.map(grupo => new Option(grupo.nombreClinica, grupo.idClinica)));
         const actual = estado.activa?.idClinica ?? estado.sesion?.rolActivo?.idClinica;
         this.$("clinica").value = estado.grupos.some(g => g.idClinica === actual) ? actual : "";
         this.#pintarRoles(estado);
@@ -224,9 +213,7 @@ class VistaDashboard extends ComponenteChivoMed {
             radio.name = "asignacion";
             radio.value = rol.idPersonaRol;
             radio.checked = rol.activa;
-            const nombre = document.createElement("span");
-            nombre.textContent = rol.nombreRol;
-            label.append(radio, nombre);
+            label.append(radio, this.texto("span", rol.nombreRol));
             fieldset.append(label);
         }
         this.$("grupos").replaceChildren(fieldset);
@@ -252,7 +239,7 @@ class VistaDashboard extends ComponenteChivoMed {
         boton.textContent = estado.cambiando ? "Cambiando de rol…" : "Usar este rol";
     }
 
-    /** F8: "Salir de la consulta". El foco va a la confirmación o al motivo del fallo. */
+    /** "Salir de la consulta". El foco va a la confirmación o al motivo del fallo. */
     #salir() {
         return new Promise(resolve => resolve(this.#controlador.salirDeConsulta())).then(salio => {
             if (!this.isConnected) return;

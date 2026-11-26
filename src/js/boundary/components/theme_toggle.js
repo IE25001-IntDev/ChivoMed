@@ -37,18 +37,15 @@ class SelectorTema extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "components.css");
-        this.#boton().addEventListener("click", this.#alPulsar);
-        this.#sistema.addEventListener("change", this.#alCambiarSistema);
-        window.addEventListener("storage", this.#alCambiarAlmacenamiento);
-        window.addEventListener(EVENTO_CAMBIO_TEMA, this.#alCambiarTema);
+        this.escuchar(this.#boton(), "click", this.#alPulsar);
+        this.escuchar(this.#sistema, "change", this.#alCambiarSistema);
+        this.escuchar(window, "storage", this.#alCambiarAlmacenamiento);
+        this.escuchar(window, EVENTO_CAMBIO_TEMA, this.#alCambiarTema);
         this.#pintarBoton();
     }
 
     disconnectedCallback() {
-        this.#boton().removeEventListener("click", this.#alPulsar);
-        this.#sistema.removeEventListener("change", this.#alCambiarSistema);
-        window.removeEventListener("storage", this.#alCambiarAlmacenamiento);
-        window.removeEventListener(EVENTO_CAMBIO_TEMA, this.#alCambiarTema);
+        this.dejarDeEscuchar();
     }
 
     #boton() {

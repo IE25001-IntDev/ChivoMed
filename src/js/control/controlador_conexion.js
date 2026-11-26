@@ -97,7 +97,7 @@ export class ControladorConexion {
             .finally(() => {
                 this.#verificando = false;
             })
-            // Primero se libera `verificando` y después se avisa, como antes.
+            // Primero se libera `verificando` y después se avisa.
             .then(respondio => {
                 if (respondio) this.#disponible();
             });

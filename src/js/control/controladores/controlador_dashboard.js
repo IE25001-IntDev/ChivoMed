@@ -27,7 +27,7 @@ export const MENSAJES = Object.freeze({
     noDisponible: "El selector de rol todavía no está disponible.",
     generico: "No pudimos cargar tus roles. Inténtalo de nuevo.",
     cambioFallido: "No pudimos cambiar tu rol. Inténtalo de nuevo.",
-    /** F8: texto propio para rolCambio.cerrarAntesCambiar; se ignora el message del backend. */
+    /** Texto propio para rolCambio.cerrarAntesCambiar; se ignora el message del backend. */
     cerrarAntes: "Tienes una consulta en curso. Sal de ella o ciérrala antes de cambiar de rol.",
     salioDeConsulta: "Saliste de la consulta. Ya puedes cambiar de rol.",
     sesionNoActualizada: "Cambiaste de rol, pero no pudimos actualizar tu sesión. Recarga la página.",
@@ -80,11 +80,11 @@ export class ControladorDashboard {
             aviso: null,
             desdeMemoria: false,
             actualizadoEn: null,
-            /** F8: idConsulta en curso según GET /atencion, o null. Nunca se guarda en memoria ni en disco. */
+            /** idConsulta en curso según GET /atencion, o null. Nunca se guarda en memoria ni en disco. */
             enCurso: null,
-            /** F8: true mientras espera el DELETE /atencion/consulta. */
+            /** true mientras espera el DELETE /atencion/consulta. */
             saliendo: false,
-            /** F8: confirmación tras salir de la consulta ("Saliste de la consulta…"). */
+            /** Confirmación tras salir de la consulta ("Saliste de la consulta…"). */
             confirmacion: null,
         });
         /** Estado reactivo: se lee como un objeto; los cambios se avisan por `suscribir`. */
@@ -162,7 +162,7 @@ export class ControladorDashboard {
                     this.#actualizar({ ...this.#derivados(), cargando: false, vacio: !this.#asignaciones.length,
                         desdeMemoria: false, actualizadoEn: en, error: null });
                 }))
-                // .catch después del .then: también atrapa los errores de normalizar y guardar, como el try.
+                // .catch después del .then: también atrapa los errores de normalizar y guardar.
                 .catch(error => contexto.then(() => {
                     if (id !== this.#secuencia) return;
                     if (error?.status === 0 && tieneDatos) {
@@ -187,7 +187,7 @@ export class ControladorDashboard {
                 return;
             }
             this.#actualizar({ cambiando: idPersonaRol, error: null, aviso: null });
-            // Dos argumentos: el primer try solo envolvía cambiarRol.
+            // Dos argumentos: los errores de #refrescarSesion no pasan por #rechazoDeCambio.
             resolve(new Promise(cambiar => cambiar(this.#servicio.cambiarRol(idPersonaRol)))
                 .then(() => this.#refrescarSesion(), error => this.#rechazoDeCambio(error)));
         });
@@ -215,7 +215,7 @@ export class ControladorDashboard {
 
     /** Tras cambiar el rol, relee la sesión. Resuelve true si se refrescó. */
     #refrescarSesion() {
-        // Dos argumentos: el segundo try solo envolvía obtenerSesion.
+        // Dos argumentos: solo un fallo de obtenerSesion muestra sesionNoActualizada.
         return new Promise(resolve => resolve(this.#obtenerSesion())).then(sesion => {
             this.#actualizar({ sesion });
             // Con el rol ya cambiado, la confirmación de salida y el motivo del 409 dejan de aplicar.
@@ -231,12 +231,11 @@ export class ControladorDashboard {
     #leerEnCurso() {
         return new Promise(resolve => resolve(this.#servicio.contexto()))
             .then(({ data }) => (typeof data?.idConsulta === "string" && Validaciones.UUID.test(data.idConsulta) ? data.idConsulta : null))
-            // .catch: el try también envolvía la desestructuración.
             .catch(() => null);
     }
 
     /**
-     * F8: sale de la consulta en curso sin cerrarla (DELETE /atencion/consulta). No reintenta el
+     * Sale de la consulta en curso sin cerrarla (DELETE /atencion/consulta). No reintenta el
      * cambio de rol: el usuario vuelve a pulsar "Usar este rol". Devuelve true si el backend respondió.
      */
     salirDeConsulta() {
@@ -249,7 +248,7 @@ export class ControladorDashboard {
                 return;
             }
             this.#actualizar({ saliendo: true, error: null, confirmacion: null });
-            // Dos argumentos: el try solo envolvía el DELETE.
+            // Dos argumentos: solo un fallo del DELETE pasa por el manejo de error.
             resolve(new Promise(salir => salir(this.#servicio.salirDeConsulta())).then(() => {
                 this.#actualizar({ saliendo: false, enCurso: null, aviso: null, confirmacion: MENSAJES.salioDeConsulta });
                 return true;
@@ -267,7 +266,7 @@ export class ControladorDashboard {
 
     /**
      * Valida y limpia el DTO de GET /atencion/asignaciones. Descarta entradas incompletas, repetidas o
-     * de PACIENTE (defensa: el backend ya las excluye). Un rol sin código es de empleado (B8).
+     * de PACIENTE (defensa: el backend ya las excluye). Un rol sin código es de empleado.
      */
     static normalizarAsignaciones(datos) {
         if (!Array.isArray(datos)) return [];

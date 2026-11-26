@@ -66,21 +66,17 @@ class PanelPasoActual extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "consulta.css");
-        this.$("valor").addEventListener("input", this.#alEscribir);
-        this.$("avanzar").addEventListener("click", this.#alAvanzar);
-        this.$("retroceder").addEventListener("click", this.#alRetroceder);
-        this.$("confirmar").addEventListener("click", this.#alConfirmar);
-        this.$("cancelar").addEventListener("click", this.#alCancelar);
+        this.escuchar(this.$("valor"), "input", this.#alEscribir);
+        this.escuchar(this.$("avanzar"), "click", this.#alAvanzar);
+        this.escuchar(this.$("retroceder"), "click", this.#alRetroceder);
+        this.escuchar(this.$("confirmar"), "click", this.#alConfirmar);
+        this.escuchar(this.$("cancelar"), "click", this.#alCancelar);
         this.#pintado = null;
         this.pintar();
     }
 
     disconnectedCallback() {
-        this.$("valor").removeEventListener("input", this.#alEscribir);
-        this.$("avanzar").removeEventListener("click", this.#alAvanzar);
-        this.$("retroceder").removeEventListener("click", this.#alRetroceder);
-        this.$("confirmar").removeEventListener("click", this.#alConfirmar);
-        this.$("cancelar").removeEventListener("click", this.#alCancelar);
+        this.dejarDeEscuchar();
     }
 
     /** Lleva el foco al título del paso (tras avanzar o retroceder) o a la confirmación. */
@@ -150,9 +146,7 @@ class PanelPasoActual extends ComponenteChivoMed {
             radio.name = "paso";
             radio.value = paso.idConsultaProcedimientoPaso;
             radio.addEventListener("change", () => { if (radio.checked) this.emitir("elegir-paso", { idPaso: radio.value }); });
-            const texto = document.createElement("span");
-            texto.textContent = `${paso.nombre} · ${procedimiento}`;
-            etiqueta.append(radio, texto);
+            etiqueta.append(radio, this.texto("span", `${paso.nombre} · ${procedimiento}`));
             radio.checked = paso.idConsultaProcedimientoPaso === actual;
             return etiqueta;
         }));

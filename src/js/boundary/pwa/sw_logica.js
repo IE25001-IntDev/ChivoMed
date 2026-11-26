@@ -29,7 +29,7 @@
      */
     class LogicaServiceWorker {
         // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-        static VERSION = "2026-11-26.1";
+        static VERSION = "2026-11-26.2";
         static PREFIJO = "chivomed-";
         static CACHE_SHELL = `${LogicaServiceWorker.PREFIJO}shell-${LogicaServiceWorker.VERSION}`;
         static PREFIJO_DATOS = `${LogicaServiceWorker.PREFIJO}datos-`;
@@ -212,7 +212,7 @@
             return new Promise(resolve => {
                 const { fetch, caches } = entorno;
                 const indice = new URL("./index.html", base).href;
-                // .catch después del .then: el try también envolvía la lectura del precache.
+                // .catch después del .then: también atrapa los errores al leer el precache.
                 resolve(new Promise(pedir => pedir(fetch(indice)))
                     .then(respuesta => (respuesta.ok ? respuesta : LogicaServiceWorker.#desdePrecache(indice, caches).then(copia => copia ?? respuesta)))
                     .catch(() => LogicaServiceWorker.#desdePrecache(indice, caches).then(copia => copia ?? LogicaServiceWorker.#respuestaSinRed("texto"))));
@@ -248,7 +248,7 @@
             return new Promise(resolve => {
                 const { fetch, caches } = entorno;
                 const cacheable = LogicaServiceWorker.esCatalogoCacheable(solicitud.url);
-                // Dos argumentos: el try solo envolvía el fetch; lo que sigue propaga sus errores.
+                // Dos argumentos: solo el fallo del fetch se trata como sin red; los errores de lo que sigue se propagan.
                 resolve(new Promise(pedir => pedir(fetch(solicitud))).then(respuesta => {
                     // 502, 503 y 504: el backend no responde (p. ej. el proxy sin backend); igual que sin red.
                     if (LogicaServiceWorker.STATUS_SIN_SERVIDOR.includes(respuesta.status)) {
@@ -302,7 +302,7 @@
             return LogicaServiceWorker.#renovacionEnCurso;
         }
 
-        /** Guarda los pares [url, respuesta] desde el índice `i`, uno tras otro (en serie, como el for…of original). */
+        /** Guarda los pares [url, respuesta] desde el índice `i`, uno tras otro (en serie, nunca en paralelo). */
         static #guardarEnSerie(cache, pares, i) {
             if (i >= pares.length) return Promise.resolve();
             const [url, respuesta] = pares[i];
@@ -318,7 +318,7 @@
                     if (!valida(respuesta)) throw new Error(`Descarga incompleta: ${url}`);
                     return [url, respuesta];
                 });
-                // Lo que envolvía el try: descargar todo, guardarlo en serie y mover el puntero.
+                // Copia nueva: descargar todo, guardarlo en serie y mover el puntero.
                 const copiaNueva = new Promise(descargarTodo => descargarTodo(Promise.all(LogicaServiceWorker.PRECACHE.map(ruta => descargar(new URL(ruta, base).href, r => r.ok)))))
                     .then(archivos => Promise.all(LogicaServiceWorker.CATALOGOS_PUBLICOS.map(nombre => descargar(
                         new URL(`${LogicaServiceWorker.RUTA_API}publico/${nombre}`, base).href,
@@ -335,7 +335,7 @@
                     .then(puntero => puntero.put(LogicaServiceWorker.#CLAVE_VIGENTE, new Response(JSON.stringify(nuevos), {
                         headers: { "Content-Type": "application/json" },
                     })));
-                // Dos argumentos: el try terminaba antes de borrar los anteriores; esos errores se propagan.
+                // Dos argumentos: si la copia nueva falla, se borra y resuelve false; los errores al borrar las anteriores se propagan.
                 resolve(copiaNueva.then(() => {
                     const conservar = new Set([nuevos.shell, nuevos.datos]);
                     return Promise.resolve(caches.keys())

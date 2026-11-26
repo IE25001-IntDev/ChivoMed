@@ -67,30 +67,23 @@ class InstallPrompt extends ComponenteChivoMed {
         this.montar(PLANTILLA, "pwa.css");
         this.#controlador = this.#inyectado ?? new ControladorInstalacion({ ventana: window });
         this.#cancelar = this.#controlador.suscribir((_cambios, estado) => this.#pintar(estado));
-        this.$("instalar").addEventListener("click", this.#alPulsar);
-        this.#escucharDialogo("addEventListener");
-        document.addEventListener(EVENTO_OFRECER, this.#alOfrecer);
-        document.addEventListener(EVENTO_INSTALAR, this.#alInstalarAlDescargar);
+        this.escuchar(this.$("instalar"), "click", this.#alPulsar);
+        this.escuchar(this.$("invitacion-instalar"), "click", this.#alAceptar);
+        this.escuchar(this.$("invitacion-no"), "click", this.#alRechazar);
+        this.escuchar(this.$("invitacion-entendido"), "click", this.#alRechazar);
+        this.escuchar(this.$("invitacion"), "close", this.#alCerrarDialogo);
+        this.escuchar(this.$("invitacion"), "click", this.#alClicDialogo);
+        this.escuchar(document, EVENTO_OFRECER, this.#alOfrecer);
+        this.escuchar(document, EVENTO_INSTALAR, this.#alInstalarAlDescargar);
         this.#controlador.iniciar();
         this.#pintar(this.#controlador.estado);
     }
 
     disconnectedCallback() {
-        this.$("instalar").removeEventListener("click", this.#alPulsar);
-        this.#escucharDialogo("removeEventListener");
-        document.removeEventListener(EVENTO_OFRECER, this.#alOfrecer);
-        document.removeEventListener(EVENTO_INSTALAR, this.#alInstalarAlDescargar);
+        this.dejarDeEscuchar();
         this.#cancelar?.();
         this.#cancelar = null;
         this.#controlador?.detener();
-    }
-
-    #escucharDialogo(metodo) {
-        this.$("invitacion-instalar")[metodo]("click", this.#alAceptar);
-        this.$("invitacion-no")[metodo]("click", this.#alRechazar);
-        this.$("invitacion-entendido")[metodo]("click", this.#alRechazar);
-        this.$("invitacion")[metodo]("close", this.#alCerrarDialogo);
-        this.$("invitacion")[metodo]("click", this.#alClicDialogo);
     }
 
     #pintar(estado) {

@@ -3,7 +3,7 @@
  * El backend trabaja con días de El Salvador (yyyy-MM-dd) y fechas con offset -06:00; el
  * navegador puede estar en otra zona, así que nunca se usa la hora local para decidir el día.
  */
-export const ZONA_SV = "America/El_Salvador";
+const ZONA_SV = "America/El_Salvador";
 
 /** Día y hora de El Salvador (una sola definición para controladores, vistas y componentes). */
 export class FechasSV {

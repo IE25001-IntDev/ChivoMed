@@ -87,21 +87,17 @@ class VentanaTicket extends ComponenteChivoMed {
 
     connectedCallback() {
         this.montar(PLANTILLA, "vistas.css", "pwa.css", "citas.css");
-        this.#escuchar("addEventListener");
+        this.escuchar(this.$("cerrar-x"), "click", this.#alCerrar);
+        this.escuchar(this.$("cerrar"), "click", this.#alCerrar);
+        this.escuchar(this.$("descargar"), "click", this.#alDescargar);
+        this.escuchar(this.$("ventana"), "close", this.#alCerrarDialogo);
+        this.escuchar(this.$("ventana"), "click", this.#alClicDialogo);
         this.pintar();
     }
 
     disconnectedCallback() {
-        this.#escuchar("removeEventListener");
+        this.dejarDeEscuchar();
         this.#soltarPdf();
-    }
-
-    #escuchar(metodo) {
-        this.$("cerrar-x")[metodo]("click", this.#alCerrar);
-        this.$("cerrar")[metodo]("click", this.#alCerrar);
-        this.$("descargar")[metodo]("click", this.#alDescargar);
-        this.$("ventana")[metodo]("close", this.#alCerrarDialogo);
-        this.$("ventana")[metodo]("click", this.#alClicDialogo);
     }
 
     #emitir(tipo) {

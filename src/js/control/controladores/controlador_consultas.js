@@ -5,7 +5,7 @@
  * registrado en un paso y decide si una consulta se puede atender y, si no, por qué. "Buscar
  * paciente" filtra en el cliente las consultas ya cargadas, sin pedir nada al backend.
  * Quién atiende lo decide el backend (`pendienteParaMi`): cada paso lo atiende su rol responsable
- * y cierra quien completó el paso final (B8). El frontend no fija roles ni los compara por nombre.
+ * y cierra quien completó el paso final. El frontend no fija roles ni los compara por nombre.
  *
  * El controlador solo escribe en su estado reactivo (`estado`, `suscribir`); nunca llama a la vista.
  * "Atender" publica `estado.navegarA = { ruta }` (un objeto nuevo cada vez).
@@ -94,7 +94,7 @@ export class ControladorConsultas {
             navegarA: null,
             /** Texto de "Buscar paciente": filtra en el cliente las consultas cargadas. */
             busqueda: "",
-            /** F8: idConsulta en curso (lo conoce el dashboard por GET /atencion), o null. No se guarda. */
+            /** idConsulta en curso (lo conoce el dashboard por GET /atencion), o null. No se guarda. */
             enCurso: null,
         });
         this.estado = this.#reactivo.estado;
@@ -320,12 +320,12 @@ export class ControladorConsultas {
         return { enLinea, soloLectura };
     }
 
-    /** F8: marca la consulta en curso para su insignia. Solo un UUID; cualquier otra cosa es null. */
+    /** Marca la consulta en curso para su insignia. Solo un UUID; cualquier otra cosa es null. */
     marcarEnCurso(idConsulta) {
         this.estado.enCurso = typeof idConsulta === "string" && Validaciones.UUID.test(idConsulta) ? idConsulta : null;
     }
 
-    /** F8: true si la consulta es la que está en curso en la sesión. */
+    /** true si la consulta es la que está en curso en la sesión. */
     estaEnCurso(consulta) {
         return Boolean(this.estado.enCurso) && consulta?.idConsulta === this.estado.enCurso;
     }
@@ -485,6 +485,14 @@ export class ControladorConsultas {
         if (estado === "PENDIENTE") return "Pendiente";
         if (estado === "COMPLETADO") return "Completado";
         return estado ?? "Sin estado";
+    }
+
+    static resumenPaso(paso) {
+        return congelar({
+            claseEstado: paso.estado === "PENDIENTE" ? "pendiente" : paso.estado === "COMPLETADO" ? "completado" : "otro",
+            responsable: paso.responsable ? [paso.responsable.nombre, paso.responsable.rol].filter(Boolean).join(" · ") : "Sin responsable asignado",
+            fechas: `${FechasSV.formatearFechaHora(paso.fechaInicio)} – ${paso.fechaFin ? FechasSV.formatearFechaHora(paso.fechaFin) : "En curso"}`,
+        });
     }
 
     /** Texto comparable: sin acentos, sin mayúsculas y sin espacios de más. */
