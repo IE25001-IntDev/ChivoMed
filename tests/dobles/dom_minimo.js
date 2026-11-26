@@ -159,6 +159,7 @@ class Dialogo extends Elemento {
     showModal() {
         if (this.open) throw new Error("InvalidStateError: el diálogo ya está abierto");
         this.open = true;
+        this.querySelectorAll("[autofocus]").find(e => !e.hidden)?.focus();
     }
     close() {
         if (!this.open) return;

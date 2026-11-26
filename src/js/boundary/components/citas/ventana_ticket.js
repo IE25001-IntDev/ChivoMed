@@ -137,10 +137,7 @@ class VentanaTicket extends ComponenteChivoMed {
         descargar.disabled = estado === "descargando" || (!listo && Boolean(motivo));
         this.$("estado").textContent = listo && ticket.descargado ? TEXTOS.descargado : "";
 
-        if (!dialogo.open) {
-            dialogo.showModal();
-            this.$("cerrar-x").focus();
-        }
+        if (!dialogo.open) dialogo.showModal();
     }
 
     #mostrarPdf(blob) {
