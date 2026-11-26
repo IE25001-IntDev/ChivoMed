@@ -29,7 +29,7 @@
      */
     class LogicaServiceWorker {
         // Cambiar en cada entrega: crea cachés nuevos y activate borra los anteriores.
-        static VERSION = "2026-11-24.6";
+        static VERSION = "2026-11-26.1";
         static PREFIJO = "chivomed-";
         static CACHE_SHELL = `${LogicaServiceWorker.PREFIJO}shell-${LogicaServiceWorker.VERSION}`;
         static PREFIJO_DATOS = `${LogicaServiceWorker.PREFIJO}datos-`;

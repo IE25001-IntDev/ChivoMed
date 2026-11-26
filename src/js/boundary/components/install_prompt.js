@@ -54,8 +54,6 @@ class InstallPrompt extends ComponenteChivoMed {
     #alCerrarDialogo = () => { if (this.#controlador.estado.invitacion) this.#controlador.cerrarInvitacion(); };
     /** El cuerpo llena la ventana: un clic cuyo destino es el <dialog> mismo cayó en el fondo. */
     #alClicDialogo = event => { if (event.target === this.$("invitacion")) this.#controlador.cerrarInvitacion(); };
-    /** Elemento con el foco antes de abrir la ventana, para devolvérselo al cerrarla. */
-    #focoPrevio = null;
 
     /** Controlador inyectado; solo se puede asignar antes de conectar el componente. */
     set controlador(valor) {
@@ -110,22 +108,11 @@ class InstallPrompt extends ComponenteChivoMed {
             this.$("invitacion-instalar").hidden = instrucciones;
             this.$("invitacion-no").hidden = instrucciones;
             this.$("invitacion-entendido").hidden = !instrucciones;
-            this.#focoPrevio = InstallPrompt.#focoProfundo();
             dialogo.showModal();
             this.$(instrucciones ? "invitacion-entendido" : "invitacion-instalar").focus();
-        } else if (!abierta) {
-            if (dialogo.open) dialogo.close();
-            const previo = this.#focoPrevio;
-            this.#focoPrevio = null;
-            if (previo && previo.isConnected !== false) previo.focus?.();
+        } else if (!abierta && dialogo.open) {
+            dialogo.close();
         }
-    }
-
-    /** El elemento con el foco, atravesando los Shadow DOM abiertos. */
-    static #focoProfundo() {
-        let actual = document.activeElement;
-        while (actual?.shadowRoot?.activeElement) actual = actual.shadowRoot.activeElement;
-        return actual;
     }
 }
 

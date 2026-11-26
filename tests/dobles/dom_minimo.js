@@ -158,12 +158,18 @@ class Dialogo extends Elemento {
     constructor() { super("dialog"); this.open = false; }
     showModal() {
         if (this.open) throw new Error("InvalidStateError: el diálogo ya está abierto");
+        let previo = globalThis.document?.activeElement ?? null;
+        while (previo?.shadowRoot?.activeElement) previo = previo.shadowRoot.activeElement;
+        this.focoPrevio = previo;
         this.open = true;
         this.querySelectorAll("[autofocus]").find(e => !e.hidden)?.focus();
     }
     close() {
         if (!this.open) return;
         this.open = false;
+        const previo = this.focoPrevio;
+        this.focoPrevio = null;
+        if (previo && previo.isConnected !== false) previo.focus?.();
         setTimeout(() => this.dispatchEvent(new Event("close")), 0);
     }
 }
